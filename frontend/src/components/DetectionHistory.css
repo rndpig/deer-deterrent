@@ -1,0 +1,144 @@
+.detection-history {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .detection-history {
+    background: #1a1a1a;
+  }
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.history-header h2 {
+  margin: 0;
+  color: #667eea;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filter-buttons button {
+  background: white;
+  border: 2px solid #667eea;
+  color: #667eea;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  .filter-buttons button {
+    background: #2a2a2a;
+  }
+}
+
+.filter-buttons button:hover {
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.filter-buttons button.active {
+  background: #667eea;
+  color: white;
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  color: #666;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: #666;
+}
+
+.empty-state .hint {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.history-table-container {
+  overflow-x: auto;
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.history-table th {
+  background: #667eea;
+  color: white;
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+}
+
+.history-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.history-table tbody tr:hover {
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.history-table .deer-count {
+  font-weight: 600;
+}
+
+.history-table .confidence {
+  color: #667eea;
+  font-weight: 600;
+}
+
+.history-table .action {
+  font-size: 0.9rem;
+}
+
+.view-image-link {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid #667eea;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  display: inline-block;
+}
+
+.view-image-link:hover {
+  background: #667eea;
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .history-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .filter-buttons {
+    width: 100%;
+  }
+  
+  .filter-buttons button {
+    flex: 1;
+  }
+}
