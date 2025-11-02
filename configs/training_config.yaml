@@ -30,8 +30,8 @@ training:
   min_delta: 0.001
   
   # Device
-  device: "cuda"  # Options: cuda, cpu, mps
-  workers: 8
+  device: "cpu"  # Options: cuda, cpu, mps
+  workers: 4  # Reduced for CPU training
   
 # Augmentation
 augmentation:

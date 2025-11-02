@@ -38,14 +38,28 @@ class GoogleDriveDownloader:
         print(f"Downloading data from Google Drive folder: {folder_id}")
         print(f"Output directory: {self.output_dir}")
         
-        # Download entire folder
+        # Download entire folder (with remaining_ok to handle large folders)
         url = f"https://drive.google.com/drive/folders/{folder_id}"
-        gdown.download_folder(
-            url=url,
-            output=str(self.output_dir),
-            quiet=False,
-            use_cookies=False
-        )
+        try:
+            gdown.download_folder(
+                url=url,
+                output=str(self.output_dir),
+                quiet=False,
+                use_cookies=False,
+                remaining_ok=True  # Don't error on 50+ files, just download what we can
+            )
+        except Exception as e:
+            if "more than 50 files" in str(e):
+                print("\n⚠ Your folder has more than 50 files.")
+                print("gdown has a 50-file limit for public folders.")
+                print("\nOptions to download all your data:")
+                print("  1. Use Google Drive desktop app to sync the folder")
+                print("  2. Manually download and extract to data/raw/")
+                print("  3. Set up Google Drive API credentials (see GETTING_STARTED.md)")
+                print(f"\nFolder URL: https://drive.google.com/drive/folders/{folder_id}")
+                raise
+            else:
+                raise
         
         print(f"\nDownload complete! Files saved to: {self.output_dir}")
         self._print_summary()
