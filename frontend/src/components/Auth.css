@@ -1,0 +1,100 @@
+.auth-button {
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+}
+
+.auth-button.sign-in {
+  background: white;
+  color: #667eea;
+  border: 2px solid white;
+}
+
+.auth-button.sign-in:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
+}
+
+.auth-button.sign-out {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+}
+
+.auth-button.sign-out:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
+.user-name {
+  color: white;
+  font-weight: 500;
+}
+
+.login-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 2rem;
+}
+
+.login-box {
+  background: white;
+  padding: 3rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  text-align: center;
+  max-width: 400px;
+  width: 100%;
+}
+
+.login-box h1 {
+  margin: 0 0 1rem 0;
+  color: #667eea;
+  font-size: 2rem;
+}
+
+.login-box p {
+  margin: 0 0 2rem 0;
+  color: #666;
+}
+
+.login-box .auth-button.sign-in {
+  width: 100%;
+  background: #667eea;
+  color: white;
+}
+
+.login-box .auth-button.sign-in:hover {
+  background: #764ba2;
+}
+
+.unauthorized-message {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+  border: 1px solid #f5c6cb;
+}
