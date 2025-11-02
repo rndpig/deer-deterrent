@@ -34,6 +34,10 @@ class DeerDeterrentSystem:
         self.cameras = self.config['cameras']
         self.settings = self.config['settings']
         
+        # Load seasonal settings
+        self.season_start = os.getenv("SEASON_START_DATE", "04-01")
+        self.season_end = os.getenv("SEASON_END_DATE", "10-31")
+        
         # Initialize components
         print("\n[1/3] Initializing deer detector...")
         model_path = os.getenv("MODEL_PATH", "models/production/best.pt")
@@ -55,7 +59,37 @@ class DeerDeterrentSystem:
             print("\n⚠ DRY RUN MODE - Sprinklers will NOT be activated")
         
         print("\n✓ System initialized successfully")
+        self._print_season_status()
         print("=" * 60)
+    
+    def _print_season_status(self) -> None:
+        """Print current seasonal operation status."""
+        if self.is_in_season():
+            print(f"✓ ACTIVE SEASON ({self.season_start} to {self.season_end})")
+        else:
+            print(f"⚠ OFF-SEASON (Active: {self.season_start} to {self.season_end})")
+            print("  Irrigation system winterized - detection only mode")
+    
+    def is_in_season(self) -> bool:
+        """Check if current date is within irrigation season."""
+        now = datetime.now()
+        current_year = now.year
+        
+        # Parse season dates
+        start_month, start_day = map(int, self.season_start.split('-'))
+        end_month, end_day = map(int, self.season_end.split('-'))
+        
+        # Create datetime objects for this year
+        season_start = datetime(current_year, start_month, start_day)
+        season_end = datetime(current_year, end_month, end_day)
+        
+        # Handle season spanning year boundary (e.g., Nov-Mar)
+        if season_start > season_end:
+            # Season crosses year boundary
+            return now >= season_start or now <= season_end
+        else:
+            # Normal season within same year
+            return season_start <= now <= season_end
     
     def is_active_hours(self) -> bool:
         """Check if current time is within active hours."""
@@ -168,6 +202,12 @@ class DeerDeterrentSystem:
         sprinkler_zones = zone['sprinkler_zones']
         duration = self.settings['sprinkler_duration']
         cooldown = self.settings['zone_cooldown']
+        
+        # Check if in season
+        if not self.is_in_season():
+            print(f"   ⚠ OFF-SEASON: Sprinklers not activated (irrigation winterized)")
+            print(f"   ℹ Detection logged for analysis")
+            return
         
         if self.dry_run:
             print(f"   [DRY RUN] Would activate sprinklers: zones {sprinkler_zones}")

@@ -35,10 +35,21 @@ class RingCameraClient:
         print("Authenticating with Ring API...")
         
         try:
-            auth = Auth("YourAppName/1.0", None, token_updated_callback=self._token_updated)
-            auth.fetch_token(self.username, self.password)
+            # Updated for newer ring-doorbell API
+            cache_file = Path("ring_token.cache")
+            
+            auth = Auth("DeerDeterrent/1.0", None, cache_file)
+            
+            # Try to load existing token first
+            if cache_file.exists():
+                print("Using cached authentication token...")
+                auth.fetch_token()
+            else:
+                print("Fetching new authentication token...")
+                auth.fetch_token(self.username, self.password)
             
             self.ring = Ring(auth)
+            self.ring.update_data()
             self.devices = self.ring.devices()
             
             print(f"✓ Successfully authenticated")
@@ -46,16 +57,13 @@ class RingCameraClient:
             
         except Exception as e:
             print(f"✗ Authentication failed: {e}")
+            import traceback
+            traceback.print_exc()
             print("\nTroubleshooting:")
             print("  - Verify RING_USERNAME and RING_PASSWORD in .env")
-            print("  - If 2FA is enabled, you may need to handle it separately")
-            print("  - Check ring-doorbell library documentation for 2FA setup")
+            print("  - If 2FA is enabled, you need to get a 2FA code")
+            print("  - Try deleting ring_token.cache if it exists")
             raise
-    
-    def _token_updated(self, token) -> None:
-        """Callback for when auth token is updated."""
-        # You can save the token here for future use
-        print("Auth token updated")
     
     def _list_devices(self) -> None:
         """List all available Ring devices."""
