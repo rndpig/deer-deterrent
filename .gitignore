@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints
+
+# Environment variables
+.env
+
+# Data (large files)
+data/raw/
+data/processed/
+*.jpg
+*.png
+*.mp4
+*.avi
+
+# Models (large files)
+models/checkpoints/
+models/production/*.pt
+models/production/*.pth
+*.pt
+*.pth
+*.onnx
+
+# Logs
+logs/
+*.log
+
+# Google credentials
+configs/google_credentials.json
+configs/*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+temp/
+tmp/
+*.tmp

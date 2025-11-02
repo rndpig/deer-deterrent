@@ -1,0 +1,67 @@
+# Training Configuration for Deer Detection Model
+
+# Data paths
+data:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  train_split: 0.7
+  val_split: 0.2
+  test_split: 0.1
+  image_size: 640
+  
+# Model configuration
+model:
+  architecture: "yolov8n"  # Options: yolov8n, yolov8s, yolov8m, yolov8l, yolov8x
+  pretrained: true
+  num_classes: 1  # Just "deer"
+  
+# Training parameters
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.01
+  optimizer: "SGD"  # Options: SGD, Adam, AdamW
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 3
+  
+  # Early stopping
+  patience: 50
+  min_delta: 0.001
+  
+  # Device
+  device: "cuda"  # Options: cuda, cpu, mps
+  workers: 8
+  
+# Augmentation
+augmentation:
+  hsv_h: 0.015  # Hue
+  hsv_s: 0.7    # Saturation
+  hsv_v: 0.4    # Value
+  degrees: 0.0  # Rotation
+  translate: 0.1
+  scale: 0.5
+  shear: 0.0
+  perspective: 0.0
+  flipud: 0.0   # Vertical flip
+  fliplr: 0.5   # Horizontal flip
+  mosaic: 1.0
+  mixup: 0.0
+  
+# Validation
+validation:
+  conf_threshold: 0.001
+  iou_threshold: 0.6
+  
+# Output
+output:
+  save_dir: "models/checkpoints"
+  save_period: 10  # Save checkpoint every N epochs
+  name: "deer_detector"
+  
+# Logging
+logging:
+  log_dir: "logs/training"
+  tensorboard: true
+  save_predictions: true
+  plot_metrics: true

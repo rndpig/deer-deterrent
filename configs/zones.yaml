@@ -1,0 +1,84 @@
+# Camera-to-Sprinkler Zone Mapping Configuration
+
+# Define detection zones in camera view and their corresponding sprinkler zones
+zones:
+  - name: "Front Garden - Left"
+    camera_id: "front_camera"
+    # Bounding box defining this zone in the camera view (normalized 0-1)
+    detection_area:
+      x_min: 0.0
+      y_min: 0.0
+      x_max: 0.5
+      y_max: 1.0
+    # Rainbird zones to activate
+    sprinkler_zones: [1, 2]
+    
+  - name: "Front Garden - Right"
+    camera_id: "front_camera"
+    detection_area:
+      x_min: 0.5
+      y_min: 0.0
+      x_max: 1.0
+      y_max: 1.0
+    sprinkler_zones: [3, 4]
+    
+  - name: "Side Yard"
+    camera_id: "side_camera"
+    detection_area:
+      x_min: 0.0
+      y_min: 0.0
+      x_max: 1.0
+      y_max: 1.0
+    sprinkler_zones: [5, 6]
+    
+  - name: "Back Garden"
+    camera_id: "back_camera"
+    detection_area:
+      x_min: 0.0
+      y_min: 0.0
+      x_max: 1.0
+      y_max: 1.0
+    sprinkler_zones: [7, 8, 9]
+
+# Camera configuration
+cameras:
+  - id: "front_camera"
+    name: "Front Door Ring Camera"
+    enabled: true
+    check_interval: 2  # seconds
+    
+  - id: "side_camera"
+    name: "Side Yard Ring Camera"
+    enabled: true
+    check_interval: 2
+    
+  - id: "back_camera"
+    name: "Back Garden Ring Camera"
+    enabled: true
+    check_interval: 2
+
+# Global settings
+settings:
+  # Confidence threshold for deer detection
+  min_confidence: 0.6
+  
+  # Minimum time between activations of the same zone (seconds)
+  zone_cooldown: 300  # 5 minutes
+  
+  # Sprinkler activation duration (seconds)
+  sprinkler_duration: 30
+  
+  # Active hours (24-hour format)
+  active_hours:
+    enabled: true
+    start: 20  # 8 PM
+    end: 6     # 6 AM
+  
+  # Require multiple detections before triggering
+  detection_confirmation:
+    enabled: true
+    required_detections: 2
+    within_seconds: 10
+  
+  # Dry run mode (don't actually activate sprinklers)
+  dry_run: false
