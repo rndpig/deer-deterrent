@@ -22,6 +22,7 @@ export function useAuth() {
   }
 
   const signIn = () => {
+    console.log('Sign in clicked, redirecting to:', '/api/auth/signin')
     window.location.href = '/api/auth/signin'
   }
 

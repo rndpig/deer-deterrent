@@ -34,7 +34,13 @@ export default async function handler(req, res) {
   if (action === 'signin') {
     // Google OAuth redirect
     const clientId = process.env.GOOGLE_CLIENT_ID;
-    const redirectUri = `${process.env.VERCEL_URL || req.headers.origin}/api/auth/callback`;
+    const protocol = req.headers['x-forwarded-proto'] || 'https';
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const redirectUri = `${protocol}://${host}/api/auth/callback`;
+    
+    console.log('OAuth redirect URI:', redirectUri);
+    console.log('Client ID:', clientId);
+    
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${clientId}&` +
       `redirect_uri=${encodeURIComponent(redirectUri)}&` +
@@ -55,6 +61,10 @@ export default async function handler(req, res) {
 
     try {
       // Exchange code for tokens
+      const protocol = req.headers['x-forwarded-proto'] || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const redirectUri = `${protocol}://${host}/api/auth/callback`;
+      
       const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -62,7 +72,7 @@ export default async function handler(req, res) {
           code,
           client_id: process.env.GOOGLE_CLIENT_ID,
           client_secret: process.env.GOOGLE_CLIENT_SECRET,
-          redirect_uri: `${process.env.VERCEL_URL || req.headers.origin}/api/auth/callback`,
+          redirect_uri: redirectUri,
           grant_type: 'authorization_code',
         }),
       });
