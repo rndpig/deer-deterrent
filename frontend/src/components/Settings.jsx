@@ -2,7 +2,33 @@ import { useState, useEffect } from 'react'
 import './Settings.css'
 
 function Settings({ settings, setSettings }) {
-  const [localSettings, setLocalSettings] = useState(settings || {})
+  // Default settings that match backend defaults
+  const defaultSettings = {
+    confidence_threshold: 0.6,
+    season_start: '04-01',
+    season_end: '10-31',
+    active_hours_enabled: true,
+    active_hours_start: 20,
+    active_hours_end: 6,
+    sprinkler_duration: 30,
+    zone_cooldown: 300,
+    dry_run: true
+  }
+
+  // Initialize from localStorage or defaults
+  const getInitialSettings = () => {
+    try {
+      const saved = localStorage.getItem('deer-deterrent-settings')
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch (err) {
+      console.error('Error loading saved settings:', err)
+    }
+    return settings || defaultSettings
+  }
+
+  const [localSettings, setLocalSettings] = useState(getInitialSettings())
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -23,9 +49,18 @@ function Settings({ settings, setSettings }) {
     setSaving(true)
     setMessage('')
     
+    // Save to localStorage immediately
+    try {
+      localStorage.setItem('deer-deterrent-settings', JSON.stringify(localSettings))
+      console.log('Settings saved to localStorage')
+    } catch (err) {
+      console.error('Error saving to localStorage:', err)
+    }
+    
+    // Try to save to backend if available
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      console.log('Saving settings to:', `${apiUrl}/api/settings`)
+      console.log('Attempting to save to backend:', `${apiUrl}/api/settings`)
       console.log('Settings data:', localSettings)
       
       const response = await fetch(`${apiUrl}/api/settings`, {
@@ -41,19 +76,21 @@ function Settings({ settings, setSettings }) {
       if (!response.ok) {
         const errorText = await response.text()
         console.error('Response error:', errorText)
-        throw new Error(`Failed to save settings: ${response.status}`)
+        throw new Error(`Backend returned ${response.status}`)
       }
       
       const data = await response.json()
-      setSettings(data.settings)
-      setMessage('✅ Settings saved successfully!')
-      
-      setTimeout(() => setMessage(''), 3000)
+      if (setSettings) {
+        setSettings(data.settings)
+      }
+      setMessage('✅ Settings saved successfully (backend and local)!')
     } catch (err) {
-      console.error('Error saving settings:', err)
-      setMessage(`❌ Error: ${err.message}. Backend may not be running.`)
+      console.error('Backend save failed:', err)
+      // Still consider it a success since we saved locally
+      setMessage('✅ Settings saved locally (backend offline)')
     } finally {
       setSaving(false)
+      setTimeout(() => setMessage(''), 5000)
     }
   }
 
