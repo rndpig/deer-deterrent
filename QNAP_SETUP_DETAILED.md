@@ -15,6 +15,21 @@ Container Station is QNAP's Docker management interface. It provides:
 
 ### 1.1 Install Container Station (If Not Already Installed)
 
+**Important:** Container Station availability depends on your QNAP model and QTS version.
+
+#### Check Your QNAP Model Compatibility
+
+Container Station is available on:
+- All x86-based QNAP models (Intel/AMD processors)
+- ARM-based models with 4GB+ RAM
+- QTS 4.2.0 or later
+
+**Not available on:**
+- Very old QNAP models (pre-2015)
+- ARM models with less than 2GB RAM
+
+#### Method 1: Find Container Station in App Center
+
 1. **Open QNAP Admin Interface**
    - Navigate to `http://YOUR-QNAP-IP:8080` in browser
    - Or just `http://YOUR-QNAP-IP` if using default HTTP port
@@ -26,14 +41,123 @@ Container Station is QNAP's Docker management interface. It provides:
 
 3. **Search for Container Station**
    - In the search bar, type: `Container Station`
-   - Click on **Container Station** in results
+   - **Alternative names to try:**
+     - `Container`
+     - `Docker`
+     - Look under **Utilities** or **Developer Tools** categories
 
-4. **Install Container Station**
+4. **If Container Station appears:**
    - Click **Install** button
    - Wait 2-3 minutes for installation
    - Click **Open** when installation completes
 
-5. **Initial Container Station Setup**
+#### Method 2: Manual Installation via QPKG
+
+**If Container Station is not in App Center, install manually:**
+
+1. **Determine Your QNAP Architecture**
+   - SSH into QNAP: `ssh admin@YOUR-QNAP-IP`
+   - Run: `uname -m`
+   - Output will be something like:
+     - `x86_64` - Intel/AMD 64-bit (most common)
+     - `i686` - Intel/AMD 32-bit
+     - `armv7l` - ARM 32-bit
+     - `aarch64` - ARM 64-bit
+
+2. **Check QTS Version**
+   - In QNAP web interface: **Control Panel** → **System** → **System Status**
+   - Or via SSH: `cat /etc/version`
+   - Note the version (e.g., "QTS 5.0.1")
+
+3. **Download Container Station QPKG**
+   
+   Visit QNAP's official download page:
+   - Go to: https://www.qnap.com/en/software/container-station
+   - Or search Google for: "QNAP Container Station download"
+   - Select your model or architecture
+   - Download the `.qpkg` file
+
+4. **Install QPKG Manually**
+   - QNAP Web Interface → **App Center**
+   - Click the **gear icon** (⚙️) in top-right
+   - Select **Install Manually**
+   - Click **Browse** and select the downloaded `.qpkg` file
+   - Click **OK** to install
+   - Wait 2-5 minutes for installation
+
+#### Method 3: Alternative - Use Docker Directly via SSH
+
+**If Container Station installation fails or isn't available:**
+
+You can use Docker directly from the command line without Container Station.
+
+1. **Install Docker via QPKG**
+   
+   Some QNAP models have Docker as a separate package:
+   - App Center → Search for "Docker"
+   - Or manually install Docker QPKG
+
+2. **Or Install Docker via opkg (package manager)**
+   
+   ```bash
+   # SSH into QNAP
+   ssh admin@YOUR-QNAP-IP
+   
+   # Check if opkg is available
+   opkg --version
+   
+   # If opkg exists, install Docker
+   opkg update
+   opkg install docker docker-compose
+   
+   # Start Docker service
+   /etc/init.d/docker start
+   
+   # Enable auto-start
+   update-rc.d docker defaults
+   ```
+
+3. **Or Use Entware (Third-Party Package Manager)**
+   
+   ```bash
+   # SSH into QNAP
+   ssh admin@YOUR-QNAP-IP
+   
+   # Install Entware (if not already installed)
+   # Visit: https://github.com/Entware/Entware/wiki/Install-on-QNAP-NAS
+   
+   # Download Entware installer for your architecture
+   # For x86_64:
+   wget http://bin.entware.net/x64-k3.2/installer/entware_install.sh
+   sh entware_install.sh
+   
+   # Install Docker via Entware
+   opkg install docker docker-compose
+   ```
+
+#### Method 4: Check Model-Specific Limitations
+
+**Some QNAP models have specific requirements:**
+
+1. **Check QNAP Community Forums**
+   - Search: "Container Station [YOUR QNAP MODEL]"
+   - Example: "Container Station TS-251+"
+
+2. **Contact QNAP Support**
+   - They can confirm if your model supports Container Station
+   - May provide direct download link
+
+3. **Check for Firmware Updates**
+   - Old firmware may not support Container Station
+   - Update QTS: **Control Panel** → **System** → **Firmware Update**
+
+#### What to Do After This Section:
+
+- ✅ **If Container Station installs successfully**: Continue to section 1.2
+- ⚠️ **If using Docker directly (Method 3)**: Skip Container Station GUI steps, use command line only
+- ❌ **If nothing works**: Let me know your QNAP model and QTS version, I'll provide alternative deployment instructions
+
+5. **Initial Container Station Setup** (Skip if using Docker directly)
    - Accept terms of service
    - Choose storage location (usually default is fine)
    - Enable **Docker Hub** registry access
