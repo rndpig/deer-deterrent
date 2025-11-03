@@ -14,7 +14,7 @@
 
 .settings h2 {
   margin: 0 0 1.5rem 0;
-  color: #667eea;
+  color: #646cff;
 }
 
 .message {
@@ -57,7 +57,7 @@
 
 .settings-section h3 {
   margin: 0 0 1.5rem 0;
-  color: #667eea;
+  color: #646cff;
   font-size: 1.2rem;
 }
 
@@ -113,17 +113,17 @@
 .setting-item input[type="number"]:focus,
 .setting-item input[type="text"]:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #646cff;
 }
 
 .value-display {
   display: inline-block;
   margin-left: 1rem;
   padding: 0.5rem 1rem;
-  background: rgba(102, 126, 234, 0.1);
+  background: rgba(100, 108, 255, 0.1);
   border-radius: 6px;
   font-weight: 600;
-  color: #667eea;
+  color: #646cff;
 }
 
 .setting-item.checkbox label {
@@ -154,7 +154,7 @@
 }
 
 .save-button {
-  background: #667eea;
+  background: #646cff;
   color: white;
   border: none;
   padding: 1rem 2rem;
@@ -166,9 +166,9 @@
 }
 
 .save-button:hover:not(:disabled) {
-  background: #764ba2;
+  background: #535bf2;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(100, 108, 255, 0.3);
 }
 
 .save-button:disabled {

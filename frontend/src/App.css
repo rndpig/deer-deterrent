@@ -1,14 +1,18 @@
 .app {
   min-height: 100vh;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
 }
 
 .app-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
   color: white;
   padding: 2rem;
   border-radius: 8px;
   margin-bottom: 2rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  border: 1px solid #404040;
 }
 
 .app-header .header-content {
@@ -45,7 +49,7 @@
 
 .tabs button.active {
   background: white;
-  color: #667eea;
+  color: #1a1a1a;
   font-weight: 600;
 }
 

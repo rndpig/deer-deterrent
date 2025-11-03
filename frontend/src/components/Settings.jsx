@@ -25,6 +25,9 @@ function Settings({ settings, setSettings }) {
     
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      console.log('Saving settings to:', `${apiUrl}/api/settings`)
+      console.log('Settings data:', localSettings)
+      
       const response = await fetch(`${apiUrl}/api/settings`, {
         method: 'PUT',
         headers: {
@@ -33,8 +36,12 @@ function Settings({ settings, setSettings }) {
         body: JSON.stringify(localSettings),
       })
       
+      console.log('Response status:', response.status)
+      
       if (!response.ok) {
-        throw new Error('Failed to save settings')
+        const errorText = await response.text()
+        console.error('Response error:', errorText)
+        throw new Error(`Failed to save settings: ${response.status}`)
       }
       
       const data = await response.json()
@@ -44,7 +51,7 @@ function Settings({ settings, setSettings }) {
       setTimeout(() => setMessage(''), 3000)
     } catch (err) {
       console.error('Error saving settings:', err)
-      setMessage('❌ Error saving settings')
+      setMessage(`❌ Error: ${err.message}. Backend may not be running.`)
     } finally {
       setSaving(false)
     }

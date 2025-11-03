@@ -11,11 +11,12 @@
 }
 
 .stat-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
   color: white;
   padding: 1.5rem;
   border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  border: 1px solid #404040;
 }
 
 .stat-card h3 {
@@ -50,7 +51,7 @@
 
 .system-status h2 {
   margin: 0 0 1rem 0;
-  color: #667eea;
+  color: #646cff;
 }
 
 .status-info {
@@ -63,7 +64,7 @@
   display: flex;
   justify-content: space-between;
   padding: 0.75rem;
-  background: rgba(102, 126, 234, 0.1);
+  background: rgba(100, 108, 255, 0.1);
   border-radius: 6px;
 }
 
@@ -93,11 +94,11 @@
 
 .section-header h2 {
   margin: 0;
-  color: #667eea;
+  color: #646cff;
 }
 
 .demo-button {
-  background: #667eea;
+  background: #646cff;
   color: white;
   border: none;
   padding: 0.75rem 1.5rem;
@@ -108,7 +109,7 @@
 }
 
 .demo-button:hover {
-  background: #764ba2;
+  background: #535bf2;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
@@ -159,7 +160,7 @@
 
 .deer-count {
   font-weight: 600;
-  color: #667eea;
+  color: #646cff;
 }
 
 .detection-body p {

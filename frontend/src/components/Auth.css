@@ -10,7 +10,7 @@
 
 .auth-button.sign-in {
   background: white;
-  color: #667eea;
+  color: #1a1a1a;
   border: 2px solid white;
 }
 
@@ -55,7 +55,7 @@
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
   padding: 2rem;
 }
 
@@ -71,7 +71,7 @@
 
 .login-box h1 {
   margin: 0 0 1rem 0;
-  color: #667eea;
+  color: #646cff;
   font-size: 2rem;
 }
 
@@ -82,12 +82,12 @@
 
 .login-box .auth-button.sign-in {
   width: 100%;
-  background: #667eea;
+  background: #646cff;
   color: white;
 }
 
 .login-box .auth-button.sign-in:hover {
-  background: #764ba2;
+  background: #535bf2;
 }
 
 .unauthorized-message {
