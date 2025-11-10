@@ -223,7 +223,7 @@ services:
       ml-detector:
         condition: service_healthy
       backend:
-        condition: service_healthy
+        condition: service_started
     
     environment:
       - ML_DETECTOR_URL=http://ml-detector:8001
