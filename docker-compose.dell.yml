@@ -278,6 +278,8 @@ services:
     
     environment:
       - TZ=${TIMEZONE:-America/New_York}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
     
     volumes:
       - ./frontend/src:/app/src
