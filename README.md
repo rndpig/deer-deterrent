@@ -6,6 +6,48 @@ An AI-powered deer detection and deterrent system that monitors Ring camera feed
 
 This project uses machine learning to detect deer in real-time from Ring camera footage and automatically triggers Rainbird irrigation zones to humanely deter them from eating plants and causing damage.
 
+## 🚀 Deployment Options
+
+Choose the deployment method that works best for you:
+
+### Option 1: Dell OptiPlex (Recommended) 🖥️
+**Best for:** Faster detection, all-in-one solution, future expansion
+
+- **Performance:** 2-5 second ML inference (fast!)
+- **Resources:** 16GB RAM, i7 CPU, 256GB SSD
+- **Cost:** ~$40/year power consumption
+- **Setup time:** ~2 hours
+- **Guides:**
+  - 📖 **Start here:** [`DELL_README.md`](DELL_README.md) - Overview and links
+  - ⚡ **Quick start:** [`QUICKSTART_DELL.md`](QUICKSTART_DELL.md) - Get running fast
+  - 📚 **Full guide:** [`DELL_DEPLOYMENT.md`](DELL_DEPLOYMENT.md) - Comprehensive instructions
+  - ✅ **Checklist:** [`DELL_CHECKLIST.md`](DELL_CHECKLIST.md) - Track your progress
+
+### Option 2: Raspberry Pi 🥧
+**Best for:** Low power consumption, dedicated edge device
+
+- **Performance:** 10-20 second ML inference
+- **Resources:** 4-8GB RAM, ARM CPU, MicroSD
+- **Cost:** ~$5/year power consumption
+- **Setup time:** ~2-3 hours
+- **Guide:** [`RPI_DEPLOYMENT.md`](RPI_DEPLOYMENT.md)
+
+### Option 3: QNAP NAS 💾
+**Best for:** If you already have a QNAP NAS
+
+- **Performance:** Varies by NAS model
+- **Resources:** Depends on NAS specs
+- **Setup time:** ~3 hours
+- **Guides:** [`QNAP_DEPLOYMENT.md`](QNAP_DEPLOYMENT.md), [`QNAP_SETUP_DETAILED.md`](QNAP_SETUP_DETAILED.md)
+
+### Option 4: Cloud Deployment ☁️
+**Best for:** No local hardware, always accessible
+
+- **Performance:** Fast (cloud GPUs)
+- **Cost:** Variable (based on usage)
+- **Setup time:** ~1 hour
+- **Guide:** [`VERCEL_DEPLOY.md`](VERCEL_DEPLOY.md)
+
 ## System Architecture
 
 1. **Data Collection & Training**: Annotated images from Google Drive used to train a deer detection model

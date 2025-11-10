@@ -1,0 +1,442 @@
+# =============================================================================
+# Coordinator Dockerfile - Ring Webhook Handler & Sprinkler Controller
+# =============================================================================
+# This container coordinates between Ring camera events, ML detection,
+# and Rainbird sprinkler activation
+# =============================================================================
+
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    fastapi==0.115.0 \
+    uvicorn[standard]==0.32.0 \
+    httpx==0.27.2 \
+    paho-mqtt==2.1.0 \
+    python-multipart==0.0.17 \
+    pyyaml==6.0.2 \
+    python-dateutil==2.9.0
+
+# Create directories
+RUN mkdir -p /app/logs /app/snapshots /app/config
+
+# Create the coordinator service
+RUN cat > /app/coordinator_service.py << 'EOF'
+#!/usr/bin/env python3
+"""
+Coordinator Service - Ring Camera → ML Detection → Sprinkler Activation
+Handles the complete flow from camera event to deterrent action
+"""
+
+import os
+import logging
+import json
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Optional, Dict, Any
+import asyncio
+
+from fastapi import FastAPI, Request, BackgroundTasks, HTTPException
+from fastapi.responses import JSONResponse
+import httpx
+import paho.mqtt.client as mqtt
+
+# Configure logging
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('/app/logs/coordinator.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Deer Deterrent Coordinator",
+    description="Coordinates Ring cameras, ML detection, and sprinkler activation",
+    version="1.0.0"
+)
+
+# Configuration
+CONFIG = {
+    "ML_DETECTOR_URL": os.getenv("ML_DETECTOR_URL", "http://ml-detector:8001"),
+    "BACKEND_API_URL": os.getenv("BACKEND_API_URL", "http://backend:8000"),
+    "MQTT_HOST": os.getenv("MQTT_HOST", "mosquitto"),
+    "MQTT_PORT": int(os.getenv("MQTT_PORT", "1883")),
+    "MQTT_USER": os.getenv("MQTT_USER", ""),
+    "MQTT_PASSWORD": os.getenv("MQTT_PASSWORD", ""),
+    "RAINBIRD_IP": os.getenv("RAINBIRD_IP", ""),
+    "RAINBIRD_PASSWORD": os.getenv("RAINBIRD_PASSWORD", ""),
+    "RAINBIRD_ZONE": os.getenv("RAINBIRD_ZONE", "1"),
+    "RAINBIRD_DURATION_SECONDS": int(os.getenv("RAINBIRD_DURATION_SECONDS", "30")),
+    "CONFIDENCE_THRESHOLD": float(os.getenv("CONFIDENCE_THRESHOLD", "0.75")),
+    "COOLDOWN_SECONDS": int(os.getenv("COOLDOWN_SECONDS", "300")),
+    "ENABLE_SPRINKLER": os.getenv("ENABLE_SPRINKLER", "true").lower() == "true",
+    "ACTIVE_HOURS_START": int(os.getenv("ACTIVE_HOURS_START", "0")),
+    "ACTIVE_HOURS_END": int(os.getenv("ACTIVE_HOURS_END", "24")),
+}
+
+# State tracking
+last_activation_time: Optional[datetime] = None
+mqtt_client: Optional[mqtt.Client] = None
+
+
+def is_active_hours() -> bool:
+    """Check if current time is within active hours"""
+    current_hour = datetime.now().hour
+    start = CONFIG["ACTIVE_HOURS_START"]
+    end = CONFIG["ACTIVE_HOURS_END"]
+    
+    if start <= end:
+        return start <= current_hour < end
+    else:  # Wraps midnight
+        return current_hour >= start or current_hour < end
+
+
+async def download_snapshot(url: str) -> bytes:
+    """Download image from URL"""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            logger.info(f"Downloaded snapshot: {len(response.content)} bytes")
+            return response.content
+    except Exception as e:
+        logger.error(f"Failed to download snapshot: {e}")
+        raise
+
+
+async def detect_deer(image_bytes: bytes) -> Dict[str, Any]:
+    """Send image to ML detector"""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            files = {"file": ("snapshot.jpg", image_bytes, "image/jpeg")}
+            response = await client.post(
+                f"{CONFIG['ML_DETECTOR_URL']}/detect",
+                files=files
+            )
+            response.raise_for_status()
+            result = response.json()
+            logger.info(f"ML detection: {result['num_detections']} objects, deer={result['deer_detected']}")
+            return result
+    except Exception as e:
+        logger.error(f"ML detection failed: {e}")
+        raise
+
+
+async def activate_rainbird(zone: str, duration: int) -> bool:
+    """Activate Rainbird sprinkler zone"""
+    if not CONFIG["RAINBIRD_IP"]:
+        logger.warning("Rainbird IP not configured, skipping activation")
+        return False
+    
+    if not CONFIG["ENABLE_SPRINKLER"]:
+        logger.info("Sprinkler activation disabled (dry-run mode)")
+        return True
+    
+    try:
+        # TODO: Implement actual Rainbird API call
+        # This is a placeholder - we'll implement after reverse-engineering the API
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            payload = {
+                "zone": zone,
+                "duration": duration
+            }
+            
+            # Example endpoint (will be customized based on your Rainbird model)
+            url = f"http://{CONFIG['RAINBIRD_IP']}/api/irrigation"
+            
+            logger.info(f"Activating Rainbird zone {zone} for {duration}s (simulated)")
+            # response = await client.post(url, json=payload)
+            # response.raise_for_status()
+            
+            # For now, just simulate success
+            await asyncio.sleep(0.1)
+            
+            logger.info(f"✓ Sprinkler zone {zone} activated for {duration}s")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Failed to activate sprinkler: {e}")
+        return False
+
+
+async def log_to_backend(event_data: Dict[str, Any]):
+    """Log detection event to backend database"""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(
+                f"{CONFIG['BACKEND_API_URL']}/api/detections",
+                json=event_data
+            )
+            logger.info("Logged event to backend")
+    except Exception as e:
+        logger.error(f"Failed to log to backend: {e}")
+
+
+async def process_camera_event(camera_id: str, snapshot_url: str, timestamp: str):
+    """Process a camera motion event"""
+    global last_activation_time
+    
+    try:
+        logger.info(f"Processing camera event: {camera_id} at {timestamp}")
+        
+        # Check if within active hours
+        if not is_active_hours():
+            logger.info(f"Outside active hours ({CONFIG['ACTIVE_HOURS_START']}-{CONFIG['ACTIVE_HOURS_END']}), skipping")
+            return
+        
+        # Download snapshot
+        image_bytes = await download_snapshot(snapshot_url)
+        
+        # Save snapshot locally
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        snapshot_path = Path(f"/app/snapshots/{ts}_{camera_id}.jpg")
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+        snapshot_path.write_bytes(image_bytes)
+        logger.info(f"Saved snapshot: {snapshot_path}")
+        
+        # Run ML detection
+        detection_result = await detect_deer(image_bytes)
+        
+        # Check if deer detected
+        deer_detected = detection_result.get("deer_detected", False)
+        confidence = 0.0
+        
+        if deer_detected and detection_result.get("detections"):
+            # Get highest confidence deer detection
+            deer_detections = [
+                d for d in detection_result["detections"]
+                if d["class"].lower() in ['deer', 'dog', 'horse', 'cow', 'sheep', 'bear']
+            ]
+            if deer_detections:
+                confidence = max(d["confidence"] for d in deer_detections)
+        
+        logger.info(f"Detection result: deer={deer_detected}, confidence={confidence:.2f}")
+        
+        # Prepare event data
+        event_data = {
+            "timestamp": timestamp,
+            "camera_id": camera_id,
+            "deer_detected": deer_detected,
+            "confidence": confidence,
+            "snapshot_path": str(snapshot_path),
+            "detections": detection_result.get("detections", []),
+            "sprinkler_activated": False
+        }
+        
+        # If deer detected, check cooldown and activate sprinkler
+        if deer_detected:
+            now = datetime.now()
+            
+            # Check cooldown
+            if last_activation_time:
+                elapsed = (now - last_activation_time).total_seconds()
+                if elapsed < CONFIG["COOLDOWN_SECONDS"]:
+                    logger.info(f"Cooldown active: {elapsed:.0f}s/{CONFIG['COOLDOWN_SECONDS']}s")
+                    await log_to_backend(event_data)
+                    return
+            
+            # Activate sprinkler
+            success = await activate_rainbird(
+                CONFIG["RAINBIRD_ZONE"],
+                CONFIG["RAINBIRD_DURATION_SECONDS"]
+            )
+            
+            if success:
+                last_activation_time = now
+                event_data["sprinkler_activated"] = True
+                logger.info("✓✓✓ DEER DETERRENT ACTIVATED ✓✓✓")
+        
+        # Log to backend
+        await log_to_backend(event_data)
+        
+    except Exception as e:
+        logger.error(f"Error processing camera event: {e}", exc_info=True)
+
+
+def on_mqtt_connect(client, userdata, flags, rc):
+    """MQTT connection callback"""
+    if rc == 0:
+        logger.info("Connected to MQTT broker")
+        # Subscribe to Ring camera motion events
+        client.subscribe("ring/+/motion/state")
+        client.subscribe("ring/+/ding/state")
+        logger.info("Subscribed to Ring motion topics")
+    else:
+        logger.error(f"MQTT connection failed with code {rc}")
+
+
+def on_mqtt_message(client, userdata, msg):
+    """MQTT message callback"""
+    try:
+        topic = msg.topic
+        payload = msg.payload.decode()
+        
+        logger.info(f"MQTT message: {topic} = {payload}")
+        
+        # Parse topic: ring/{camera_id}/motion/state
+        parts = topic.split('/')
+        if len(parts) >= 4 and parts[0] == "ring" and parts[2] in ["motion", "ding"]:
+            camera_id = parts[1]
+            
+            # Check if motion detected (payload might be "ON" or JSON)
+            if payload.upper() == "ON" or "detected" in payload.lower():
+                # Get snapshot URL (this is Ring MQTT specific)
+                # The actual snapshot URL comes from Ring MQTT attributes
+                snapshot_topic = f"ring/{camera_id}/snapshot/url"
+                
+                # For now, we'll construct a webhook event
+                # In production, Ring MQTT publishes snapshot URLs separately
+                logger.info(f"Motion detected on camera {camera_id}")
+                
+                # Process the event (in background)
+                asyncio.create_task(process_camera_event(
+                    camera_id=camera_id,
+                    snapshot_url=f"http://ring-mqtt:8123/snapshot/{camera_id}",
+                    timestamp=datetime.now().isoformat()
+                ))
+        
+    except Exception as e:
+        logger.error(f"Error processing MQTT message: {e}", exc_info=True)
+
+
+def setup_mqtt():
+    """Setup MQTT client"""
+    global mqtt_client
+    
+    try:
+        mqtt_client = mqtt.Client()
+        mqtt_client.on_connect = on_mqtt_connect
+        mqtt_client.on_message = on_mqtt_message
+        
+        if CONFIG["MQTT_USER"]:
+            mqtt_client.username_pw_set(CONFIG["MQTT_USER"], CONFIG["MQTT_PASSWORD"])
+        
+        mqtt_client.connect(CONFIG["MQTT_HOST"], CONFIG["MQTT_PORT"], 60)
+        mqtt_client.loop_start()
+        
+        logger.info(f"MQTT client started: {CONFIG['MQTT_HOST']}:{CONFIG['MQTT_PORT']}")
+        
+    except Exception as e:
+        logger.error(f"Failed to setup MQTT: {e}")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize on startup"""
+    logger.info("Starting Deer Deterrent Coordinator")
+    logger.info(f"Configuration: {json.dumps(CONFIG, indent=2)}")
+    setup_mqtt()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    if mqtt_client:
+        mqtt_client.loop_stop()
+        mqtt_client.disconnect()
+    logger.info("Coordinator shut down")
+
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "service": "Deer Deterrent Coordinator",
+        "status": "running",
+        "version": "1.0.0"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """Health check"""
+    return {
+        "status": "healthy",
+        "mqtt_connected": mqtt_client and mqtt_client.is_connected() if mqtt_client else False,
+        "last_activation": last_activation_time.isoformat() if last_activation_time else None,
+        "active_hours": is_active_hours(),
+        "config": {
+            "rainbird_configured": bool(CONFIG["RAINBIRD_IP"]),
+            "sprinkler_enabled": CONFIG["ENABLE_SPRINKLER"],
+            "cooldown_seconds": CONFIG["COOLDOWN_SECONDS"],
+            "confidence_threshold": CONFIG["CONFIDENCE_THRESHOLD"]
+        }
+    }
+
+
+@app.post("/webhook/test")
+async def test_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Test endpoint for manual triggering"""
+    try:
+        payload = await request.json()
+        
+        camera_id = payload.get("camera_id", "test-camera")
+        snapshot_url = payload.get("snapshot_url")
+        timestamp = payload.get("timestamp", datetime.now().isoformat())
+        
+        if not snapshot_url:
+            raise HTTPException(status_code=400, detail="Missing snapshot_url")
+        
+        background_tasks.add_task(process_camera_event, camera_id, snapshot_url, timestamp)
+        
+        return {"status": "accepted", "message": "Processing test event"}
+        
+    except Exception as e:
+        logger.error(f"Test webhook error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/stats")
+async def get_stats():
+    """Get coordinator statistics"""
+    snapshot_dir = Path("/app/snapshots")
+    snapshot_count = len(list(snapshot_dir.glob("*.jpg"))) if snapshot_dir.exists() else 0
+    
+    cooldown_remaining = 0
+    if last_activation_time:
+        elapsed = (datetime.now() - last_activation_time).total_seconds()
+        cooldown_remaining = max(0, CONFIG["COOLDOWN_SECONDS"] - elapsed)
+    
+    return {
+        "total_snapshots": snapshot_count,
+        "last_activation": last_activation_time.isoformat() if last_activation_time else None,
+        "cooldown_remaining_seconds": int(cooldown_remaining),
+        "active_hours": is_active_hours(),
+        "mqtt_connected": mqtt_client.is_connected() if mqtt_client else False
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=5000,
+        log_level=os.getenv("LOG_LEVEL", "info").lower()
+    )
+EOF
+
+# Make the script executable
+RUN chmod +x /app/coordinator_service.py
+
+# Expose port
+EXPOSE 5000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
+
+# Run the service
+CMD ["python", "/app/coordinator_service.py"]

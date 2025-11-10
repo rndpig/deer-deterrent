@@ -1,0 +1,289 @@
+# =============================================================================
+# ML Detector Dockerfile - YOLOv8 Inference Service
+# =============================================================================
+# This container runs the YOLO model for deer detection
+# It provides a REST API for image inference
+# =============================================================================
+
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install additional ML dependencies
+RUN pip install --no-cache-dir \
+    fastapi==0.115.0 \
+    uvicorn[standard]==0.32.0 \
+    python-multipart==0.0.17 \
+    ultralytics==8.3.0 \
+    opencv-python-headless==4.10.0.84
+
+# Copy application code
+COPY src/ /app/src/
+
+# Create directories
+RUN mkdir -p /app/models /app/logs /app/temp
+
+# Create the ML detector service
+RUN cat > /app/ml_detector_service.py << 'EOF'
+#!/usr/bin/env python3
+"""
+ML Detector Service - YOLOv8 Inference API
+Provides REST API for deer detection using YOLO models
+"""
+
+import os
+import logging
+from pathlib import Path
+from typing import List, Dict, Any
+import io
+
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.responses import JSONResponse
+import uvicorn
+from ultralytics import YOLO
+from PIL import Image
+import numpy as np
+
+# Configure logging
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('/app/logs/ml_detector.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Deer Detector ML Service",
+    description="YOLOv8-based deer detection inference API",
+    version="1.0.0"
+)
+
+# Global model variable
+model = None
+MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "/app/models/yolov8n.pt")
+CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.75"))
+IOU_THRESHOLD = float(os.getenv("IOU_THRESHOLD", "0.45"))
+DEVICE = os.getenv("DEVICE", "cpu")
+
+
+def load_model():
+    """Load YOLO model at startup"""
+    global model
+    try:
+        logger.info(f"Loading YOLO model from {MODEL_PATH}")
+        model = YOLO(MODEL_PATH)
+        model.to(DEVICE)
+        logger.info(f"Model loaded successfully on device: {DEVICE}")
+        
+        # Warm up the model with a dummy inference
+        dummy_image = np.zeros((640, 640, 3), dtype=np.uint8)
+        _ = model(dummy_image, verbose=False)
+        logger.info("Model warm-up complete")
+        
+    except Exception as e:
+        logger.error(f"Failed to load model: {e}")
+        raise
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize model on startup"""
+    load_model()
+
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "service": "Deer Detector ML Service",
+        "status": "running",
+        "model": MODEL_PATH,
+        "device": DEVICE
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    return {
+        "status": "healthy",
+        "model_loaded": model is not None,
+        "model_path": MODEL_PATH,
+        "device": DEVICE,
+        "confidence_threshold": CONFIDENCE_THRESHOLD
+    }
+
+
+@app.post("/detect")
+async def detect_deer(file: UploadFile = File(...)) -> Dict[str, Any]:
+    """
+    Detect deer in uploaded image
+    
+    Args:
+        file: Uploaded image file (JPEG, PNG)
+    
+    Returns:
+        Detection results with bounding boxes and confidence scores
+    """
+    try:
+        # Read image
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+        
+        # Convert to RGB if needed
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        # Convert to numpy array
+        image_np = np.array(image)
+        
+        logger.info(f"Processing image: {image.size}, mode: {image.mode}")
+        
+        # Run inference
+        results = model(
+            image_np,
+            conf=CONFIDENCE_THRESHOLD,
+            iou=IOU_THRESHOLD,
+            verbose=False
+        )
+        
+        # Parse results
+        detections = []
+        deer_detected = False
+        
+        for result in results:
+            boxes = result.boxes
+            
+            for box in boxes:
+                class_id = int(box.cls[0])
+                class_name = model.names[class_id]
+                confidence = float(box.conf[0])
+                bbox = box.xyxy[0].tolist()  # [x1, y1, x2, y2]
+                
+                detection = {
+                    "class": class_name,
+                    "class_id": class_id,
+                    "confidence": round(confidence, 4),
+                    "bbox": {
+                        "x1": round(bbox[0], 2),
+                        "y1": round(bbox[1], 2),
+                        "x2": round(bbox[2], 2),
+                        "y2": round(bbox[3], 2)
+                    }
+                }
+                
+                detections.append(detection)
+                
+                # Check if deer detected
+                # YOLO class 0 is "person", class 15 is "bird", etc.
+                # For custom model, class "deer" should be detected
+                # For COCO model, we might detect "dog", "cat", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe"
+                # Class IDs: dog=16, cat=15, horse=17, sheep=18, cow=19, elephant=20, bear=21, zebra=22, giraffe=23
+                if class_name.lower() in ['deer', 'dog', 'horse', 'cow', 'sheep', 'bear']:
+                    deer_detected = True
+                    logger.info(f"Detected {class_name} with confidence {confidence:.2f}")
+        
+        response = {
+            "deer_detected": deer_detected,
+            "num_detections": len(detections),
+            "detections": detections,
+            "image_size": {
+                "width": image.width,
+                "height": image.height
+            },
+            "confidence_threshold": CONFIDENCE_THRESHOLD
+        }
+        
+        logger.info(f"Detection complete: {len(detections)} objects found, deer={deer_detected}")
+        
+        return response
+    
+    except Exception as e:
+        logger.error(f"Detection error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Detection failed: {str(e)}")
+
+
+@app.post("/detect-batch")
+async def detect_deer_batch(files: List[UploadFile] = File(...)) -> Dict[str, Any]:
+    """
+    Batch detection for multiple images
+    
+    Args:
+        files: List of uploaded image files
+    
+    Returns:
+        Batch detection results
+    """
+    results = []
+    
+    for file in files:
+        try:
+            result = await detect_deer(file)
+            results.append({
+                "filename": file.filename,
+                "success": True,
+                "result": result
+            })
+        except Exception as e:
+            results.append({
+                "filename": file.filename,
+                "success": False,
+                "error": str(e)
+            })
+    
+    deer_count = sum(1 for r in results if r.get("success") and r["result"]["deer_detected"])
+    
+    return {
+        "total_images": len(files),
+        "successful": sum(1 for r in results if r.get("success")),
+        "deer_detected_count": deer_count,
+        "results": results
+    }
+
+
+if __name__ == "__main__":
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8001,
+        log_level=os.getenv("LOG_LEVEL", "info").lower()
+    )
+EOF
+
+# Make the script executable
+RUN chmod +x /app/ml_detector_service.py
+
+# Expose port
+EXPOSE 8001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+
+# Run the service
+CMD ["python", "/app/ml_detector_service.py"]
