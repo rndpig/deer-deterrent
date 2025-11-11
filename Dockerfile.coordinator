@@ -269,9 +269,10 @@ def on_mqtt_connect(client, userdata, flags, rc):
     """MQTT connection callback"""
     if rc == 0:
         logger.info("Connected to MQTT broker")
-        # Subscribe to Ring camera motion events
-        client.subscribe("ring/+/motion/state")
-        client.subscribe("ring/+/ding/state")
+        # Subscribe to Ring camera motion events (Ring-MQTT v5.x format)
+        client.subscribe("ring/+/camera/+/event_select/attributes")
+        client.subscribe("ring/+/camera/+/motion")
+        client.subscribe("ring/+/camera/+/ding")
         logger.info("Subscribed to Ring motion topics")
     else:
         logger.error(f"MQTT connection failed with code {rc}")
@@ -283,29 +284,45 @@ def on_mqtt_message(client, userdata, msg):
         topic = msg.topic
         payload = msg.payload.decode()
         
-        logger.info(f"MQTT message: {topic} = {payload}")
+        logger.info(f"MQTT message: {topic} = {payload[:200]}")  # Truncate long payloads
         
-        # Parse topic: ring/{camera_id}/motion/state
+        # Parse topic: ring/{location_id}/camera/{device_id}/event_select/attributes
         parts = topic.split('/')
-        if len(parts) >= 4 and parts[0] == "ring" and parts[2] in ["motion", "ding"]:
-            camera_id = parts[1]
-            
-            # Check if motion detected (payload might be "ON" or JSON)
-            if payload.upper() == "ON" or "detected" in payload.lower():
-                # Get snapshot URL (this is Ring MQTT specific)
-                # The actual snapshot URL comes from Ring MQTT attributes
-                snapshot_topic = f"ring/{camera_id}/snapshot/url"
+        
+        # Handle Ring-MQTT v5.x event_select format (motion with recording)
+        if len(parts) >= 6 and parts[0] == "ring" and parts[2] == "camera" and parts[4] == "event_select":
+            try:
+                data = json.loads(payload)
+                camera_id = parts[3]  # device_id
+                recording_url = data.get("recordingUrl")
+                event_id = data.get("eventId")
                 
-                # For now, we'll construct a webhook event
-                # In production, Ring MQTT publishes snapshot URLs separately
-                logger.info(f"Motion detected on camera {camera_id}")
+                if recording_url:
+                    logger.info(f"Motion event detected on camera {camera_id}, eventId={event_id}")
+                    
+                    # Process the event (in background)
+                    asyncio.create_task(process_camera_event(
+                        camera_id=camera_id,
+                        snapshot_url=recording_url,  # Use the recording URL as snapshot
+                        timestamp=datetime.now().isoformat()
+                    ))
+                    
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse event_select JSON: {payload[:100]}")
+        
+        # Handle legacy Ring-MQTT v4.x format (if any)
+        elif len(parts) >= 4 and parts[0] == "ring":
+            # ring/{location}/camera/{device}/motion or ring/{location}/camera/{device}/ding
+            if len(parts) == 5 and parts[2] == "camera" and parts[4] in ["motion", "ding"]:
+                camera_id = parts[3]
                 
-                # Process the event (in background)
-                asyncio.create_task(process_camera_event(
-                    camera_id=camera_id,
-                    snapshot_url=f"http://ring-mqtt:8123/snapshot/{camera_id}",
-                    timestamp=datetime.now().isoformat()
-                ))
+                # Check if motion detected
+                if payload.upper() == "ON" or "detected" in payload.lower():
+                    logger.info(f"Legacy motion detected on camera {camera_id}")
+                    
+                    # For legacy format, we'd need to get snapshot URL separately
+                    # For now, just log it
+                    logger.warning("Legacy format detected - snapshot URL needed separately")
         
     except Exception as e:
         logger.error(f"Error processing MQTT message: {e}", exc_info=True)
