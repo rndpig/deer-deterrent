@@ -273,10 +273,13 @@ def on_mqtt_connect(client, userdata, flags, rc):
     if rc == 0:
         logger.info("Connected to MQTT broker")
         # Subscribe to Ring camera motion events (Ring-MQTT v5.x format)
-        client.subscribe("ring/+/camera/+/event_select/attributes")
-        client.subscribe("ring/+/camera/+/motion")
-        client.subscribe("ring/+/camera/+/ding")
-        logger.info("Subscribed to Ring motion topics")
+        topics = [
+            ("ring/+/camera/+/event_select/attributes", 0),
+            ("ring/+/camera/+/motion", 0),
+            ("ring/+/camera/+/ding", 0),
+        ]
+        client.subscribe(topics)
+        logger.info(f"Subscribed to Ring motion topics: {[t[0] for t in topics]}")
     else:
         logger.error(f"MQTT connection failed with code {rc}")
 
