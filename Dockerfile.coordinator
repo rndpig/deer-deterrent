@@ -93,6 +93,7 @@ CONFIG = {
 last_activation_time: Optional[datetime] = None
 mqtt_client: Optional[mqtt.Client] = None
 event_queue: queue.Queue = queue.Queue()  # Thread-safe queue for MQTT events
+camera_snapshots: Dict[str, bytes] = {}  # Store latest snapshot for each camera
 
 
 def is_active_hours() -> bool:
@@ -188,52 +189,69 @@ async def log_to_backend(event_data: Dict[str, Any]):
         logger.error(f"Failed to log to backend: {e}")
 
 
-async def process_camera_event(camera_id: str, snapshot_url: str, timestamp: str):
+async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: bytes = None, snapshot_url: str = None, source: str = "unknown"):
     """Process a camera motion event"""
     global last_activation_time
     
     try:
-        logger.info(f"Processing camera event: {camera_id} at {timestamp}")
+        logger.info(f"Processing camera event: {camera_id} at {timestamp} (source: {source})")
         
         # Check if within active hours
         if not is_active_hours():
             logger.info(f"Outside active hours ({CONFIG['ACTIVE_HOURS_START']}-{CONFIG['ACTIVE_HOURS_END']}), skipping")
             return
         
-        # Download snapshot (might be MP4 video)
-        media_bytes = await download_snapshot(snapshot_url)
-        
-        # Save media file temporarily
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        temp_path = Path(f"/app/snapshots/{ts}_{camera_id}_temp")
-        temp_path.parent.mkdir(parents=True, exist_ok=True)
-        temp_path.write_bytes(media_bytes)
-        
-        # Extract first frame if it's a video (MP4), otherwise use as-is
-        snapshot_path = Path(f"/app/snapshots/{ts}_{camera_id}.jpg")
-        if snapshot_url.lower().endswith('.mp4'):
-            logger.info(f"Extracting frame from MP4 video...")
-            import subprocess
-            result = subprocess.run([
-                'ffmpeg', '-i', str(temp_path), 
-                '-vframes', '1', '-f', 'image2',
-                '-y', str(snapshot_path)
-            ], capture_output=True, text=True)
+        # Get image bytes - either from cache or download
+        if snapshot_bytes:
+            # FAST PATH: Use cached snapshot from MQTT
+            logger.info(f"✓ Using cached snapshot: {len(snapshot_bytes)} bytes")
+            image_bytes = snapshot_bytes
             
-            if result.returncode != 0:
-                logger.error(f"FFmpeg failed: {result.stderr}")
-                temp_path.unlink()
-                return
+            # Save for debugging
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            snapshot_path = Path(f"/app/snapshots/{ts}_{camera_id}.jpg")
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_path.write_bytes(image_bytes)
             
-            temp_path.unlink()  # Clean up temp file
-            logger.info(f"Extracted frame: {snapshot_path}")
+        elif snapshot_url:
+            # SLOW PATH: Download and extract from video
+            logger.info(f"Downloading from URL: {snapshot_url[:80]}...")
+            media_bytes = await download_snapshot(snapshot_url)
+            
+            # Save media file temporarily
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            temp_path = Path(f"/app/snapshots/{ts}_{camera_id}_temp")
+            temp_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_path.write_bytes(media_bytes)
+            
+            # Extract first frame if it's a video (MP4), otherwise use as-is
+            snapshot_path = Path(f"/app/snapshots/{ts}_{camera_id}.jpg")
+            if snapshot_url.lower().endswith('.mp4'):
+                logger.info(f"Extracting frame from MP4 video...")
+                import subprocess
+                result = subprocess.run([
+                    'ffmpeg', '-i', str(temp_path), 
+                    '-vframes', '1', '-f', 'image2',
+                    '-y', str(snapshot_path)
+                ], capture_output=True, text=True)
+                
+                if result.returncode != 0:
+                    logger.error(f"FFmpeg failed: {result.stderr}")
+                    temp_path.unlink()
+                    return
+                
+                temp_path.unlink()  # Clean up temp file
+                logger.info(f"Extracted frame: {snapshot_path}")
+            else:
+                # Already an image, just rename
+                temp_path.rename(snapshot_path)
+                logger.info(f"Saved snapshot: {snapshot_path}")
+            
+            # Read the image for ML detection
+            image_bytes = snapshot_path.read_bytes()
         else:
-            # Already an image, just rename
-            temp_path.rename(snapshot_path)
-            logger.info(f"Saved snapshot: {snapshot_path}")
-        
-        # Read the image for ML detection
-        image_bytes = snapshot_path.read_bytes()
+            logger.error("No snapshot_bytes or snapshot_url provided!")
+            return
         
         # Run ML detection
         detection_result = await detect_deer(image_bytes)
@@ -317,55 +335,72 @@ def on_mqtt_message(client, userdata, msg):
     """MQTT message callback"""
     try:
         topic = msg.topic
+        parts = topic.split('/')
         
-        # Skip binary messages (snapshot images)
+        # Handle binary snapshot images - store them for instant access
+        if len(parts) >= 6 and parts[0] == "ring" and parts[2] == "camera" and parts[4] == "snapshot" and parts[5] == "image":
+            camera_id = parts[3]
+            camera_snapshots[camera_id] = msg.payload
+            logger.debug(f"Cached snapshot for camera {camera_id}: {len(msg.payload)} bytes")
+            return
+        
+        # Try to decode text messages
         try:
             payload = msg.payload.decode()
         except UnicodeDecodeError:
-            # Binary data (snapshot image), skip silently
+            # Unknown binary message, skip
             return
         
-        # Only log event_select messages to reduce noise
-        if "event_select" in topic:
+        # Handle motion/state messages (INSTANT - 1-2 seconds after motion)
+        if len(parts) >= 6 and parts[0] == "ring" and parts[2] == "camera" and parts[4] == "motion" and parts[5] == "state":
+            camera_id = parts[3]
+            
+            if payload.upper() == "ON":
+                logger.info(f"⚡ INSTANT motion detected on camera {camera_id}")
+                
+                # Check if we have a cached snapshot
+                if camera_id in camera_snapshots:
+                    logger.info(f"✓ Using cached snapshot ({len(camera_snapshots[camera_id])} bytes)")
+                    
+                    # Put event in queue with cached snapshot
+                    event_queue.put({
+                        "camera_id": camera_id,
+                        "snapshot_bytes": camera_snapshots[camera_id],
+                        "timestamp": datetime.now().isoformat(),
+                        "source": "mqtt_snapshot"
+                    })
+                else:
+                    logger.warning(f"No cached snapshot for camera {camera_id}, will wait for recording URL")
+            return
+        
+        # Handle event_select messages (SLOW - 30-60 seconds, used as fallback)
+        if "event_select" in topic and len(parts) >= 6 and parts[4] == "event_select":
             logger.info(f"MQTT message: {topic} = {payload[:200]}")
-        
-        # Parse topic: ring/{location_id}/camera/{device_id}/event_select/attributes
-        parts = topic.split('/')
-        
-        # Handle Ring-MQTT v5.x event_select format (motion with recording)
-        if len(parts) >= 6 and parts[0] == "ring" and parts[2] == "camera" and parts[4] == "event_select":
+            
             try:
                 data = json.loads(payload)
-                camera_id = parts[3]  # device_id
+                camera_id = parts[3]
                 recording_url = data.get("recordingUrl")
                 event_id = data.get("eventId")
                 
                 if recording_url:
-                    logger.info(f"Motion event detected on camera {camera_id}, eventId={event_id}")
+                    logger.info(f"Recording URL available for camera {camera_id}, eventId={event_id}")
                     
-                    # Put event in queue for processing by main loop
-                    event_queue.put({
-                        "camera_id": camera_id,
-                        "snapshot_url": recording_url,
-                        "timestamp": datetime.now().isoformat()
-                    })
+                    # Only use recording URL as fallback if we don't have a snapshot
+                    if camera_id not in camera_snapshots:
+                        logger.info("No cached snapshot, using recording URL (slower)")
+                        event_queue.put({
+                            "camera_id": camera_id,
+                            "snapshot_url": recording_url,
+                            "timestamp": datetime.now().isoformat(),
+                            "source": "recording_url"
+                        })
+                    else:
+                        logger.info("Already processed with cached snapshot, skipping recording URL")
                     
             except json.JSONDecodeError:
                 logger.warning(f"Failed to parse event_select JSON: {payload[:100]}")
-        
-        # Handle legacy Ring-MQTT v4.x format (if any)
-        elif len(parts) >= 4 and parts[0] == "ring":
-            # ring/{location}/camera/{device}/motion or ring/{location}/camera/{device}/ding
-            if len(parts) == 5 and parts[2] == "camera" and parts[4] in ["motion", "ding"]:
-                camera_id = parts[3]
-                
-                # Check if motion detected
-                if payload.upper() == "ON" or "detected" in payload.lower():
-                    logger.info(f"Legacy motion detected on camera {camera_id}")
-                    
-                    # For legacy format, we'd need to get snapshot URL separately
-                    # For now, just log it
-                    logger.warning("Legacy format detected - snapshot URL needed separately")
+            return
         
     except Exception as e:
         logger.error(f"Error processing MQTT message: {e}", exc_info=True)
@@ -404,11 +439,13 @@ async def process_event_queue():
                 event = event_queue.get_nowait()
                 logger.info(f"Processing queued event for camera {event['camera_id']}")
                 
-                # Process the event
+                # Process the event with either cached snapshot or URL
                 await process_camera_event(
                     camera_id=event["camera_id"],
-                    snapshot_url=event["snapshot_url"],
-                    timestamp=event["timestamp"]
+                    timestamp=event["timestamp"],
+                    snapshot_bytes=event.get("snapshot_bytes"),
+                    snapshot_url=event.get("snapshot_url"),
+                    source=event.get("source", "unknown")
                 )
                 
                 event_queue.task_done()
