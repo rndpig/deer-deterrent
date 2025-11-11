@@ -270,6 +270,7 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_API_URL=http://${DELL_SERVER_IP:-192.168.1.200}:8000
+        - VITE_DISABLE_AUTH=true
     container_name: deer-frontend
     restart: unless-stopped
     
@@ -278,8 +279,6 @@ services:
     
     environment:
       - TZ=${TIMEZONE:-America/New_York}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
     
     volumes:
       - ./frontend/src:/app/src

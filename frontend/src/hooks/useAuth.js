@@ -4,9 +4,18 @@ export function useAuth() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  // Check if auth is disabled for local development
+  const authDisabled = import.meta.env.VITE_DISABLE_AUTH === 'true'
+
   useEffect(() => {
-    checkAuth()
-  }, [])
+    if (authDisabled) {
+      // Mock user for local development
+      setUser({ email: 'local-user@localhost', name: 'Local User' })
+      setLoading(false)
+    } else {
+      checkAuth()
+    }
+  }, [authDisabled])
 
   const checkAuth = async () => {
     try {
