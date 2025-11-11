@@ -73,10 +73,10 @@ log_dest stdout
 EOF
 
 # 9. Deploy!
-docker compose -f docker-compose.dell.yml --env-file .env.dell up -d
+docker compose --env-file .env.dell up -d
 
 # 10. Watch logs
-docker compose -f docker-compose.dell.yml logs -f
+docker compose logs -f
 
 # 11. Access dashboard
 # Open browser: http://192.168.1.200:3000
@@ -306,14 +306,14 @@ sudo systemctl enable containerd
 
 6. **Deploy all services:**
    ```bash
-   docker compose -f docker-compose.dell.yml --env-file .env.dell up -d
+   docker compose --env-file .env.dell up -d
    ```
    
    First time takes 5-10 minutes to download all images.
 
 7. **Watch logs:**
    ```bash
-   docker compose -f docker-compose.dell.yml logs -f
+   docker compose logs -f
    ```
    
    Wait until you see:
@@ -349,12 +349,12 @@ sudo systemctl enable containerd
 
 4. **Restart Ring MQTT:**
    ```bash
-   docker compose -f docker-compose.dell.yml restart ring-mqtt
+   docker compose restart ring-mqtt
    ```
 
 5. **Verify connection:**
    ```bash
-   docker compose -f docker-compose.dell.yml logs ring-mqtt | tail -20
+   docker compose logs ring-mqtt | tail -20
    # Should see: "Successfully connected to Ring API"
    # Should see: "Found X cameras"
    ```
@@ -381,7 +381,7 @@ sudo systemctl enable containerd
 
 3. **Restart coordinator:**
    ```bash
-   docker compose -f docker-compose.dell.yml restart coordinator
+   docker compose restart coordinator
    ```
 
 ✅ **Checkpoint:** Rainbird configured!
@@ -448,7 +448,7 @@ sudo systemctl enable containerd
    # Change: ENABLE_SPRINKLER=true
    # Save and exit
    
-   docker compose -f docker-compose.dell.yml restart coordinator
+   docker compose restart coordinator
    ```
 
 3. **Test live activation:**
@@ -516,21 +516,21 @@ sudo systemctl enable containerd
 ```bash
 nano .env.dell
 # Increase: CONFIDENCE_THRESHOLD=0.80
-docker compose -f docker-compose.dell.yml restart coordinator
+docker compose restart coordinator
 ```
 
 ### Missing deer detections?
 ```bash
 nano .env.dell
 # Decrease: CONFIDENCE_THRESHOLD=0.65
-docker compose -f docker-compose.dell.yml restart coordinator
+docker compose restart coordinator
 ```
 
 ### Sprinkler activating too often?
 ```bash
 nano .env.dell
 # Increase: COOLDOWN_SECONDS=600  (10 minutes)
-docker compose -f docker-compose.dell.yml restart coordinator
+docker compose restart coordinator
 ```
 
 ### Only want activation at night?
@@ -538,7 +538,7 @@ docker compose -f docker-compose.dell.yml restart coordinator
 nano .env.dell
 # Set: ACTIVE_HOURS_START=18  (6 PM)
 # Set: ACTIVE_HOURS_END=6     (6 AM)
-docker compose -f docker-compose.dell.yml restart coordinator
+docker compose restart coordinator
 ```
 
 ---
@@ -547,14 +547,14 @@ docker compose -f docker-compose.dell.yml restart coordinator
 
 ### Service won't start?
 ```bash
-docker compose -f docker-compose.dell.yml logs <service-name>
+docker compose logs <service-name>
 # Check logs for errors
 ```
 
 ### Can't access dashboard?
 ```bash
 # Check if frontend is running
-docker compose -f docker-compose.dell.yml ps frontend
+docker compose ps frontend
 
 # Check firewall
 sudo ufw status
@@ -609,12 +609,12 @@ df -h              # Check disk usage
 
 ### Stop everything:
 ```bash
-docker compose -f docker-compose.dell.yml down
+docker compose down
 ```
 
 ### Restart everything:
 ```bash
-docker compose -f docker-compose.dell.yml restart
+docker compose restart
 ```
 
 ### View all containers:

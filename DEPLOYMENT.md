@@ -693,11 +693,11 @@ chmod -R 755 dell-deployment
 
 ### 7.3 Review the All-in-One Docker Compose
 
-The repository now includes `docker-compose.dell.yml` with all services configured!
+The repository now includes `docker-compose.yml` with all services configured!
 
 ```bash
 # View the Docker Compose configuration
-cat docker-compose.dell.yml
+cat docker-compose.yml
 ```
 
 **This includes:**
@@ -812,7 +812,7 @@ log_type all
 cd ~/deer-deterrent
 
 # Start all services in background
-docker compose -f docker-compose.dell.yml --env-file .env.dell up -d
+docker compose --env-file .env.dell up -d
 
 # This will:
 # 1. Download all Docker images (takes 5-10 minutes first time)
@@ -820,7 +820,7 @@ docker compose -f docker-compose.dell.yml --env-file .env.dell up -d
 # 3. Start all services
 
 # Watch the logs as services start
-docker compose -f docker-compose.dell.yml logs -f
+docker compose logs -f
 
 # You should see:
 # - Database: "database system is ready to accept connections"
@@ -841,7 +841,7 @@ docker compose -f docker-compose.dell.yml logs -f
 
 ```bash
 # Check service status
-docker compose -f docker-compose.dell.yml ps
+docker compose ps
 
 # All services should show "Up" status:
 # NAME                 STATUS
@@ -884,7 +884,7 @@ Ring requires 2FA, so we need to get a token manually:
 
 ```bash
 # Check ring-mqtt logs for authentication instructions
-docker compose -f docker-compose.dell.yml logs ring-mqtt
+docker compose logs ring-mqtt
 
 # You'll see a URL to authenticate
 # Open it in browser on Windows PC
@@ -901,14 +901,14 @@ nano .env.dell
 RING_REFRESH_TOKEN=your-token-from-ring-auth
 
 # Save and restart ring-mqtt
-docker compose -f docker-compose.dell.yml restart ring-mqtt
+docker compose restart ring-mqtt
 ```
 
 **Verify Ring connection:**
 
 ```bash
 # Check logs again
-docker compose -f docker-compose.dell.yml logs ring-mqtt | tail -20
+docker compose logs ring-mqtt | tail -20
 
 # Should see: "Successfully connected to Ring API"
 # Should see: "Found X cameras"
@@ -944,7 +944,7 @@ nano .env.dell
 RAINBIRD_IP=192.168.7.XXX  # Your actual Rainbird IP
 
 # Save and restart coordinator
-docker compose -f docker-compose.dell.yml restart coordinator
+docker compose restart coordinator
 ```
 
 ### 8.6 Test ML Detection
@@ -986,12 +986,12 @@ curl http://localhost:8001/health
 # Should return: {"status":"ready","model":"yolov8n"}
 
 # Database
-docker compose -f docker-compose.dell.yml exec db psql -U deeruser -d deer_deterrent -c "SELECT 1;"
+docker compose exec db psql -U deeruser -d deer_deterrent -c "SELECT 1;"
 # Should return: " 1 "
 
 # MQTT Broker
-docker compose -f docker-compose.dell.yml exec mosquitto mosquitto_sub -t test -C 1 &
-docker compose -f docker-compose.dell.yml exec mosquitto mosquitto_pub -t test -m "hello"
+docker compose exec mosquitto mosquitto_sub -t test -C 1 &
+docker compose exec mosquitto mosquitto_pub -t test -m "hello"
 # Should show: hello
 ```
 
@@ -1010,7 +1010,7 @@ curl -X POST http://localhost:5000/webhook/test \
   }'
 
 # Check coordinator logs
-docker compose -f docker-compose.dell.yml logs coordinator | tail -30
+docker compose logs coordinator | tail -30
 
 # You should see:
 # - Downloaded snapshot
@@ -1025,19 +1025,19 @@ docker compose -f docker-compose.dell.yml logs coordinator | tail -30
 
 ```bash
 # All services
-docker compose -f docker-compose.dell.yml logs -f
+docker compose logs -f
 
 # Specific service
-docker compose -f docker-compose.dell.yml logs -f coordinator
+docker compose logs -f coordinator
 
 # Last 50 lines
-docker compose -f docker-compose.dell.yml logs --tail=50 coordinator
+docker compose logs --tail=50 coordinator
 
 # Follow logs with timestamps
-docker compose -f docker-compose.dell.yml logs -f -t
+docker compose logs -f -t
 
 # Search logs for errors
-docker compose -f docker-compose.dell.yml logs | grep -i error
+docker compose logs | grep -i error
 ```
 
 ---
@@ -1050,7 +1050,7 @@ docker compose -f docker-compose.dell.yml logs | grep -i error
 
 ```bash
 # Quick status check
-docker compose -f docker-compose.dell.yml ps
+docker compose ps
 
 # Resource usage
 docker stats
@@ -1064,16 +1064,16 @@ du -sh ~/deer-deterrent/dell-deployment/*
 
 ```bash
 # Restart all
-docker compose -f docker-compose.dell.yml restart
+docker compose restart
 
 # Restart specific service
-docker compose -f docker-compose.dell.yml restart coordinator
+docker compose restart coordinator
 
 # Stop all
-docker compose -f docker-compose.dell.yml stop
+docker compose stop
 
 # Start all
-docker compose -f docker-compose.dell.yml start
+docker compose start
 ```
 
 ### 10.2 Updates and Upgrades
@@ -1086,10 +1086,10 @@ cd ~/deer-deterrent
 git pull origin main
 
 # Rebuild and restart
-docker compose -f docker-compose.dell.yml up -d --build
+docker compose up -d --build
 
 # View logs to verify
-docker compose -f docker-compose.dell.yml logs -f
+docker compose logs -f
 ```
 
 **Update Ubuntu system:**
@@ -1128,7 +1128,7 @@ DATE=$(date +%Y%m%d_%H%M%S)
 mkdir -p $BACKUP_DIR
 
 # Backup database
-docker compose -f ~/deer-deterrent/docker-compose.dell.yml exec -T db \
+docker compose -f ~/deer-deterrent/docker-compose.yml exec -T db \
   pg_dump -U deeruser deer_deterrent > $BACKUP_DIR/db_$DATE.sql
 
 # Backup configuration
@@ -1163,7 +1163,7 @@ crontab -e
 
 ```bash
 # Check logs for specific container
-docker compose -f docker-compose.dell.yml logs <service-name>
+docker compose logs <service-name>
 
 # Check Docker daemon
 sudo systemctl status docker
@@ -1189,19 +1189,19 @@ sudo journalctl --vacuum-time=7d
 
 ```bash
 # Refresh Ring token (it expires every ~6 months)
-docker compose -f docker-compose.dell.yml logs ring-mqtt
+docker compose logs ring-mqtt
 
 # Follow the re-authentication link in logs
 # Update .env.dell with new token
 # Restart ring-mqtt
-docker compose -f docker-compose.dell.yml restart ring-mqtt
+docker compose restart ring-mqtt
 ```
 
 **Issue: ML detection too slow**
 
 ```bash
 # Check if GPU is being used (if available)
-docker compose -f docker-compose.dell.yml exec ml-detector python -c "import torch; print(torch.cuda.is_available())"
+docker compose exec ml-detector python -c "import torch; print(torch.cuda.is_available())"
 
 # Reduce model size (use yolov8n instead of yolov8m)
 # Update YOLO_MODEL_PATH in .env.dell
@@ -1332,19 +1332,19 @@ Once you have deer images:
 
 ```bash
 # Start all services
-docker compose -f docker-compose.dell.yml up -d
+docker compose up -d
 
 # Stop all services
-docker compose -f docker-compose.dell.yml down
+docker compose down
 
 # Restart specific service
-docker compose -f docker-compose.dell.yml restart <service-name>
+docker compose restart <service-name>
 
 # View logs
-docker compose -f docker-compose.dell.yml logs -f
+docker compose logs -f
 
 # Check status
-docker compose -f docker-compose.dell.yml ps
+docker compose ps
 ```
 
 ### System Maintenance
@@ -1372,10 +1372,10 @@ curl http://localhost:8001/health  # ML Detector
 curl http://localhost:5000/health  # Coordinator
 
 # Enter container shell
-docker compose -f docker-compose.dell.yml exec <service-name> bash
+docker compose exec <service-name> bash
 
 # View container logs
-docker compose -f docker-compose.dell.yml logs <service-name>
+docker compose logs <service-name>
 
 # Check network connectivity
 ping google.com

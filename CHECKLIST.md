@@ -144,7 +144,7 @@ Use this checklist to track your progress through the Dell deployment process.
 ### Repository Setup
 - [ ] Cloned repo: `git clone https://github.com/rndpig/deer-deterrent.git`
 - [ ] Changed to directory: `cd deer-deterrent`
-- [ ] Verified files present: `ls -la` (see README, docker-compose.dell.yml, etc.)
+- [ ] Verified files present: `ls -la` (see README, docker-compose.yml, etc.)
 
 ### Directory Structure
 - [ ] Created deployment directories:
@@ -188,9 +188,9 @@ Use this checklist to track your progress through the Dell deployment process.
 ## 🚀 Service Deployment Checklist
 
 ### First Deployment
-- [ ] Started services: `docker compose -f docker-compose.dell.yml --env-file .env.dell up -d`
+- [ ] Started services: `docker compose --env-file .env.dell up -d`
 - [ ] Waited for image downloads (5-10 minutes first time)
-- [ ] Watched logs: `docker compose -f docker-compose.dell.yml logs -f`
+- [ ] Watched logs: `docker compose logs -f`
 - [ ] Saw "database system is ready to accept connections"
 - [ ] Saw "Uvicorn running on http://0.0.0.0:8000" (backend)
 - [ ] Saw "VITE ready" (frontend)
@@ -199,7 +199,7 @@ Use this checklist to track your progress through the Dell deployment process.
 - [ ] Pressed Ctrl+C to exit logs (containers keep running)
 
 ### Service Verification
-- [ ] Checked status: `docker compose -f docker-compose.dell.yml ps`
+- [ ] Checked status: `docker compose ps`
 - [ ] All services show "Up" status
 - [ ] Verified frontend: Open browser to `http://192.168.1.200:3000`
 - [ ] Saw dashboard load successfully
@@ -219,15 +219,15 @@ Use this checklist to track your progress through the Dell deployment process.
 - [ ] Completed 2FA verification
 - [ ] Copied refresh token provided
 - [ ] Updated `.env.dell` with `RING_REFRESH_TOKEN=<token>`
-- [ ] Restarted ring-mqtt: `docker compose -f docker-compose.dell.yml restart ring-mqtt`
-- [ ] Checked logs: `docker compose -f docker-compose.dell.yml logs ring-mqtt`
+- [ ] Restarted ring-mqtt: `docker compose restart ring-mqtt`
+- [ ] Checked logs: `docker compose logs ring-mqtt`
 - [ ] Saw "Successfully connected to Ring API"
 - [ ] Saw "Found X cameras" in logs
 - [ ] Ring cameras discovered: _____ cameras
 
 ### Ring Event Testing
 - [ ] Manually triggered motion on Ring camera
-- [ ] Checked coordinator logs: `docker compose -f docker-compose.dell.yml logs coordinator`
+- [ ] Checked coordinator logs: `docker compose logs coordinator`
 - [ ] Saw "Motion detected on camera..." message
 - [ ] Verified MQTT message received
 
