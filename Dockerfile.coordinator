@@ -43,6 +43,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any
 import asyncio
+import queue
+import threading
 
 from fastapi import FastAPI, Request, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse
@@ -89,6 +91,7 @@ CONFIG = {
 # State tracking
 last_activation_time: Optional[datetime] = None
 mqtt_client: Optional[mqtt.Client] = None
+event_queue: queue.Queue = queue.Queue()  # Thread-safe queue for MQTT events
 
 
 def is_active_hours() -> bool:
@@ -300,16 +303,12 @@ def on_mqtt_message(client, userdata, msg):
                 if recording_url:
                     logger.info(f"Motion event detected on camera {camera_id}, eventId={event_id}")
                     
-                    # Schedule the event processing in the main event loop
-                    # MQTT callback runs in a different thread, so we need to use call_soon_threadsafe
-                    loop = asyncio.get_event_loop()
-                    loop.call_soon_threadsafe(
-                        lambda: asyncio.create_task(process_camera_event(
-                            camera_id=camera_id,
-                            snapshot_url=recording_url,  # Use the recording URL as snapshot
-                            timestamp=datetime.now().isoformat()
-                        ))
-                    )
+                    # Put event in queue for processing by main loop
+                    event_queue.put({
+                        "camera_id": camera_id,
+                        "snapshot_url": recording_url,
+                        "timestamp": datetime.now().isoformat()
+                    })
                     
             except json.JSONDecodeError:
                 logger.warning(f"Failed to parse event_select JSON: {payload[:100]}")
@@ -353,12 +352,44 @@ def setup_mqtt():
         logger.error(f"Failed to setup MQTT: {e}")
 
 
+async def process_event_queue():
+    """Background task to process events from MQTT queue"""
+    logger.info("Event queue processor started")
+    
+    while True:
+        try:
+            # Check queue for events (non-blocking)
+            try:
+                event = event_queue.get_nowait()
+                logger.info(f"Processing queued event for camera {event['camera_id']}")
+                
+                # Process the event
+                await process_camera_event(
+                    camera_id=event["camera_id"],
+                    snapshot_url=event["snapshot_url"],
+                    timestamp=event["timestamp"]
+                )
+                
+                event_queue.task_done()
+                
+            except queue.Empty:
+                # No events in queue, sleep briefly
+                await asyncio.sleep(0.1)
+                
+        except Exception as e:
+            logger.error(f"Error in event queue processor: {e}", exc_info=True)
+            await asyncio.sleep(1)
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize on startup"""
     logger.info("Starting Deer Deterrent Coordinator")
     logger.info(f"Configuration: {json.dumps(CONFIG, indent=2)}")
     setup_mqtt()
+    
+    # Start background task to process MQTT events
+    asyncio.create_task(process_event_queue())
 
 
 @app.on_event("shutdown")
