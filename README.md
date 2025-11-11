@@ -6,147 +6,216 @@ An AI-powered deer detection and deterrent system that monitors Ring camera feed
 
 This project uses machine learning to detect deer in real-time from Ring camera footage and automatically triggers Rainbird irrigation zones to humanely deter them from eating plants and causing damage.
 
-## 🚀 Deployment Options
+## 🚀 Quick Start
 
-Choose the deployment method that works best for you:
+Get up and running in under 30 minutes:
 
-### Option 1: Dell OptiPlex (Recommended) 🖥️
-**Best for:** Faster detection, all-in-one solution, future expansion
+1. **📖 Read the Quick Start Guide:** [`QUICKSTART.md`](QUICKSTART.md) - Fastest path to deployment
+2. **📚 Full Documentation:** [`DEPLOYMENT.md`](DEPLOYMENT.md) - Comprehensive setup guide
+3. **✅ Track Progress:** [`CHECKLIST.md`](CHECKLIST.md) - Step-by-step deployment checklist
 
-- **Performance:** 2-5 second ML inference (fast!)
-- **Resources:** 16GB RAM, i7 CPU, 256GB SSD
-- **Cost:** ~$40/year power consumption
-- **Setup time:** ~2 hours
-- **Guides:**
-  - 📖 **Start here:** [`DELL_README.md`](DELL_README.md) - Overview and links
-  - ⚡ **Quick start:** [`QUICKSTART_DELL.md`](QUICKSTART_DELL.md) - Get running fast
-  - 📚 **Full guide:** [`DELL_DEPLOYMENT.md`](DELL_DEPLOYMENT.md) - Comprehensive instructions
-  - ✅ **Checklist:** [`DELL_CHECKLIST.md`](DELL_CHECKLIST.md) - Track your progress
+## ✨ Key Features
 
-### Option 2: Raspberry Pi 🥧
-**Best for:** Low power consumption, dedicated edge device
-
-- **Performance:** 10-20 second ML inference
-- **Resources:** 4-8GB RAM, ARM CPU, MicroSD
-- **Cost:** ~$5/year power consumption
-- **Setup time:** ~2-3 hours
-- **Guide:** [`RPI_DEPLOYMENT.md`](RPI_DEPLOYMENT.md)
-
-### Option 3: QNAP NAS 💾
-**Best for:** If you already have a QNAP NAS
-
-- **Performance:** Varies by NAS model
-- **Resources:** Depends on NAS specs
-- **Setup time:** ~3 hours
-- **Guides:** [`QNAP_DEPLOYMENT.md`](QNAP_DEPLOYMENT.md), [`QNAP_SETUP_DETAILED.md`](QNAP_SETUP_DETAILED.md)
-
-### Option 4: Cloud Deployment ☁️
-**Best for:** No local hardware, always accessible
-
-- **Performance:** Fast (cloud GPUs)
-- **Cost:** Variable (based on usage)
-- **Setup time:** ~1 hour
-- **Guide:** [`VERCEL_DEPLOY.md`](VERCEL_DEPLOY.md)
+- **⚡ Sub-Second Detection** - Motion detected and processed in <1 second
+- **🎯 Accurate ML Model** - Custom YOLOv8 model trained on deer imagery
+- **💧 Smart Irrigation** - Integrates with Rainbird controllers for targeted deterrence
+- **📊 Real-Time Dashboard** - Monitor detections, view snapshots, track activity
+- **🔒 Privacy-First** - All processing runs locally on your hardware
+- **🎨 Easy Setup** - Docker Compose handles all dependencies
 
 ## System Architecture
 
-1. **Data Collection & Training**: Annotated images from Google Drive used to train a deer detection model
-2. **Ring Camera Integration**: Real-time monitoring of camera feeds via Ring API
-3. **Deer Detection**: ML model inference on camera frames to detect deer presence
-4. **Rainbird Controller**: Automatic activation of specific irrigation zones when deer are detected
+The system consists of 7 Docker containers working together:
+
+1. **Ring-MQTT** - Bridges Ring cameras to MQTT broker
+2. **MQTT Broker (Mosquitto)** - Message bus for camera events
+3. **Coordinator** - Orchestrates detection workflow and sprinkler control
+4. **ML Detector** - YOLOv8 model for deer detection
+5. **Backend API** - FastAPI service for data persistence
+6. **PostgreSQL Database** - Stores detection history
+7. **Frontend Dashboard** - React web interface for monitoring
+
+### Event Flow
+
+```
+Ring Camera → Ring-MQTT → MQTT Broker → Coordinator → ML Detector
+                                              ↓
+                                    Rainbird Controller
+                                              ↓
+                                       Backend API → Database
+                                              ↓
+                                     Frontend Dashboard
+```
+
+**Detection Timeline:**
+- T+0s: Motion detected by Ring camera
+- T+1s: Snapshot cached via MQTT
+- T+1.2s: ML analysis completed
+- T+1.5s: Sprinkler activated (if deer detected)
+- T+2s: Event logged to database
 
 ## Project Structure
 
 ```
 deer-deterrent/
-├── data/                    # Dataset storage
-│   ├── raw/                # Raw annotated images from Google Drive
-│   ├── processed/          # Processed datasets (train/val/test splits)
-│   └── annotations/        # Annotation files
-├── models/                  # Trained model storage
-│   ├── checkpoints/        # Training checkpoints
-│   └── production/         # Production-ready models
-├── src/                     # Source code
-│   ├── data/               # Data management utilities
-│   ├── training/           # Model training scripts
-│   ├── inference/          # Real-time inference engine
-│   ├── integrations/       # Ring & Rainbird API integrations
-│   └── utils/              # Shared utilities
-├── configs/                 # Configuration files
-├── notebooks/              # Jupyter notebooks for exploration
-├── tests/                  # Unit and integration tests
-├── logs/                   # Application logs
-└── requirements.txt        # Python dependencies
+├── docker-compose.yml           # Main deployment configuration
+├── Dockerfile.coordinator       # Coordinator service
+├── Dockerfile.ml-detector       # ML detection service
+├── .env.example                 # Environment template
+│
+├── backend/                     # Backend API
+│   ├── Dockerfile
+│   ├── main.py
+│   └── requirements.txt
+│
+├── frontend/                    # React dashboard
+│   ├── package.json
+│   ├── vite.config.js
+│   └── src/
+│
+├── configs/                     # Configuration
+│   ├── training_config.yaml
+│   └── zones.yaml
+│
+├── models/                      # ML models
+│   └── deer_detector_best.pt
+│
+├── notebooks/                   # Training notebooks
+│   └── train_deer_detector_colab.ipynb
+│
+├── scripts/                     # Utility scripts
+│   ├── demo_system.py
+│   ├── setup_ring_auth.py
+│   └── discover_rainbird_api.py
+│
+└── docs/                        # Additional documentation
 ```
 
 ## Prerequisites
 
-- Python 3.9+
-- Ring account with camera access
-- Rainbird irrigation controller with API access
-- Google Drive with annotated deer images
-- GPU recommended for model training (CPU works but slower)
+- **Hardware:** Any x86_64 server/PC (tested on Dell OptiPlex 7050)
+- **OS:** Ubuntu 22.04 LTS (or similar Linux distribution)
+- **Software:** Docker, Docker Compose
+- **Ring Account:** With at least one Ring camera
+- **Network:** Local network access to Ring cameras and Rainbird controller (optional)
 
-## Installation
+## Quick Installation
 
-1. Clone or navigate to this repository
-2. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   venv\Scripts\activate  # On Windows
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+# Clone repository
+git clone https://github.com/rndpig/deer-deterrent.git
+cd deer-deterrent
+
+# Copy and configure environment
+cp .env.example .env
+# Edit .env with your Ring credentials
+
+# Start all services
+docker compose up -d
+
+# View logs
+docker compose logs -f
+```
+
+For detailed setup instructions, see [`QUICKSTART.md`](QUICKSTART.md)
 
 ## Configuration
 
-1. Copy `.env.example` to `.env` and fill in your API credentials:
-   - Ring API credentials
-   - Rainbird controller credentials
-   - Google Drive access (for data download)
+Edit `.env` with your specific settings:
 
-2. Configure detection zones and sprinkler mappings in `configs/zones.yaml`
-
-## Getting Started
-
-### Step 1: Download Training Data
 ```bash
-python src/data/download_from_gdrive.py
-```
+# Ring Camera Configuration
+RING_REFRESH_TOKEN=your_token_here
+RING_TOKEN=your_token_here
 
-### Step 2: Train the Model
-```bash
-python src/training/train.py --config configs/training_config.yaml
-```
+# Rainbird Controller (optional - for sprinkler activation)
+RAINBIRD_IP=192.168.1.100
+RAINBIRD_PASSWORD=your_password
 
-### Step 3: Run the Deterrent System
-```bash
-python src/main.py
+# ML Detection Settings
+CONFIDENCE_THRESHOLD=0.75
+COOLDOWN_SECONDS=300
+
+# Active Hours (24-hour format)
+ACTIVE_HOURS_START=0
+ACTIVE_HOURS_END=24
 ```
 
 ## Usage
 
-- **Training Mode**: Train or fine-tune the deer detection model
-- **Live Mode**: Monitor Ring cameras and activate sprinklers automatically
-- **Test Mode**: Test detection on sample images without activating sprinklers
+### View Dashboard
+Access the web dashboard at `http://your-server-ip:3000` to:
+- View real-time detection events
+- Browse detection history with snapshots
+- Monitor camera status
+- Configure settings
 
-## Safety Features
+### Command Line Management
 
-- Configurable cooldown periods to prevent excessive sprinkler activation
-- Time-based rules (e.g., only active at night)
-- Confidence thresholds to reduce false positives
-- Manual override capabilities
+```bash
+# View all logs
+docker compose logs -f
+
+# View specific service
+docker compose logs -f coordinator
+
+# Restart a service
+docker compose restart coordinator
+
+# Stop all services
+docker compose down
+
+# Update and restart
+git pull && docker compose build && docker compose up -d
+```
+
+## Safety & Features
+
+- ✅ **Configurable cooldown periods** - Prevent excessive sprinkler activation
+- ✅ **Time-based rules** - Only activate during specified hours
+- ✅ **Confidence thresholds** - Reduce false positives
+- ✅ **Dry-run mode** - Test without activating sprinklers (set `RAINBIRD_IP=""`)
+- ✅ **Historical logging** - Track all detections with timestamps and images
+
+## Performance
+
+**Tested on Dell OptiPlex 7050 (i7-6700, 16GB RAM):**
+- Motion detection: <1 second
+- ML inference: ~200ms
+- Total response time: ~1.5 seconds from motion to sprinkler activation
+
+## Troubleshooting
+
+See [`DEPLOYMENT.md`](DEPLOYMENT.md) for detailed troubleshooting steps, including:
+- Ring authentication issues
+- MQTT connectivity problems
+- ML detector performance tuning
+- Database connection errors
+
+## Training Your Own Model
+
+The included model (`models/deer_detector_best.pt`) is trained on deer imagery. To retrain or fine-tune:
+
+1. See [`notebooks/train_deer_detector_colab.ipynb`](notebooks/train_deer_detector_colab.ipynb)
+2. Upload to Google Colab (free GPU available)
+3. Follow notebook instructions to train on your own dataset
+4. Download trained model and replace `models/deer_detector_best.pt`
 
 ## Contributing
 
-This is a personal project, but suggestions and improvements are welcome!
+Contributions welcome! This is an active project. Please open an issue to discuss major changes.
 
 ## License
 
-MIT License
+MIT License - See LICENSE file for details
 
 ## Acknowledgments
 
-Built to protect gardens from hungry deer while using humane deterrent methods.
+- Built with YOLOv8 for object detection
+- Ring-MQTT bridge by @tsightler
+- Inspired by the need to protect gardens humanely
+- Special thanks to the open-source community
+
+## Project Status
+
+✅ **Production Ready** - System is deployed and actively logging deer detections. Sprinkler integration tested and functional.
