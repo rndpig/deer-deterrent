@@ -270,16 +270,18 @@ async def process_camera_event(camera_id: str, snapshot_url: str, timestamp: str
 
 def on_mqtt_connect(client, userdata, flags, rc):
     """MQTT connection callback"""
+    logger.info(f"MQTT on_connect callback fired with rc={rc}")
     if rc == 0:
-        logger.info("Connected to MQTT broker")
+        logger.info("✓ MQTT broker connection established in callback")
         # Subscribe to Ring camera motion events (Ring-MQTT v5.x format)
         topics = [
             ("ring/+/camera/+/event_select/attributes", 0),
             ("ring/+/camera/+/motion", 0),
             ("ring/+/camera/+/ding", 0),
         ]
-        client.subscribe(topics)
-        logger.info(f"Subscribed to Ring motion topics: {[t[0] for t in topics]}")
+        result = client.subscribe(topics)
+        logger.info(f"✓ Subscribed to Ring motion topics with result: {result}")
+        logger.info(f"  Topics: {[t[0] for t in topics]}")
     else:
         logger.error(f"MQTT connection failed with code {rc}")
 
@@ -346,10 +348,11 @@ def setup_mqtt():
         if CONFIG["MQTT_USER"]:
             mqtt_client.username_pw_set(CONFIG["MQTT_USER"], CONFIG["MQTT_PASSWORD"])
         
+        logger.info(f"Connecting to MQTT broker at {CONFIG['MQTT_HOST']}:{CONFIG['MQTT_PORT']}")
         mqtt_client.connect(CONFIG["MQTT_HOST"], CONFIG["MQTT_PORT"], 60)
         mqtt_client.loop_start()
         
-        logger.info(f"MQTT client started: {CONFIG['MQTT_HOST']}:{CONFIG['MQTT_PORT']}")
+        logger.info(f"MQTT client loop started (waiting for on_connect callback...)")
         
     except Exception as e:
         logger.error(f"Failed to setup MQTT: {e}")
