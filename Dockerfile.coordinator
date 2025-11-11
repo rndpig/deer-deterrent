@@ -13,6 +13,7 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -199,15 +200,40 @@ async def process_camera_event(camera_id: str, snapshot_url: str, timestamp: str
             logger.info(f"Outside active hours ({CONFIG['ACTIVE_HOURS_START']}-{CONFIG['ACTIVE_HOURS_END']}), skipping")
             return
         
-        # Download snapshot
-        image_bytes = await download_snapshot(snapshot_url)
+        # Download snapshot (might be MP4 video)
+        media_bytes = await download_snapshot(snapshot_url)
         
-        # Save snapshot locally
+        # Save media file temporarily
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        temp_path = Path(f"/app/snapshots/{ts}_{camera_id}_temp")
+        temp_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path.write_bytes(media_bytes)
+        
+        # Extract first frame if it's a video (MP4), otherwise use as-is
         snapshot_path = Path(f"/app/snapshots/{ts}_{camera_id}.jpg")
-        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-        snapshot_path.write_bytes(image_bytes)
-        logger.info(f"Saved snapshot: {snapshot_path}")
+        if snapshot_url.lower().endswith('.mp4'):
+            logger.info(f"Extracting frame from MP4 video...")
+            import subprocess
+            result = subprocess.run([
+                'ffmpeg', '-i', str(temp_path), 
+                '-vframes', '1', '-f', 'image2',
+                '-y', str(snapshot_path)
+            ], capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                logger.error(f"FFmpeg failed: {result.stderr}")
+                temp_path.unlink()
+                return
+            
+            temp_path.unlink()  # Clean up temp file
+            logger.info(f"Extracted frame: {snapshot_path}")
+        else:
+            # Already an image, just rename
+            temp_path.rename(snapshot_path)
+            logger.info(f"Saved snapshot: {snapshot_path}")
+        
+        # Read the image for ML detection
+        image_bytes = snapshot_path.read_bytes()
         
         # Run ML detection
         detection_result = await detect_deer(image_bytes)
