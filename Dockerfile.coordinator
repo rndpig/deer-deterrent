@@ -291,9 +291,17 @@ def on_mqtt_message(client, userdata, msg):
     """MQTT message callback"""
     try:
         topic = msg.topic
-        payload = msg.payload.decode()
         
-        logger.info(f"MQTT message: {topic} = {payload[:200]}")  # Truncate long payloads
+        # Skip binary messages (snapshot images)
+        try:
+            payload = msg.payload.decode()
+        except UnicodeDecodeError:
+            # Binary data (snapshot image), skip silently
+            return
+        
+        # Only log event_select messages to reduce noise
+        if "event_select" in topic:
+            logger.info(f"MQTT message: {topic} = {payload[:200]}")
         
         # Parse topic: ring/{location_id}/camera/{device_id}/event_select/attributes
         parts = topic.split('/')
