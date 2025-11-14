@@ -71,7 +71,7 @@
 
 .login-box h1 {
   margin: 0 0 1rem 0;
-  color: #646cff;
+  color: #2563eb;
   font-size: 2rem;
 }
 
@@ -82,12 +82,12 @@
 
 .login-box .auth-button.sign-in {
   width: 100%;
-  background: #646cff;
+  background: #2563eb;
   color: white;
 }
 
 .login-box .auth-button.sign-in:hover {
-  background: #535bf2;
+  background: #1d4ed8;
 }
 
 .unauthorized-message {
