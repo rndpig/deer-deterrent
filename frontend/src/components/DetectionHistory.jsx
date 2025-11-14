@@ -4,7 +4,7 @@ import './DetectionHistory.css'
 function DetectionHistory() {
   const [detections, setDetections] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('all') // all, last24h, last7d
+  const [filter, setFilter] = useState('last24h') // all, last24h, last7d
 
   useEffect(() => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -31,12 +31,6 @@ function DetectionHistory() {
         <h2>Detection History</h2>
         <div className="filter-buttons">
           <button 
-            className={filter === 'all' ? 'active' : ''}
-            onClick={() => setFilter('all')}
-          >
-            All Time
-          </button>
-          <button 
             className={filter === 'last24h' ? 'active' : ''}
             onClick={() => setFilter('last24h')}
           >
@@ -47,6 +41,12 @@ function DetectionHistory() {
             onClick={() => setFilter('last7d')}
           >
             Last 7 Days
+          </button>
+          <button 
+            className={filter === 'all' ? 'active' : ''}
+            onClick={() => setFilter('all')}
+          >
+            All Time
           </button>
         </div>
       </div>
