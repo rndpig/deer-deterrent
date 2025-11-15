@@ -2,7 +2,7 @@
 FastAPI backend for Deer Deterrent System.
 Provides REST API and WebSocket for real-time updates.
 """
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -14,6 +14,9 @@ import sys
 import json
 import asyncio
 from collections import defaultdict
+import tempfile
+import shutil
+import base64
 
 # Add parent directory to path
 project_root = str(Path(__file__).parent.parent)
@@ -240,6 +243,155 @@ async def run_detection(image_file: str):
     
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/detect/video")
+async def run_video_detection(video: UploadFile = File(...)):
+    """
+    Run detection on an uploaded video file.
+    Processes frames and returns detections with diagnostic info.
+    
+    Args:
+        video: Uploaded video file (mp4, mov, avi, etc.)
+    
+    Returns:
+        Detection results including:
+        - Total frames processed
+        - Frames with deer detected
+        - Highest confidence detection
+        - All detection details
+        - Annotated images for frames with detections
+    """
+    if not CV2_AVAILABLE:
+        raise HTTPException(status_code=503, detail="OpenCV not available - install opencv-python")
+    
+    det = load_detector()
+    if not det:
+        raise HTTPException(status_code=503, detail="Detector not initialized")
+    
+    # Create temp directory for processing
+    temp_dir = Path("temp/video_uploads")
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        # Save uploaded video to temp file
+        video_path = temp_dir / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{video.filename}"
+        with video_path.open("wb") as buffer:
+            shutil.copyfileobj(video.file, buffer)
+        
+        import cv2
+        import numpy as np
+        
+        # Open video
+        cap = cv2.VideoCapture(str(video_path))
+        if not cap.isOpened():
+            raise HTTPException(status_code=400, detail="Could not open video file")
+        
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        # Process every Nth frame (sample rate - process ~2 frames per second)
+        sample_rate = max(1, int(fps / 2))
+        
+        results = {
+            "filename": video.filename,
+            "fps": fps,
+            "total_frames": total_frames,
+            "frames_processed": 0,
+            "frames_with_detections": 0,
+            "total_deer_detected": 0,
+            "max_confidence": 0.0,
+            "detections": [],
+            "diagnostic_info": {
+                "sample_rate": sample_rate,
+                "frames_sampled": 0
+            }
+        }
+        
+        frame_num = 0
+        detections_by_frame = []
+        
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            # Only process sampled frames
+            if frame_num % sample_rate == 0:
+                results["frames_processed"] += 1
+                results["diagnostic_info"]["frames_sampled"] += 1
+                
+                # Run detection
+                detections, annotated = det.detect(frame, return_annotated=True)
+                
+                if detections:
+                    results["frames_with_detections"] += 1
+                    results["total_deer_detected"] += len(detections)
+                    
+                    # Save annotated frame
+                    frame_filename = f"frame_{frame_num:06d}.jpg"
+                    frame_path = temp_dir / frame_filename
+                    cv2.imwrite(str(frame_path), annotated)
+                    
+                    # Encode frame for response
+                    _, buffer = cv2.imencode('.jpg', annotated)
+                    annotated_b64 = base64.b64encode(buffer).decode('utf-8')
+                    
+                    # Track max confidence
+                    max_conf = max([d['confidence'] for d in detections])
+                    if max_conf > results["max_confidence"]:
+                        results["max_confidence"] = max_conf
+                    
+                    detections_by_frame.append({
+                        "frame_number": frame_num,
+                        "timestamp_seconds": frame_num / fps,
+                        "deer_count": len(detections),
+                        "detections": detections,
+                        "annotated_image": f"data:image/jpeg;base64,{annotated_b64}",
+                        "image_path": f"/api/video-frames/{frame_filename}"
+                    })
+            
+            frame_num += 1
+        
+        cap.release()
+        
+        # Add detection details to results
+        results["detections"] = detections_by_frame
+        
+        # Save results to database if detections found
+        if results["frames_with_detections"] > 0:
+            detection_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "camera_name": "Manual Upload",
+                "zone_name": "Video Analysis",
+                "deer_count": results["total_deer_detected"],
+                "max_confidence": results["max_confidence"],
+                "sprinklers_activated": False,
+                "image_path": f"/api/video-frames/{detections_by_frame[0]['frame_number']:06d}.jpg" if detections_by_frame else None,
+                "video_analysis": True,
+                "video_filename": video.filename,
+                "frames_analyzed": results["frames_processed"]
+            }
+            detection_history.append(detection_entry)
+        
+        # Clean up video file
+        video_path.unlink()
+        
+        return results
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing video: {str(e)}")
+    finally:
+        await video.close()
+
+
+@app.get("/api/video-frames/{frame_name}")
+async def get_video_frame(frame_name: str):
+    """Serve extracted video frames with detections."""
+    frame_path = Path("temp/video_uploads") / frame_name
+    if not frame_path.exists():
+        raise HTTPException(status_code=404, detail="Frame not found")
+    return FileResponse(frame_path)
 
 
 @app.get("/api/images/{image_name}")
