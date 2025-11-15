@@ -144,8 +144,10 @@ services:
     
     volumes:
       - ./backend:/app
+      - ./src:/app/src
       - ./dell-deployment/logs/backend:/app/logs
       - ./dell-deployment/data/snapshots:/app/snapshots:ro
+      - ./dell-deployment/models:/app/models
     
     ports:
       - "8000:8000"
