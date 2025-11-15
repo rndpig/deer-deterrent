@@ -32,9 +32,11 @@ def load_detector():
     if detector is None:
         try:
             from src.inference.detector import DeerDetector
-            model_path = "models/production/best.pt"
+            # Try production model first, fall back to base model
+            import os
+            model_path = "models/deer_detector_best.pt" if os.path.exists("models/deer_detector_best.pt") else "models/yolov8n.pt"
             detector = DeerDetector(model_path=model_path, conf_threshold=settings.confidence_threshold)
-            print("✓ Detector initialized")
+            print(f"✓ Detector initialized with model: {model_path}")
         except Exception as e:
             print(f"⚠ Detector initialization failed: {e}")
             print("  Running in demo mode - detection features disabled")
