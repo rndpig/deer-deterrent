@@ -239,6 +239,40 @@ async def get_rainbird_zones():
         }
 
 
+@app.get("/api/ring/cameras")
+async def get_ring_cameras():
+    """
+    Get available Ring cameras.
+    
+    Returns:
+        List of Ring cameras with name, id, type
+    """
+    try:
+        from src.integrations.ring_camera import RingCameraClient
+        
+        client = RingCameraClient()
+        cameras = client.get_all_cameras()
+        
+        return {
+            "status": "success",
+            "cameras": cameras
+        }
+            
+    except Exception as e:
+        print(f"Error fetching Ring cameras: {e}")
+        # Return fallback camera list
+        return {
+            "status": "error",
+            "message": str(e),
+            "cameras": [
+                {"name": "Driveway", "id": "driveway", "type": "camera"},
+                {"name": "Side", "id": "side", "type": "camera"},
+                {"name": "Front", "id": "front", "type": "camera"},
+                {"name": "Backyard", "id": "backyard", "type": "camera"}
+            ]
+        }
+
+
 @app.put("/api/zones")
 async def update_zones(new_zones: List[ZoneConfig]):
     """Update zone configurations."""
