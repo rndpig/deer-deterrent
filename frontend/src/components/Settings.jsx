@@ -63,22 +63,31 @@ function Settings({ settings, setSettings }) {
         const data = await response.json()
         
         if (data.cameras && data.cameras.length > 0) {
-          setRingCameras(data.cameras)
+          // Sort cameras in preferred order: Side > Driveway > Backyard > Front
+          const cameraOrder = ['side', 'driveway', 'backyard', 'front']
+          const sortedCameras = data.cameras.sort((a, b) => {
+            const aIndex = cameraOrder.findIndex(name => a.name.toLowerCase().includes(name))
+            const bIndex = cameraOrder.findIndex(name => b.name.toLowerCase().includes(name))
+            // If not found, put at end (-1 becomes large number)
+            return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex)
+          })
+          
+          setRingCameras(sortedCameras)
           // Initialize cameraZones state with camera IDs
           const initialZones = {}
-          data.cameras.forEach(cam => {
+          sortedCameras.forEach(cam => {
             initialZones[cam.id] = []
           })
           setCameraZones(prev => ({ ...initialZones, ...prev }))
         }
       } catch (err) {
         console.error('Error fetching Ring cameras:', err)
-        // Use fallback cameras
+        // Use fallback cameras in preferred order
         const fallbackCameras = [
-          { name: 'Driveway', id: 'driveway', type: 'camera' },
           { name: 'Side', id: 'side', type: 'camera' },
-          { name: 'Front', id: 'front', type: 'camera' },
-          { name: 'Backyard', id: 'backyard', type: 'camera' }
+          { name: 'Driveway', id: 'driveway', type: 'camera' },
+          { name: 'Backyard', id: 'backyard', type: 'camera' },
+          { name: 'Front', id: 'front', type: 'camera' }
         ]
         setRingCameras(fallbackCameras)
         const initialZones = {}

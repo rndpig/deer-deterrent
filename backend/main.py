@@ -209,34 +209,27 @@ async def get_rainbird_zones():
     Returns:
         List of zones with number and name
     """
-    try:
-        # Try to import and initialize Rainbird controller
-        from src.integrations.rainbird_cloud import RainbirdCloudController
-        
-        controller = RainbirdCloudController()
-        zones_data = controller.get_zones()
-        
-        if zones_data:
-            # Format: [{"number": 1, "name": "Driveway North"}, ...]
-            return {
-                "status": "success",
-                "zones": zones_data
-            }
-        else:
-            # Return default zone numbers if API fails
-            return {
-                "status": "fallback",
-                "zones": [{"number": i, "name": f"Zone {i}"} for i in range(1, 11)]
-            }
-            
-    except Exception as e:
-        print(f"Error fetching Rainbird zones: {e}")
-        # Return fallback zone numbers
-        return {
-            "status": "error",
-            "message": str(e),
-            "zones": [{"number": i, "name": f"Zone {i}"} for i in range(1, 11)]
-        }
+    # ESP-Me local controller doesn't expose zone names via API
+    # For now, return hardcoded names matching the user's Rainbird app
+    # TODO: Make this configurable via settings
+    
+    default_zones = [
+        {"number": 1, "name": "Driveway North"},
+        {"number": 2, "name": "Garage North"},
+        {"number": 3, "name": "Patio Lawn"},
+        {"number": 4, "name": "Patio N Bed"},
+        {"number": 5, "name": "Woods North"},
+        {"number": 6, "name": "Woods South"},
+        {"number": 7, "name": "House South 1"},
+        {"number": 8, "name": "Front Beds"},
+        {"number": 9, "name": "Front Sidewalk"},
+        {"number": 10, "name": "Driveway South"}
+    ]
+    
+    return {
+        "status": "success",
+        "zones": default_zones
+    }
 
 
 @app.get("/api/ring/cameras")
