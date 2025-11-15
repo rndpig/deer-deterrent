@@ -27,11 +27,19 @@ function Dashboard({ stats, settings }) {
         setLoading(false)
       })
     
-    // Fetch training stats
+    // Fetch training stats (optional - don't block on error)
     fetch(`${apiUrl}/api/training/stats`)
-      .then(res => res.json())
-      .then(data => setTrainingStats(data))
-      .catch(err => console.error('Error fetching training stats:', err))
+      .then(res => {
+        if (res.ok) return res.json()
+        return null
+      })
+      .then(data => {
+        if (data) setTrainingStats(data)
+      })
+      .catch(err => {
+        console.error('Error fetching training stats:', err)
+        // Don't break the dashboard if stats aren't available
+      })
   }, [filter])
 
   const loadDemoData = async () => {
