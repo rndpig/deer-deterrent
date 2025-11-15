@@ -75,6 +75,7 @@ app.add_middleware(
 detector = None
 detection_history = []
 detection_reviews = {}  # Store manual reviews for training
+missed_detections = []  # Store user-reported missed deer
 active_websockets = []
 
 # Models
@@ -94,6 +95,13 @@ class DetectionReview(BaseModel):
     notes: str = None
     reviewed_at: str = None
     reviewer: str = "admin"
+
+class MissedDetection(BaseModel):
+    timestamp: str
+    camera_name: str
+    deer_count: int
+    notes: str = None
+    reporter: str = "user"
 
 class SystemSettings(BaseModel):
     confidence_threshold: float = 0.6
@@ -662,6 +670,69 @@ async def get_detection_review(detection_id: str):
         "status": "reviewed",
         "detection_id": detection_id,
         **detection_reviews[detection_id]
+    }
+
+
+@app.post("/api/detections/missed")
+async def report_missed_detection(report: MissedDetection):
+    """Report a detection that was missed by the ML model."""
+    missed_report = {
+        "id": f"missed-{len(missed_detections)+1}",
+        "timestamp": report.timestamp,
+        "camera_name": report.camera_name,
+        "deer_count": report.deer_count,
+        "notes": report.notes,
+        "reporter": report.reporter,
+        "reported_at": datetime.now().isoformat()
+    }
+    
+    missed_detections.append(missed_report)
+    
+    # Broadcast to websockets
+    await broadcast_message({
+        "type": "missed_detection_reported",
+        "report": missed_report
+    })
+    
+    return {
+        "status": "success",
+        "message": "Missed detection reported",
+        "report_id": missed_report["id"],
+        "total_missed": len(missed_detections)
+    }
+
+
+@app.get("/api/detections/missed")
+async def get_missed_detections():
+    """Get all reported missed detections."""
+    return {
+        "total": len(missed_detections),
+        "reports": missed_detections
+    }
+
+
+@app.get("/api/training/stats")
+async def get_training_stats():
+    """Get training and review statistics."""
+    # Count reviewed detections by type
+    review_counts = {
+        'correct': 0,
+        'false_positive': 0,
+        'incorrect_count': 0,
+        'missed_deer': 0
+    }
+    
+    for review in detection_reviews.values():
+        review_type = review.get('review_type', 'correct')
+        if review_type in review_counts:
+            review_counts[review_type] += 1
+    
+    return {
+        "total_detections": len(detection_history),
+        "reviewed_detections": len(detection_reviews),
+        "review_breakdown": review_counts,
+        "missed_reports": len(missed_detections),
+        "ready_for_training": len(detection_reviews) >= 50  # Minimum threshold
     }
 
 
