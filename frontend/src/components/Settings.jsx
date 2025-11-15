@@ -34,6 +34,7 @@ function Settings({ settings, setSettings }) {
   const [rainbirdZones, setRainbirdZones] = useState([])
   const [ringCameras, setRingCameras] = useState([])
   const [cameraZones, setCameraZones] = useState({})
+  const [activeTab, setActiveTab] = useState(null)
 
   // Fetch Rainbird zones on component mount
   useEffect(() => {
@@ -79,6 +80,10 @@ function Settings({ settings, setSettings }) {
             initialZones[cam.id] = []
           })
           setCameraZones(prev => ({ ...initialZones, ...prev }))
+          // Set first camera as active tab
+          if (sortedCameras.length > 0) {
+            setActiveTab(sortedCameras[0].id)
+          }
         }
       } catch (err) {
         console.error('Error fetching Ring cameras:', err)
@@ -95,6 +100,10 @@ function Settings({ settings, setSettings }) {
           initialZones[cam.id] = []
         })
         setCameraZones(prev => ({ ...initialZones, ...prev }))
+        // Set first camera as active tab
+        if (fallbackCameras.length > 0) {
+          setActiveTab(fallbackCameras[0].id)
+        }
       }
     }
     
@@ -332,25 +341,36 @@ function Settings({ settings, setSettings }) {
           </p>
           
           {rainbirdZones.length > 0 && ringCameras.length > 0 ? (
-            <div className="camera-zones-container">
-              {ringCameras.map(camera => (
-                <div key={camera.id} className="camera-zone-compact">
-                  <h4>
+            <div className="camera-tabs-container">
+              {/* Camera Tabs */}
+              <div className="camera-tabs">
+                {ringCameras.map(camera => (
+                  <button
+                    key={camera.id}
+                    className={`camera-tab ${activeTab === camera.id ? 'active' : ''}`}
+                    onClick={() => setActiveTab(camera.id)}
+                  >
                     📹 {camera.name}
                     {cameraZones[camera.id]?.length > 0 && (
-                      <span className="zone-count">{cameraZones[camera.id].length} zones</span>
+                      <span className="zone-count">{cameraZones[camera.id].length}</span>
                     )}
-                  </h4>
+                  </button>
+                ))}
+              </div>
+              
+              {/* Active Camera Zone Content */}
+              {activeTab && ringCameras.find(cam => cam.id === activeTab) && (
+                <div className="camera-zone-content">
                   <div className="zone-chips">
                     {rainbirdZones.map(zone => (
                       <label 
-                        key={`${camera.id}-${zone.number}`} 
-                        className={`zone-chip ${cameraZones[camera.id]?.includes(zone.number) ? 'selected' : ''}`}
+                        key={`${activeTab}-${zone.number}`} 
+                        className={`zone-chip ${cameraZones[activeTab]?.includes(zone.number) ? 'selected' : ''}`}
                       >
                         <input
                           type="checkbox"
-                          checked={cameraZones[camera.id]?.includes(zone.number) || false}
-                          onChange={() => toggleZoneForCamera(camera.id, zone.number)}
+                          checked={cameraZones[activeTab]?.includes(zone.number) || false}
+                          onChange={() => toggleZoneForCamera(activeTab, zone.number)}
                         />
                         <span className="chip-content">
                           <span className="chip-number">{zone.number}</span>
@@ -360,7 +380,7 @@ function Settings({ settings, setSettings }) {
                     ))}
                   </div>
                 </div>
-              ))}
+              )}
             </div>
           ) : (
             <div className="loading-zones">
