@@ -337,3 +337,82 @@
     padding: 0.5rem;
   }
 }
+
+/* Review Buttons */
+.review-cell {
+  min-width: 120px;
+}
+
+.review-buttons {
+  display: flex;
+  gap: 0.25rem;
+  justify-content: center;
+}
+
+.review-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: bold;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.review-btn.correct {
+  background: #10b981;
+  color: white;
+}
+
+.review-btn.correct:hover {
+  background: #059669;
+  transform: scale(1.1);
+}
+
+.review-btn.false-positive {
+  background: #ef4444;
+  color: white;
+}
+
+.review-btn.false-positive:hover {
+  background: #dc2626;
+  transform: scale(1.1);
+}
+
+.review-btn.incorrect-count {
+  background: #f59e0b;
+  color: white;
+}
+
+.review-btn.incorrect-count:hover {
+  background: #d97706;
+  transform: scale(1.1);
+}
+
+.reviewed-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #e5e7eb;
+  color: #374151;
+  white-space: nowrap;
+}
+
+@media (prefers-color-scheme: dark) {
+  .reviewed-badge {
+    background: #374151;
+    color: #d1d5db;
+  }
+}
+
+.reviewing {
+  color: #6b7280;
+  font-style: italic;
+}
+

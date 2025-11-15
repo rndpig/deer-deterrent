@@ -6,6 +6,7 @@ function Dashboard({ stats, settings }) {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('last24h') // last24h, last7d, all
   const [demoMode, setDemoMode] = useState(false)
+  const [reviewingId, setReviewingId] = useState(null)
 
   useEffect(() => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -89,6 +90,43 @@ function Dashboard({ stats, settings }) {
     }
   }
 
+  const reviewDetection = async (detectionId, reviewType, correctedCount = null) => {
+    setReviewingId(detectionId)
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    try {
+      const payload = {
+        detection_id: detectionId,
+        review_type: reviewType,
+        reviewer: 'user'
+      }
+      
+      if (correctedCount !== null) {
+        payload.corrected_deer_count = correctedCount
+      }
+
+      const response = await fetch(`${apiUrl}/api/detections/${detectionId}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      
+      if (response.ok) {
+        // Update the detection in state to show it's been reviewed
+        setDetections(prev => prev.map(d => 
+          d.id === detectionId ? { ...d, reviewed: true, review_type: reviewType } : d
+        ))
+      } else {
+        alert('❌ Error submitting review')
+      }
+    } catch (error) {
+      console.error('Error reviewing detection:', error)
+      alert('❌ Error submitting review')
+    } finally {
+      setReviewingId(null)
+    }
+  }
+
   return (
     <div className="dashboard">
       <div className="stats-grid">
@@ -165,6 +203,7 @@ function Dashboard({ stats, settings }) {
                   <th>Confidence</th>
                   <th>Action</th>
                   <th>Image</th>
+                  <th>Review</th>
                 </tr>
               </thead>
               <tbody>
@@ -192,6 +231,45 @@ function Dashboard({ stats, settings }) {
                         </a>
                       ) : (
                         <span className="no-image">—</span>
+                      )}
+                    </td>
+                    <td className="review-cell">
+                      {detection.reviewed ? (
+                        <span className="reviewed-badge">
+                          {detection.review_type === 'correct' && '✓ Correct'}
+                          {detection.review_type === 'false_positive' && '✗ False'}
+                          {detection.review_type === 'incorrect_count' && '# Adjusted'}
+                          {detection.review_type === 'missed_deer' && '+ Missed'}
+                        </span>
+                      ) : reviewingId === detection.id ? (
+                        <span className="reviewing">...</span>
+                      ) : (
+                        <div className="review-buttons">
+                          <button 
+                            className="review-btn correct"
+                            onClick={() => reviewDetection(detection.id, 'correct')}
+                            title="Mark as correct"
+                          >
+                            ✓
+                          </button>
+                          <button 
+                            className="review-btn false-positive"
+                            onClick={() => reviewDetection(detection.id, 'false_positive')}
+                            title="Mark as false positive"
+                          >
+                            ✗
+                          </button>
+                          <button 
+                            className="review-btn incorrect-count"
+                            onClick={() => {
+                              const count = prompt('Enter correct deer count:')
+                              if (count) reviewDetection(detection.id, 'incorrect_count', parseInt(count))
+                            }}
+                            title="Adjust deer count"
+                          >
+                            #
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>

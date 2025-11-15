@@ -805,6 +805,71 @@ async def sync_training_to_drive():
         )
 
 
+@app.post("/api/training/deploy-latest")
+async def deploy_latest_model():
+    """
+    Download latest trained model from Google Drive and deploy it
+    """
+    try:
+        from services.drive_sync import DriveSync
+        
+        credentials_path = os.getenv("GOOGLE_DRIVE_CREDENTIALS_PATH")
+        folder_id = os.getenv("GOOGLE_DRIVE_TRAINING_FOLDER_ID")
+        
+        if not credentials_path or not folder_id:
+            raise HTTPException(
+                status_code=500,
+                detail="Google Drive not configured"
+            )
+        
+        # Initialize Drive sync
+        drive = DriveSync(credentials_path, folder_id)
+        
+        # Download latest model
+        model_info = drive.get_latest_model()
+        
+        if not model_info:
+            raise HTTPException(
+                status_code=404,
+                detail="No trained models found in Google Drive"
+            )
+        
+        # Model is now at model_info['local_path']
+        local_model_path = model_info['local_path']
+        
+        # TODO: Validate model before deployment
+        # - Check file size and format
+        # - Run inference on test image
+        # - Compare metrics with current model
+        
+        # Deploy to ml-detector service
+        # For now, we'll move it to the models directory where detector can pick it up
+        models_dir = PROJECT_ROOT / "temp" / "models"
+        models_dir.mkdir(parents=True, exist_ok=True)
+        
+        deployed_path = models_dir / f"deer_detection_latest.pt"
+        shutil.copy2(local_model_path, deployed_path)
+        
+        return {
+            "success": True,
+            "message": "Model deployed successfully",
+            "model_version": model_info['name'],
+            "model_path": str(deployed_path),
+            "modified_time": model_info['modified_time']
+        }
+        
+    except ImportError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Google Drive dependencies not installed: {e}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to deploy model: {e}"
+        )
+
+
 if __name__ == "__main__":
     import uvicorn
     print("Starting Deer Deterrent API server on http://localhost:8000")
