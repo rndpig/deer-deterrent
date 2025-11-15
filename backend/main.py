@@ -578,6 +578,29 @@ async def load_demo_data():
     }
 
 
+@app.post("/api/demo/clear")
+async def clear_demo_data():
+    """Clear all detection data and reset to live mode."""
+    global detection_history, stats
+    
+    # Clear all data
+    detection_history = []
+    stats["total_detections"] = 0
+    stats["total_deer"] = 0
+    stats["sprinklers_activated"] = 0
+    stats["last_detection"] = None
+    
+    # Broadcast update
+    await broadcast_message({
+        "type": "demo_data_cleared"
+    })
+    
+    return {
+        "status": "cleared",
+        "message": "All detection data cleared. System ready for live detections."
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     print("Starting Deer Deterrent API server on http://localhost:8000")

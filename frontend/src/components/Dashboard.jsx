@@ -5,6 +5,7 @@ function Dashboard({ stats, settings }) {
   const [detections, setDetections] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('last24h') // last24h, last7d, all
+  const [demoMode, setDemoMode] = useState(false)
 
   useEffect(() => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -47,14 +48,44 @@ function Dashboard({ stats, settings }) {
       const refreshResponse = await fetch(endpoint)
       const refreshData = await refreshResponse.json()
       setDetections(refreshData)
+      setDemoMode(true)
       setLoading(false)
-      
-      // Show success message
-      alert(`✅ Successfully loaded ${data.count || 0} demo detections!`)
     } catch (err) {
       console.error('Error loading demo data:', err)
       setLoading(false)
       alert('❌ Error loading demo data. Make sure backend is running.')
+    }
+  }
+
+  const clearData = async () => {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    try {
+      setLoading(true)
+      const response = await fetch(`${apiUrl}/api/demo/clear`, { method: 'POST' })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to clear data: ${response.statusText}`)
+      }
+      
+      console.log('Data cleared')
+      
+      // Refresh to show empty state
+      setDetections([])
+      setDemoMode(false)
+      setLoading(false)
+    } catch (err) {
+      console.error('Error clearing data:', err)
+      setLoading(false)
+      alert('❌ Error clearing data. Make sure backend is running.')
+    }
+  }
+
+  const toggleMode = async () => {
+    if (demoMode) {
+      await clearData()
+    } else {
+      await loadDemoData()
     }
   }
 
@@ -105,8 +136,12 @@ function Dashboard({ stats, settings }) {
                 All Time
               </button>
             </div>
-            <button className="demo-button" onClick={loadDemoData}>
-              Load Demo Data
+            <button 
+              className={`mode-toggle ${demoMode ? 'demo-active' : ''}`} 
+              onClick={toggleMode}
+              title={demoMode ? 'Switch to Live Mode' : 'Load Demo Data'}
+            >
+              {demoMode ? '🧪 Demo Mode - Switch to Live' : '💦 Live Mode - Load Demo'}
             </button>
           </div>
         </div>
@@ -146,15 +181,17 @@ function Dashboard({ stats, settings }) {
                       {detection.sprinklers_activated ? '💦 Activated' : '🧪 Demo'}
                     </td>
                     <td>
-                      {detection.image_path && (
+                      {detection.image_path ? (
                         <a 
                           href={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${detection.image_path}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="view-image-link"
                         >
-                          View
+                          📷 View
                         </a>
+                      ) : (
+                        <span className="no-image">—</span>
                       )}
                     </td>
                   </tr>
