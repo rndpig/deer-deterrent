@@ -131,6 +131,31 @@
   text-align: center;
 }
 
+.value-input {
+  width: 70px;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+  background: #2563eb;
+  color: white;
+}
+
+.value-input:focus {
+  outline: none;
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+@media (prefers-color-scheme: dark) {
+  .value-input {
+    background: #2563eb;
+    border-color: #1d4ed8;
+  }
+}
+
 .checkbox-inline {
   display: flex;
   align-items: center;
@@ -365,7 +390,7 @@
   background: white;
   border: 1.5px solid #e5e7eb;
   border-radius: 4px;
-  padding: 0.3rem 0.5rem;
+  padding: 0.25rem 0.5rem;
   transition: all 0.15s ease;
   display: flex;
   align-items: center;
@@ -409,19 +434,19 @@
 
 .chip-content {
   display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
+  align-items: center;
+  gap: 0.4rem;
   line-height: 1;
 }
 
 .chip-number {
-  font-weight: 600;
+  font-weight: 700;
   color: #2563eb;
   font-size: 0.75rem;
 }
 
 .chip-name {
-  color: #6b7280;
+  color: #374151;
   font-size: 0.7rem;
   line-height: 1;
   white-space: nowrap;
@@ -429,7 +454,7 @@
 
 @media (prefers-color-scheme: dark) {
   .chip-name {
-    color: #9ca3af;
+    color: #e5e7eb;
   }
 }
 

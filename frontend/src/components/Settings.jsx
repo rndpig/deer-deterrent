@@ -217,9 +217,15 @@ function Settings({ settings, setSettings }) {
                   value={localSettings.confidence_threshold || 0.6}
                   onChange={(e) => handleChange('confidence_threshold', parseFloat(e.target.value))}
                 />
-                <span className="value-badge">
-                  {((localSettings.confidence_threshold || 0.6) * 100).toFixed(0)}%
-                </span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={localSettings.confidence_threshold || 0.6}
+                  onChange={(e) => handleChange('confidence_threshold', parseFloat(e.target.value))}
+                  className="value-input"
+                />
               </div>
             </div>
           </div>
