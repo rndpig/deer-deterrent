@@ -40,7 +40,9 @@ logs/
 
 # Google credentials
 configs/google_credentials.json
+configs/google-credentials.json
 configs/*.json
+!configs/*.example.json
 
 # IDE
 .vscode/

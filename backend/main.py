@@ -74,6 +74,7 @@ app.add_middleware(
 # Initialize detector
 detector = None
 detection_history = []
+detection_reviews = {}  # Store manual reviews for training
 active_websockets = []
 
 # Models
@@ -85,6 +86,14 @@ class DetectionEvent(BaseModel):
     max_confidence: float
     image_path: str
     sprinklers_activated: bool
+
+class DetectionReview(BaseModel):
+    detection_id: str
+    review_type: str  # 'correct', 'false_positive', 'missed_deer', 'incorrect_count'
+    corrected_deer_count: int = None
+    notes: str = None
+    reviewed_at: str = None
+    reviewer: str = "admin"
 
 class SystemSettings(BaseModel):
     confidence_threshold: float = 0.6
@@ -523,7 +532,12 @@ def is_in_season() -> bool:
 
 @app.post("/api/demo/load")
 async def load_demo_data():
-    """Generate synthetic demo detection data for testing."""
+    """Generate synthetic demo detection data for testing.
+    
+    TODO: Replace with actual training images from Google Drive.
+    Images are stored in: Google Drive > 'Deer video detection' > videos/annotations/images/
+    Could sync sample images locally or use Drive API to fetch them.
+    """
     global detection_history, stats
     
     # Clear existing data
@@ -599,6 +613,196 @@ async def clear_demo_data():
         "status": "cleared",
         "message": "All detection data cleared. System ready for live detections."
     }
+
+
+@app.post("/api/detections/{detection_id}/review")
+async def review_detection(detection_id: str, review: DetectionReview):
+    """Submit a review/label for a detection to improve training data."""
+    global detection_reviews
+    
+    # Find the detection
+    detection = next(
+        (d for i, d in enumerate(detection_history) if f"det-{i}" == detection_id),
+        None
+    )
+    
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    
+    # Store review with timestamp
+    review_data = review.dict()
+    review_data["reviewed_at"] = datetime.now().isoformat()
+    review_data["detection"] = detection
+    detection_reviews[detection_id] = review_data
+    
+    print(f"📝 Detection {detection_id} reviewed as: {review.review_type}")
+    
+    # Broadcast update
+    await broadcast_message({
+        "type": "detection_reviewed",
+        "detection_id": detection_id,
+        "review_type": review.review_type
+    })
+    
+    return {
+        "status": "success",
+        "detection_id": detection_id,
+        "review_type": review.review_type,
+        "total_reviews": len(detection_reviews)
+    }
+
+
+@app.get("/api/detections/{detection_id}/review")
+async def get_detection_review(detection_id: str):
+    """Get review status for a detection."""
+    if detection_id not in detection_reviews:
+        return {"status": "not_reviewed", "detection_id": detection_id}
+    
+    return {
+        "status": "reviewed",
+        "detection_id": detection_id,
+        **detection_reviews[detection_id]
+    }
+
+
+@app.get("/api/training/export")
+async def export_training_data():
+    """Export reviewed detections in COCO format for training."""
+    from datetime import datetime
+    import json
+    from pathlib import Path
+    
+    # Create export directory
+    export_dir = Path("temp/training_export")
+    export_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Filter reviewed detections
+    reviewed = [
+        {**detection_reviews[det_id], "id": det_id}
+        for det_id in detection_reviews
+        if detection_reviews[det_id]["review_type"] in ["correct", "incorrect_count"]
+    ]
+    
+    if not reviewed:
+        raise HTTPException(status_code=404, detail="No reviewed detections to export")
+    
+    # Build COCO format dataset
+    images = []
+    annotations = []
+    
+    for i, review in enumerate(reviewed):
+        detection = review["detection"]
+        
+        # Image entry
+        image_entry = {
+            "id": i + 1,
+            "file_name": Path(detection["image_path"]).name if detection.get("image_path") else f"detection_{i}.jpg",
+            "width": 1920,  # Adjust based on your camera resolution
+            "height": 1080,
+            "date_captured": detection["timestamp"]
+        }
+        images.append(image_entry)
+        
+        # Annotation entry (simplified - would need bounding boxes from actual detections)
+        deer_count = review.get("corrected_deer_count") or detection["deer_count"]
+        for j in range(deer_count):
+            annotation = {
+                "id": len(annotations) + 1,
+                "image_id": i + 1,
+                "category_id": 1,  # Deer category
+                "bbox": [0, 0, 100, 100],  # Placeholder - needs actual bbox data
+                "area": 10000,
+                "iscrowd": 0
+            }
+            annotations.append(annotation)
+    
+    # COCO dataset structure
+    coco_data = {
+        "info": {
+            "description": "Deer Deterrent Training Dataset",
+            "version": "1.0",
+            "year": datetime.now().year,
+            "date_created": datetime.now().isoformat()
+        },
+        "licenses": [],
+        "categories": [
+            {
+                "id": 1,
+                "name": "deer",
+                "supercategory": "animal"
+            }
+        ],
+        "images": images,
+        "annotations": annotations
+    }
+    
+    # Save to file
+    export_path = export_dir / f"annotations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    with open(export_path, 'w') as f:
+        json.dump(coco_data, f, indent=2)
+    
+    return {
+        "status": "success",
+        "export_path": str(export_path),
+        "images_count": len(images),
+        "annotations_count": len(annotations),
+        "reviewed_detections": len(reviewed)
+    }
+
+
+@app.post("/api/training/sync-to-drive")
+async def sync_training_to_drive():
+    """Sync exported training data to Google Drive."""
+    from pathlib import Path
+    import os
+    import sys
+    
+    # Add src to path
+    sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+    
+    try:
+        from services.drive_sync import DriveSync
+        from dotenv import load_dotenv
+        load_dotenv()
+        
+        credentials_path = os.getenv('GOOGLE_DRIVE_CREDENTIALS_PATH')
+        folder_id = os.getenv('GOOGLE_DRIVE_TRAINING_FOLDER_ID')
+        
+        if not credentials_path or not folder_id:
+            raise HTTPException(
+                status_code=500,
+                detail="Google Drive not configured. Set GOOGLE_DRIVE_CREDENTIALS_PATH and GOOGLE_DRIVE_TRAINING_FOLDER_ID in .env"
+            )
+        
+        # Initialize Drive sync
+        drive = DriveSync(credentials_path, folder_id)
+        
+        # Export training data first
+        export_result = await export_training_data()
+        export_dir = Path(export_result["export_path"]).parent
+        
+        # Sync to Drive
+        version = datetime.now().strftime("production_%Y%m%d_%H%M%S")
+        folder_id = drive.sync_training_dataset(export_dir, version)
+        
+        return {
+            "status": "success",
+            "message": "Training data synced to Google Drive",
+            "version": version,
+            "drive_folder_id": folder_id,
+            **export_result
+        }
+        
+    except ImportError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Google Drive dependencies not installed: {e}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to sync to Drive: {e}"
+        )
 
 
 if __name__ == "__main__":
