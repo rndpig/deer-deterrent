@@ -1,5 +1,3 @@
-version: '3.8'
-
 # =============================================================================
 # Dell OptiPlex All-in-One Deployment
 # Deer Deterrent System - Complete Stack
@@ -9,18 +7,18 @@ version: '3.8'
 # Dell OptiPlex machine running Ubuntu Server.
 #
 # Services:
-# - Frontend: React/Vite dashboard (port 3000)
 # - Backend: FastAPI server (port 8000)
 # - ML Detector: YOLOv8 inference service (port 8001)
 # - Coordinator: Ring webhook handler & sprinkler controller (port 5000)
 # - Database: PostgreSQL (port 5432)
 # - MQTT Broker: Mosquitto (port 1883)
 # - Ring MQTT: Ring camera integration (port 55123)
+# - Frontend: DISABLED - Now hosted on Vercel (https://deer.rndpig.com)
 #
 # Usage:
-#   docker compose -f docker-compose.dell.yml --env-file .env.dell up -d
-#   docker compose -f docker-compose.dell.yml logs -f
-#   docker compose -f docker-compose.dell.yml down
+#   docker compose up -d
+#   docker compose logs -f
+#   docker compose down
 #
 # =============================================================================
 
@@ -264,38 +262,41 @@ services:
   # ===========================================================================
   # Frontend - React/Vite Dashboard
   # ===========================================================================
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        - VITE_API_URL=http://${DELL_SERVER_IP:-192.168.1.200}:8000
-        - VITE_DISABLE_AUTH=true
-    container_name: deer-frontend
-    restart: unless-stopped
-    
-    depends_on:
-      - backend
-    
-    environment:
-      - TZ=${TIMEZONE:-America/New_York}
-    
-    volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
-    
-    ports:
-      - "3000:3000"
-    
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    
-    networks:
-      - deer-network
+  # DISABLED: Frontend now hosted on Vercel at https://deer.rndpig.com
+  # No need to run locally since external dashboard is accessible via Cloudflare Tunnel
+  #
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #     args:
+  #       - VITE_API_URL=http://${DELL_SERVER_IP:-192.168.1.200}:8000
+  #       - VITE_DISABLE_AUTH=true
+  #   container_name: deer-frontend
+  #   restart: unless-stopped
+  #   
+  #   depends_on:
+  #     - backend
+  #   
+  #   environment:
+  #     - TZ=${TIMEZONE:-America/New_York}
+  #   
+  #   volumes:
+  #     - ./frontend/src:/app/src
+  #     - ./frontend/public:/app/public
+  #   
+  #   ports:
+  #     - "3000:3000"
+  #   
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 30s
+  #   
+  #   networks:
+  #     - deer-network
 
 # =============================================================================
 # Networks
