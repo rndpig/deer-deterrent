@@ -233,6 +233,9 @@
   font-size: 1.5rem;
   font-weight: 700;
   color: #1a1a1a;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 
 .summary-value .meta {
@@ -397,6 +400,24 @@
 
   .results-summary {
     grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .summary-card {
+    padding: 1rem;
+  }
+
+  .summary-label {
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .summary-value {
+    font-size: 1.25rem;
+  }
+
+  .summary-value .meta {
+    font-size: 0.75rem;
   }
 
   .results-header {
@@ -405,12 +426,42 @@
     align-items: flex-start;
   }
 
+  .results-header h3 {
+    font-size: 1.25rem;
+  }
+
+  .upload-button.secondary {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+  }
+
   .detection-info {
     flex-direction: column;
     align-items: flex-start;
+    gap: 0.5rem;
   }
 
   .deer-count {
     margin-left: 0;
+  }
+
+  .frame-number {
+    font-size: 0.875rem;
+  }
+
+  .timestamp {
+    font-size: 0.75rem;
+  }
+
+  .detection-result {
+    padding: 1rem;
+  }
+
+  .upload-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .upload-header .description {
+    font-size: 0.875rem;
   }
 }
