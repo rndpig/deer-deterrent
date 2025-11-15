@@ -29,13 +29,32 @@ function Dashboard({ stats, settings }) {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
     
     try {
+      setLoading(true)
       const response = await fetch(`${apiUrl}/api/demo/load`, { method: 'POST' })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to load demo data: ${response.statusText}`)
+      }
+      
       const data = await response.json()
       console.log('Demo data loaded:', data)
-      window.location.reload()
+      
+      // Refresh the detections by re-fetching
+      const endpoint = filter === 'all' 
+        ? `${apiUrl}/api/detections?limit=100`
+        : `${apiUrl}/api/detections/recent?hours=${filter === 'last24h' ? 24 : 168}`
+      
+      const refreshResponse = await fetch(endpoint)
+      const refreshData = await refreshResponse.json()
+      setDetections(refreshData)
+      setLoading(false)
+      
+      // Show success message
+      alert(`✅ Successfully loaded ${data.count || 0} demo detections!`)
     } catch (err) {
       console.error('Error loading demo data:', err)
-      alert('Error loading demo data. Make sure backend is running and demo images exist.')
+      setLoading(false)
+      alert('❌ Error loading demo data. Make sure backend is running.')
     }
   }
 

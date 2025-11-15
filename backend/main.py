@@ -523,12 +523,8 @@ def is_in_season() -> bool:
 
 @app.post("/api/demo/load")
 async def load_demo_data():
-    """Load demo detection data from test images."""
+    """Generate synthetic demo detection data for testing."""
     global detection_history, stats
-    
-    test_images_dir = Path("temp/demo_detections")
-    if not test_images_dir.exists():
-        raise HTTPException(status_code=404, detail="Demo images not found. Run demo_system.py first.")
     
     # Clear existing data
     detection_history = []
@@ -536,29 +532,38 @@ async def load_demo_data():
     stats["total_deer"] = 0
     stats["sprinklers_activated"] = 0
     
-    # Load demo images
-    demo_images = list(test_images_dir.glob("demo_*.jpg"))
+    # Generate synthetic demo data
+    camera_names = ["Front Camera", "Side Camera", "Driveway Camera", "Backyard Camera"]
+    zone_names = ["Driveway North", "Garage North", "Front Beds", "Woods North", "Patio Lawn"]
     
-    for i, img_path in enumerate(demo_images):
-        # Simulate detection event
-        timestamp = (datetime.now() - timedelta(hours=len(demo_images) - i)).isoformat()
+    # Create 15 demo detections over the past 7 days
+    for i in range(15):
+        # Vary the time - spread over past 7 days with more recent activity
+        hours_ago = (i * 12) % 168  # Spread over 7 days (168 hours)
+        timestamp = (datetime.now() - timedelta(hours=hours_ago)).isoformat()
+        
+        deer_count = 1 + (i % 3)  # 1-3 deer
+        confidence = 0.65 + (i % 7) * 0.05  # 0.65-0.95 confidence
         
         detection_history.append({
             "timestamp": timestamp,
-            "camera_name": "Front Yard Camera (Demo)",
-            "zone_name": "Garage North",
-            "deer_count": 1 + (i % 3),  # Vary count
-            "max_confidence": 0.75 + (i % 3) * 0.05,  # Vary confidence
-            "image_path": f"/api/images/{img_path.name}",
+            "camera_name": camera_names[i % len(camera_names)],
+            "zone_name": zone_names[i % len(zone_names)],
+            "deer_count": deer_count,
+            "max_confidence": confidence,
+            "image_path": None,  # No actual image for synthetic data
             "sprinklers_activated": not settings.dry_run
         })
         
         stats["total_detections"] += 1
-        stats["total_deer"] += 1 + (i % 3)
+        stats["total_deer"] += deer_count
         if not settings.dry_run:
             stats["sprinklers_activated"] += 1
     
-    stats["last_detection"] = detection_history[-1]["timestamp"] if detection_history else None
+    # Sort by timestamp (most recent first)
+    detection_history.sort(key=lambda x: x["timestamp"], reverse=True)
+    
+    stats["last_detection"] = detection_history[0]["timestamp"] if detection_history else None
     
     # Broadcast update
     await broadcast_message({
