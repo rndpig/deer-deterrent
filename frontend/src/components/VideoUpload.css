@@ -11,11 +11,15 @@
 .upload-header h2 {
   color: #2563eb;
   margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .upload-header .description {
-  color: #666;
+  color: #999;
   line-height: 1.6;
+  font-size: 0.95rem;
 }
 
 /* Upload Section */
@@ -26,8 +30,14 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.dark .upload-section {
-  background: #1a1a1a;
+@media (prefers-color-scheme: dark) {
+  .upload-section {
+    background: #1a1a1a;
+  }
+  
+  .upload-header .description {
+    color: #999;
+  }
 }
 
 .file-input-container {
@@ -160,8 +170,26 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.dark .results-section {
-  background: #1a1a1a;
+@media (prefers-color-scheme: dark) {
+  .results-section {
+    background: #1a1a1a;
+  }
+  
+  .summary-value {
+    color: #fff;
+  }
+  
+  .detection-result {
+    background: #2a2a2a;
+  }
+  
+  .detection-item {
+    background: #1a1a1a;
+  }
+  
+  .diagnostic-details {
+    background: #2a2a2a;
+  }
 }
 
 .results-header {
@@ -207,10 +235,6 @@
   color: #1a1a1a;
 }
 
-.dark .summary-value {
-  color: #fff;
-}
-
 .summary-value .meta {
   font-size: 0.875rem;
   font-weight: 400;
@@ -241,10 +265,6 @@
   border-radius: 8px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
-}
-
-.dark .detection-result {
-  background: #2a2a2a;
 }
 
 .detection-info {
@@ -295,10 +315,6 @@
   display: flex;
   gap: 0.5rem;
   align-items: center;
-}
-
-.dark .detection-item {
-  background: #1a1a1a;
 }
 
 .detection-item .confidence {
@@ -361,10 +377,6 @@
   background: #f9fafb;
   border-radius: 6px;
   margin-top: 0.5rem;
-}
-
-.dark .diagnostic-details {
-  background: #2a2a2a;
 }
 
 .diagnostic-details p {
