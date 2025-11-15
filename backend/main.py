@@ -210,8 +210,7 @@ async def get_rainbird_zones():
         List of zones with number and name
     """
     # ESP-Me local controller doesn't expose zone names via API
-    # For now, return hardcoded names matching the user's Rainbird app
-    # TODO: Make this configurable via settings
+    # Zone names from user's Rainbird app configuration
     
     default_zones = [
         {"number": 1, "name": "Driveway North"},
@@ -223,7 +222,11 @@ async def get_rainbird_zones():
         {"number": 7, "name": "House South 1"},
         {"number": 8, "name": "Front Beds"},
         {"number": 9, "name": "Front Sidewalk"},
-        {"number": 10, "name": "Driveway South"}
+        {"number": 10, "name": "Driveway South"},
+        {"number": 11, "name": "Road South"},
+        {"number": 12, "name": "Patio S Bed"},
+        {"number": 13, "name": "House South 2"},
+        {"number": 14, "name": "Garage South"}
     ]
     
     return {

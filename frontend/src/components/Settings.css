@@ -312,13 +312,13 @@
 .camera-zones-container {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 0.75rem;
 }
 
 .camera-zone-compact {
   background: #f9fafb;
   border-radius: 8px;
-  padding: 1rem;
+  padding: 0.75rem;
   border: 1px solid #e5e7eb;
 }
 
@@ -330,9 +330,9 @@
 }
 
 .camera-zone-compact h4 {
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 0.5rem 0;
   color: #374151;
-  font-size: 1rem;
+  font-size: 0.95rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -347,34 +347,34 @@
 .zone-count {
   background: #dbeafe;
   color: #1e40af;
-  padding: 0.25rem 0.5rem;
-  border-radius: 8px;
-  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
   font-weight: 600;
 }
 
 .zone-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.375rem;
 }
 
 .zone-chip {
   position: relative;
   cursor: pointer;
   background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 0.5rem 0.75rem;
-  transition: all 0.2s ease;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  transition: all 0.15s ease;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .zone-chip:hover {
   border-color: #2563eb;
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.15);
 }
 
 .zone-chip.selected {
@@ -400,28 +400,31 @@
 }
 
 .zone-chip input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   cursor: pointer;
   flex-shrink: 0;
+  margin: 0;
 }
 
 .chip-content {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: 0.1rem;
+  line-height: 1;
 }
 
 .chip-number {
   font-weight: 600;
   color: #2563eb;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
 }
 
 .chip-name {
   color: #6b7280;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   line-height: 1;
+  white-space: nowrap;
 }
 
 @media (prefers-color-scheme: dark) {
