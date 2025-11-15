@@ -31,6 +31,43 @@ function Settings({ settings, setSettings }) {
   const [localSettings, setLocalSettings] = useState(getInitialSettings())
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [rainbirdZones, setRainbirdZones] = useState([])
+  const [cameraZones, setCameraZones] = useState({
+    'side': [],
+    'front': [],
+    'backyard': []
+  })
+
+  // Fetch Rainbird zones on component mount
+  useEffect(() => {
+    const fetchRainbirdZones = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+        const response = await fetch(`${apiUrl}/api/rainbird/zones`)
+        const data = await response.json()
+        
+        if (data.zones && data.zones.length > 0) {
+          setRainbirdZones(data.zones)
+        }
+      } catch (err) {
+        console.error('Error fetching Rainbird zones:', err)
+      }
+    }
+    
+    fetchRainbirdZones()
+  }, [])
+
+  // Load camera-zone mappings from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('deer-deterrent-camera-zones')
+      if (saved) {
+        setCameraZones(JSON.parse(saved))
+      }
+    } catch (err) {
+      console.error('Error loading camera zones:', err)
+    }
+  }, [])
 
   useEffect(() => {
     if (settings) {
@@ -45,13 +82,28 @@ function Settings({ settings, setSettings }) {
     }))
   }
 
+  const toggleZoneForCamera = (camera, zoneNumber) => {
+    setCameraZones(prev => {
+      const currentZones = prev[camera] || []
+      const isSelected = currentZones.includes(zoneNumber)
+      
+      return {
+        ...prev,
+        [camera]: isSelected
+          ? currentZones.filter(z => z !== zoneNumber)
+          : [...currentZones, zoneNumber].sort((a, b) => a - b)
+      }
+    })
+  }
+
   const handleSave = async () => {
     setSaving(true)
     setMessage('')
     
-    // Save to localStorage immediately
+    // Save settings to localStorage immediately
     try {
       localStorage.setItem('deer-deterrent-settings', JSON.stringify(localSettings))
+      localStorage.setItem('deer-deterrent-camera-zones', JSON.stringify(cameraZones))
       console.log('Settings saved to localStorage')
     } catch (err) {
       console.error('Error saving to localStorage:', err)
@@ -266,6 +318,96 @@ function Settings({ settings, setSettings }) {
               <span className="help-text">Simulate sprinkler activation without actually running them</span>
             </label>
           </div>
+        </section>
+
+        <section className="settings-section">
+          <h3>Camera Zone Mappings</h3>
+          <p className="section-description">
+            Configure which irrigation zones to activate when deer are detected by each camera.
+          </p>
+          
+          {rainbirdZones.length > 0 ? (
+            <>
+              <div className="camera-zone-mapping">
+                <h4>Side Ring Camera</h4>
+                <div className="zone-grid">
+                  {rainbirdZones.map(zone => (
+                    <label key={`side-${zone.number}`} className="zone-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={cameraZones.side?.includes(zone.number) || false}
+                        onChange={() => toggleZoneForCamera('side', zone.number)}
+                      />
+                      <span className="zone-label">
+                        <span className="zone-number">Zone {zone.number}</span>
+                        <span className="zone-name">{zone.name}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {cameraZones.side?.length > 0 && (
+                  <div className="selected-zones">
+                    Selected: Zones {cameraZones.side.join(', ')}
+                  </div>
+                )}
+              </div>
+
+              <div className="camera-zone-mapping">
+                <h4>Front Ring Camera</h4>
+                <div className="zone-grid">
+                  {rainbirdZones.map(zone => (
+                    <label key={`front-${zone.number}`} className="zone-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={cameraZones.front?.includes(zone.number) || false}
+                        onChange={() => toggleZoneForCamera('front', zone.number)}
+                      />
+                      <span className="zone-label">
+                        <span className="zone-number">Zone {zone.number}</span>
+                        <span className="zone-name">{zone.name}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {cameraZones.front?.length > 0 && (
+                  <div className="selected-zones">
+                    Selected: Zones {cameraZones.front.join(', ')}
+                  </div>
+                )}
+              </div>
+
+              <div className="camera-zone-mapping">
+                <h4>Backyard Camera</h4>
+                <div className="zone-grid">
+                  {rainbirdZones.map(zone => (
+                    <label key={`backyard-${zone.number}`} className="zone-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={cameraZones.backyard?.includes(zone.number) || false}
+                        onChange={() => toggleZoneForCamera('backyard', zone.number)}
+                      />
+                      <span className="zone-label">
+                        <span className="zone-number">Zone {zone.number}</span>
+                        <span className="zone-name">{zone.name}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {cameraZones.backyard?.length > 0 && (
+                  <div className="selected-zones">
+                    Selected: Zones {cameraZones.backyard.join(', ')}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="loading-zones">
+              <p>Loading Rainbird zones...</p>
+              <p className="help-text">
+                Make sure your Rainbird controller is configured in the backend.
+              </p>
+            </div>
+          )}
         </section>
       </div>
 

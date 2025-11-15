@@ -176,6 +176,147 @@
   cursor: not-allowed;
 }
 
+/* Camera Zone Mappings */
+.section-description {
+  color: #666;
+  margin: -0.5rem 0 1.5rem 0;
+  font-size: 0.95rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .section-description {
+    color: #999;
+  }
+}
+
+.camera-zone-mapping {
+  margin-bottom: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.camera-zone-mapping:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .camera-zone-mapping {
+    border-bottom-color: #333;
+  }
+}
+
+.camera-zone-mapping h4 {
+  margin: 0 0 1rem 0;
+  color: #374151;
+  font-size: 1.1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .camera-zone-mapping h4 {
+    color: #d1d5db;
+  }
+}
+
+.zone-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.zone-checkbox {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.zone-checkbox:hover {
+  background: #f3f4f6;
+  border-color: #2563eb;
+}
+
+.zone-checkbox input[type="checkbox"] {
+  margin-right: 0.75rem;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.zone-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.zone-number {
+  font-weight: 600;
+  color: #2563eb;
+  font-size: 0.9rem;
+}
+
+.zone-name {
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .zone-checkbox {
+    background: #2a2a2a;
+    border-color: #404040;
+  }
+
+  .zone-checkbox:hover {
+    background: #333;
+    border-color: #2563eb;
+  }
+
+  .zone-name {
+    color: #9ca3af;
+  }
+}
+
+.selected-zones {
+  padding: 0.75rem;
+  background: rgba(37, 99, 235, 0.1);
+  border-radius: 6px;
+  color: #2563eb;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .selected-zones {
+    background: rgba(37, 99, 235, 0.2);
+  }
+}
+
+.loading-zones {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+}
+
+@media (prefers-color-scheme: dark) {
+  .loading-zones {
+    color: #999;
+  }
+}
+
+.loading-zones .help-text {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+
 @media (max-width: 768px) {
   .settings {
     padding: 1rem;
@@ -190,5 +331,9 @@
     display: block;
     margin-left: 0;
     margin-top: 0.5rem;
+  }
+
+  .zone-grid {
+    grid-template-columns: 1fr;
   }
 }

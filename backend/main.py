@@ -201,6 +201,44 @@ async def get_zones():
     return zones
 
 
+@app.get("/api/rainbird/zones")
+async def get_rainbird_zones():
+    """
+    Get available Rainbird irrigation zones with their names.
+    
+    Returns:
+        List of zones with number and name
+    """
+    try:
+        # Try to import and initialize Rainbird controller
+        from src.integrations.rainbird_cloud import RainbirdCloudController
+        
+        controller = RainbirdCloudController()
+        zones_data = controller.get_zones()
+        
+        if zones_data:
+            # Format: [{"number": 1, "name": "Driveway North"}, ...]
+            return {
+                "status": "success",
+                "zones": zones_data
+            }
+        else:
+            # Return default zone numbers if API fails
+            return {
+                "status": "fallback",
+                "zones": [{"number": i, "name": f"Zone {i}"} for i in range(1, 11)]
+            }
+            
+    except Exception as e:
+        print(f"Error fetching Rainbird zones: {e}")
+        # Return fallback zone numbers
+        return {
+            "status": "error",
+            "message": str(e),
+            "zones": [{"number": i, "name": f"Zone {i}"} for i in range(1, 11)]
+        }
+
+
 @app.put("/api/zones")
 async def update_zones(new_zones: List[ZoneConfig]):
     """Update zone configurations."""
