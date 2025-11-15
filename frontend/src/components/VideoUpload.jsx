@@ -6,6 +6,7 @@ function VideoUpload() {
   const [uploading, setUploading] = useState(false)
   const [results, setResults] = useState(null)
   const [error, setError] = useState(null)
+  const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0]
@@ -54,6 +55,7 @@ function VideoUpload() {
       
       const data = await response.json()
       setResults(data)
+      setCurrentFrameIndex(0) // Reset to first frame when new results arrive
     } catch (err) {
       setError(err.message || 'Error processing video')
       console.error('Upload error:', err)
@@ -66,6 +68,19 @@ function VideoUpload() {
     setSelectedFile(null)
     setResults(null)
     setError(null)
+    setCurrentFrameIndex(0)
+  }
+
+  const handleNextFrame = () => {
+    if (results && results.detections && currentFrameIndex < results.detections.length - 1) {
+      setCurrentFrameIndex(currentFrameIndex + 1)
+    }
+  }
+
+  const handlePrevFrame = () => {
+    if (currentFrameIndex > 0) {
+      setCurrentFrameIndex(currentFrameIndex - 1)
+    }
   }
 
   return (
@@ -185,33 +200,82 @@ function VideoUpload() {
           </div>
 
           {results.frames_with_detections > 0 ? (
-            <div className="detections-grid">
-              <h4>Detected Frames</h4>
-              {results.detections.map((detection, idx) => (
-                <div key={idx} className="detection-result">
-                  <div className="detection-info">
-                    <div className="frame-number">Frame {detection.frame_number}</div>
-                    <div className="timestamp">
-                      {detection.timestamp_seconds.toFixed(1)}s
-                    </div>
-                    <div className="deer-count">
-                      🦌 {detection.deer_count} deer detected
-                    </div>
+            <>
+              <div className="carousel-container">
+                <h4>🦌 Detected Frames ({currentFrameIndex + 1} of {results.detections.length})</h4>
+                
+                <div className="carousel">
+                  <button 
+                    className="carousel-btn prev"
+                    onClick={handlePrevFrame}
+                    disabled={currentFrameIndex === 0}
+                    aria-label="Previous frame"
+                  >
+                    ‹
+                  </button>
+
+                  <div className="carousel-content">
+                    {results.detections[currentFrameIndex] && (
+                      <>
+                        <div className="detection-image">
+                          <img 
+                            src={results.detections[currentFrameIndex].annotated_image} 
+                            alt={`Frame ${results.detections[currentFrameIndex].frame_number}`} 
+                          />
+                        </div>
+                        
+                        <div className="detection-info-panel">
+                          <div className="detection-meta">
+                            <div className="meta-item">
+                              <span className="meta-label">Frame</span>
+                              <span className="meta-value">{results.detections[currentFrameIndex].frame_number}</span>
+                            </div>
+                            <div className="meta-item">
+                              <span className="meta-label">Time</span>
+                              <span className="meta-value">{results.detections[currentFrameIndex].timestamp_seconds.toFixed(1)}s</span>
+                            </div>
+                            <div className="meta-item">
+                              <span className="meta-label">Deer Count</span>
+                              <span className="meta-value highlight-value">🦌 {results.detections[currentFrameIndex].deer_count}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="detection-details">
+                            <div className="details-header">Individual Detections:</div>
+                            {results.detections[currentFrameIndex].detections.map((det, i) => (
+                              <div key={i} className="detection-item">
+                                <span className="deer-label">Deer {i + 1}</span>
+                                <span className="confidence-badge">{(det.confidence * 100).toFixed(1)}%</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <div className="detection-image">
-                    <img src={detection.annotated_image} alt={`Frame ${detection.frame_number}`} />
-                  </div>
-                  <div className="detection-details">
-                    {detection.detections.map((det, i) => (
-                      <div key={i} className="detection-item">
-                        <span>Deer {i + 1}:</span>
-                        <span className="confidence">{(det.confidence * 100).toFixed(1)}%</span>
-                      </div>
-                    ))}
-                  </div>
+
+                  <button 
+                    className="carousel-btn next"
+                    onClick={handleNextFrame}
+                    disabled={currentFrameIndex === results.detections.length - 1}
+                    aria-label="Next frame"
+                  >
+                    ›
+                  </button>
                 </div>
-              ))}
-            </div>
+
+                <div className="carousel-indicators">
+                  {results.detections.map((_, idx) => (
+                    <button
+                      key={idx}
+                      className={`indicator ${idx === currentFrameIndex ? 'active' : ''}`}
+                      onClick={() => setCurrentFrameIndex(idx)}
+                      aria-label={`Go to frame ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
           ) : (
             <div className="no-detections-info">
               <h4>🔍 Diagnostic Information</h4>
