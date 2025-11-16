@@ -754,6 +754,62 @@ async def get_annotated_frame(frame_id: int):
     return FileResponse(annotated_path, media_type="image/jpeg")
 
 
+@app.post("/api/frames/{frame_id}/review")
+async def review_frame(frame_id: int, request: dict):
+    """Mark a frame as reviewed."""
+    review_type = request.get('review_type', 'correct')
+    
+    # Update frame review status
+    db.update_frame_review(frame_id, reviewed=True, review_type=review_type)
+    
+    # If marked as correct or corrected, mark it for training
+    if review_type in ['correct', 'corrected']:
+        db.mark_frame_for_training(frame_id, selected=True)
+    
+    return {"success": True, "frame_id": frame_id, "review_type": review_type}
+
+
+@app.post("/api/frames/{frame_id}/annotate")
+async def annotate_frame(frame_id: int, request: dict):
+    """Add manual annotations to a frame."""
+    annotations = request.get('annotations', [])
+    
+    # Get frame to ensure it exists
+    frame = db.get_frame(frame_id)
+    if not frame:
+        raise HTTPException(status_code=404, detail="Frame not found")
+    
+    # Save annotations
+    for ann in annotations:
+        bbox = {
+            'x': ann['x'],
+            'y': ann['y'],
+            'width': ann['width'],
+            'height': ann['height']
+        }
+        db.add_annotation(
+            frame_id=frame_id,
+            bbox=bbox,
+            annotation_type='addition',
+            annotator='user'
+        )
+    
+    return {"success": True, "frame_id": frame_id, "annotation_count": len(annotations)}
+
+
+@app.delete("/api/frames/{frame_id}")
+async def delete_frame(frame_id: int):
+    """Delete a frame and its associated data."""
+    frame = db.get_frame(frame_id)
+    if not frame:
+        raise HTTPException(status_code=404, detail="Frame not found")
+    
+    # Delete the frame record (cascade will delete detections and annotations)
+    db.delete_frame(frame_id)
+    
+    return {"success": True, "frame_id": frame_id}
+
+
 @app.get("/api/images/{image_name}")
 async def get_detection_image(image_name: str):
     """Serve detection images."""
@@ -1425,31 +1481,35 @@ async def get_selected_training_frames():
     # Convert to format expected by frontend
     formatted_frames = []
     for frame in frames:
+        # Build image URL
+        image_url = f"/api/training-frames/{frame['image_path'].split('/')[-1]}" if frame.get('image_path') else None
+        
         formatted_frame = {
-            "id": f"frame_{frame['id']}",
-            "timestamp": frame['created_at'],
-            "camera_name": frame['camera_name'],
-            "zone_name": f"Video: {frame['filename']}",
-            "deer_count": frame['detection_count'],
+            "id": frame['id'],
+            "frame_number": frame['frame_number'],
+            "video_id": frame['video_id'],
+            "video_filename": frame['filename'],
+            "timestamp_in_video": frame['timestamp_in_video'],
+            "camera_name": frame.get('camera_name', 'Unknown'),
+            "detection_count": len(frame['detections']),
+            "annotation_count": len(frame['annotations']),
             "max_confidence": max([d['confidence'] for d in frame['detections']]) if frame['detections'] else 0.0,
             "image_path": frame['image_path'],
-            "sprinklers_activated": False,
-            "reviewed": frame['reviewed'],
-            "review_type": frame['review_type'],
+            "image_url": image_url,
+            "reviewed": frame.get('reviewed', 0) == 1,
+            "review_type": frame.get('review_type'),
             "detections": [
                 {
-                    'bbox': {
-                        'x1': d['bbox_x1'],
-                        'y1': d['bbox_y1'],
-                        'x2': d['bbox_x2'],
-                        'y2': d['bbox_y2']
-                    },
+                    'bbox_x': d['bbox_x1'],
+                    'bbox_y': d['bbox_y1'],
+                    'bbox_width': d['bbox_x2'] - d['bbox_x1'],
+                    'bbox_height': d['bbox_y2'] - d['bbox_y1'],
                     'confidence': d['confidence'],
                     'class_name': d['class_name']
                 }
                 for d in frame['detections']
             ],
-            "manual_annotations": [
+            "annotations": [
                 {
                     'x': a['bbox_x'],
                     'y': a['bbox_y'],
@@ -1457,8 +1517,7 @@ async def get_selected_training_frames():
                     'height': a['bbox_height']
                 }
                 for a in frame['annotations']
-            ],
-            "frame_number": frame['frame_number']
+            ]
         }
         formatted_frames.append(formatted_frame)
     
