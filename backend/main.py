@@ -857,6 +857,86 @@ async def save_manual_annotations(detection_id: str, payload: dict):
     }
 
 
+@app.delete("/api/detections/{detection_id}")
+async def delete_detection(detection_id: str):
+    """Delete a detection from the review queue."""
+    global detection_history
+    
+    # Find the detection
+    detection = None
+    detection_index = None
+    for i, d in enumerate(detection_history):
+        if d["id"] == detection_id:
+            detection = d
+            detection_index = i
+            break
+    
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    
+    # Delete the image file if it exists
+    if detection.get("image_path"):
+        try:
+            image_path = Path(detection["image_path"])
+            if image_path.exists():
+                image_path.unlink()
+        except Exception as e:
+            print(f"Warning: Could not delete image file: {e}")
+    
+    # Remove from detection_history
+    detection_history.pop(detection_index)
+    
+    return {
+        "status": "success",
+        "detection_id": detection_id,
+        "message": "Detection deleted"
+    }
+
+
+@app.post("/api/detections/batch-delete")
+async def batch_delete_detections(detection_ids: List[str]):
+    """Delete multiple detections at once."""
+    global detection_history
+    
+    deleted_count = 0
+    errors = []
+    
+    for detection_id in detection_ids:
+        try:
+            # Find the detection
+            detection = None
+            detection_index = None
+            for i, d in enumerate(detection_history):
+                if d["id"] == detection_id:
+                    detection = d
+                    detection_index = i
+                    break
+            
+            if detection:
+                # Delete the image file if it exists
+                if detection.get("image_path"):
+                    try:
+                        image_path = Path(detection["image_path"])
+                        if image_path.exists():
+                            image_path.unlink()
+                    except Exception as e:
+                        print(f"Warning: Could not delete image file: {e}")
+                
+                # Remove from detection_history
+                detection_history.pop(detection_index)
+                deleted_count += 1
+            else:
+                errors.append(f"Detection {detection_id} not found")
+        except Exception as e:
+            errors.append(f"Error deleting {detection_id}: {str(e)}")
+    
+    return {
+        "status": "success" if deleted_count > 0 else "error",
+        "deleted_count": deleted_count,
+        "errors": errors if errors else None
+    }
+
+
 @app.post("/api/detections/missed")
 async def report_missed_detection(report: MissedDetection):
     """Report a detection that was missed by the ML model."""

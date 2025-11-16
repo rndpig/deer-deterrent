@@ -230,16 +230,11 @@ function Training() {
       // Close upload section to show review interface
       setShowVideoSection(false)
       
-      // Switch to 'All' filter to show newly uploaded frames and reload
+      // Switch to 'All' filter to show newly uploaded frames
+      // The useEffect will automatically reload when filter changes
       setFilter('all')
       setCurrentIndex(0)
-      
-      // Reload detections to show new frames
-      // Note: loadDetections will be triggered by the filter change above via useEffect
-      setTimeout(() => {
-        loadDetections()
-        loadTrainingStats()
-      }, 100)
+      loadTrainingStats()
       
     } catch (err) {
       setUploadError(err.message || 'Error processing video')
@@ -289,6 +284,74 @@ function Training() {
       alert('❌ Error saving annotations')
     } finally {
       setAnnotating(false)
+    }
+  }
+
+  const deleteCurrentFrame = async () => {
+    if (!currentDetection) return
+    
+    if (!confirm('Delete this frame? This cannot be undone.')) return
+    
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/detections/${currentDetection.id}`, {
+        method: 'DELETE'
+      })
+      
+      if (response.ok) {
+        // Remove from local state
+        const newDetections = detections.filter(d => d.id !== currentDetection.id)
+        setDetections(newDetections)
+        
+        // Adjust index if needed
+        if (currentIndex >= newDetections.length) {
+          setCurrentIndex(Math.max(0, newDetections.length - 1))
+        }
+        
+        loadTrainingStats()
+      } else {
+        alert('❌ Error deleting frame')
+      }
+    } catch (error) {
+      console.error('Error deleting frame:', error)
+      alert('❌ Error deleting frame')
+    }
+  }
+
+  const clearAllFrames = async () => {
+    if (detections.length === 0) return
+    
+    const message = filter === 'all' 
+      ? `Delete all ${detections.length} frames? This cannot be undone.`
+      : filter === 'reviewed'
+      ? `Delete all ${detections.length} reviewed frames? This cannot be undone.`
+      : `Delete all ${detections.length} unreviewed frames? This cannot be undone.`
+    
+    if (!confirm(message)) return
+    
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    try {
+      const ids = detections.map(d => d.id)
+      const response = await fetch(`${apiUrl}/api/detections/batch-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ids)
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setDetections([])
+        setCurrentIndex(0)
+        loadTrainingStats()
+        alert(`✅ Deleted ${data.deleted_count} frames`)
+      } else {
+        alert('❌ Error deleting frames')
+      }
+    } catch (error) {
+      console.error('Error deleting frames:', error)
+      alert('❌ Error deleting frames')
     }
   }
 
@@ -436,13 +499,24 @@ function Training() {
             </button>
           </div>
           
-          <button 
-            className="sync-button"
-            onClick={exportAndSync}
-            disabled={syncing || !trainingStats?.ready_for_training}
-          >
-            {syncing ? '⏳ Syncing...' : '☁️ Export & Sync to Drive'}
-          </button>
+          <div className="action-buttons">
+            {detections.length > 0 && (
+              <button 
+                className="clear-button"
+                onClick={clearAllFrames}
+                title={filter === 'all' ? 'Delete all frames' : `Delete all ${filter} frames`}
+              >
+                🗑️ Clear {filter === 'all' ? 'All' : filter === 'reviewed' ? 'Reviewed' : 'Unreviewed'}
+              </button>
+            )}
+            <button 
+              className="sync-button"
+              onClick={exportAndSync}
+              disabled={syncing || !trainingStats?.ready_for_training}
+            >
+              {syncing ? '⏳ Syncing...' : '☁️ Export & Sync to Drive'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -586,6 +660,16 @@ function Training() {
                   ✅ {currentDetection.manual_annotations.length} box{currentDetection.manual_annotations.length !== 1 ? 'es' : ''} drawn
                 </div>
               )}
+            </div>
+
+            <div className="delete-section">
+              <button 
+                className="delete-button"
+                onClick={deleteCurrentFrame}
+                title="Delete this frame from the review queue"
+              >
+                🗑️ Delete This Frame
+              </button>
             </div>
 
             <div className="keyboard-shortcuts">

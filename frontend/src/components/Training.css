@@ -342,6 +342,12 @@
   flex-wrap: wrap;
 }
 
+.action-buttons {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
 .filter-group {
   display: flex;
   gap: 0.5rem;
@@ -382,6 +388,24 @@
   .filter-group button {
     color: #9ca3af;
   }
+}
+
+.clear-button {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.25rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+}
+
+.clear-button:hover {
+  background: #b91c1c;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
 }
 
 .sync-button {
@@ -739,6 +763,41 @@
     border-color: #059669;
     color: #d1fae5;
   }
+}
+
+/* Delete Section */
+.delete-section {
+  padding-top: 2rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  .delete-section {
+    border-top-color: #333;
+  }
+}
+
+.delete-button {
+  width: 100%;
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.25rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+}
+
+.delete-button:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.delete-button:active {
+  transform: translateY(0);
 }
 
 /* Keyboard Shortcuts */
