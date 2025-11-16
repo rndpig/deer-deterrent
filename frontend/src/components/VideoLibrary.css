@@ -2,6 +2,9 @@
   padding: 2rem;
   max-width: 1400px;
   margin: 0 auto;
+  background: #1a1f2e;
+  border-radius: 16px;
+  min-height: 400px;
 }
 
 .library-header {
