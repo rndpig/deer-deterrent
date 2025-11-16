@@ -123,7 +123,7 @@ function VideoLibrary({ onStartReview }) {
       const formData = new FormData()
       formData.append('video', file)
 
-      const response = await fetch(`${apiUrl}/api/upload`, {
+      const response = await fetch(`${apiUrl}/api/videos/upload`, {
         method: 'POST',
         body: formData
       })
