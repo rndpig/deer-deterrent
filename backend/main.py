@@ -572,13 +572,15 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
                 
                 # Create detection record for sampled frames
                 # This allows users to draw bounding boxes on missed detections
+                max_conf = max([d['confidence'] for d in detections]) if detections else 0.0
                 detection_record = {
                     "id": f"{timestamp}_frame_{frame_num}",
                     "timestamp": datetime.now().isoformat(),
                     "camera_name": "Manual Upload",
                     "zone_name": f"Video: {video.filename}",
                     "deer_count": len(detections) if detections else 0,
-                    "confidence": max([d['confidence'] for d in detections]) if detections else 0.0,
+                    "confidence": max_conf,
+                    "max_confidence": max_conf,  # Add for API response compatibility
                     "sprinklers_activated": False,
                     "image_path": f"/api/training-frames/{frame_filename}",
                     "annotated_image_path": f"/api/training-frames/{annotated_filename}" if detections else None,
