@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './Training.css'
 import AnnotationTool from './AnnotationTool'
 
@@ -26,6 +26,82 @@ function Training() {
   // Camera selection for uploaded frames
   const [selectedCamera, setSelectedCamera] = useState('Front Camera')
   const cameraOptions = ['Front Camera', 'Side Camera', 'Driveway Camera', 'Backyard Camera']
+  
+  // Canvas ref for drawing bounding boxes
+  const canvasRef = useRef(null)
+  const imageRef = useRef(null)
+
+  // Draw bounding boxes on canvas when detection changes
+  useEffect(() => {
+    if (currentDetection && imageRef.current && canvasRef.current) {
+      const img = imageRef.current
+      const canvas = canvasRef.current
+      
+      // Wait for image to load
+      const drawBoxes = () => {
+        const ctx = canvas.getContext('2d')
+        canvas.width = img.naturalWidth || img.width
+        canvas.height = img.naturalHeight || img.height
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        
+        // Draw auto-detected boxes (green solid)
+        if (currentDetection.detections?.length > 0) {
+          ctx.strokeStyle = '#10b981'
+          ctx.lineWidth = 3
+          ctx.setLineDash([])
+          
+          currentDetection.detections.forEach(det => {
+            const bbox = det.bbox
+            ctx.strokeRect(
+              bbox.x1,
+              bbox.y1,
+              bbox.x2 - bbox.x1,
+              bbox.y2 - bbox.y1
+            )
+            
+            // Draw label
+            ctx.fillStyle = '#10b981'
+            ctx.fillRect(bbox.x1, bbox.y1 - 20, 80, 20)
+            ctx.fillStyle = 'white'
+            ctx.font = '12px Arial'
+            ctx.fillText(`Auto ${(det.confidence * 100).toFixed(0)}%`, bbox.x1 + 5, bbox.y1 - 5)
+          })
+        }
+        
+        // Draw manual annotation boxes (orange dashed)
+        if (currentDetection.manual_annotations?.length > 0) {
+          ctx.strokeStyle = '#f59e0b'
+          ctx.lineWidth = 3
+          ctx.setLineDash([8, 4])
+          
+          currentDetection.manual_annotations.forEach((box, idx) => {
+            ctx.strokeRect(
+              box.x * canvas.width,
+              box.y * canvas.height,
+              box.width * canvas.width,
+              box.height * canvas.height
+            )
+            
+            // Draw label
+            ctx.setLineDash([])
+            ctx.fillStyle = '#f59e0b'
+            ctx.fillRect(box.x * canvas.width, box.y * canvas.height - 20, 70, 20)
+            ctx.fillStyle = 'white'
+            ctx.font = '12px Arial'
+            ctx.fillText(`Manual ${idx + 1}`, box.x * canvas.width + 5, box.y * canvas.height - 5)
+          })
+        }
+      }
+      
+      if (img.complete) {
+        drawBoxes()
+      } else {
+        img.onload = drawBoxes
+      }
+    }
+  }, [currentDetection, currentIndex])
 
   useEffect(() => {
     loadDetections()
@@ -565,41 +641,15 @@ function Training() {
                   {currentDetection.image_path ? (
                     <div className="image-wrapper">
                       <img 
+                        ref={imageRef}
                         src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${currentDetection.image_path}`}
                         alt="Detection"
                         className="detection-image"
-                        id="frame-image"
                       />
-                      <svg className="detection-overlay" viewBox="0 0 1280 720">
-                        {/* Draw existing detection boxes */}
-                        {currentDetection.detections?.map((det, idx) => (
-                          <rect
-                            key={`det-${idx}`}
-                            x={det.bbox.x1}
-                            y={det.bbox.y1}
-                            width={det.bbox.x2 - det.bbox.x1}
-                            height={det.bbox.y2 - det.bbox.y1}
-                            fill="none"
-                            stroke="#10b981"
-                            strokeWidth="3"
-                            strokeDasharray="none"
-                          />
-                        ))}
-                        {/* Draw manual annotation boxes */}
-                        {currentDetection.manual_annotations?.map((box, idx) => (
-                          <rect
-                            key={`manual-${idx}`}
-                            x={box.x * 1280}
-                            y={box.y * 720}
-                            width={box.width * 1280}
-                            height={box.height * 720}
-                            fill="none"
-                            stroke="#f59e0b"
-                            strokeWidth="3"
-                            strokeDasharray="5,5"
-                          />
-                        ))}
-                      </svg>
+                      <canvas 
+                        ref={canvasRef}
+                        className="detection-canvas"
+                      />
                     </div>
                   ) : (
                     <div className="no-image">
