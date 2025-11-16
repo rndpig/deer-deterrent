@@ -6,8 +6,6 @@ function Dashboard({ stats, settings }) {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('last24h') // last24h, last7d, all
   const [demoMode, setDemoMode] = useState(false)
-  const [reviewingId, setReviewingId] = useState(null)
-  const [trainingStats, setTrainingStats] = useState(null)
 
   useEffect(() => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -25,20 +23,6 @@ function Dashboard({ stats, settings }) {
       .catch(err => {
         console.error('Error fetching detections:', err)
         setLoading(false)
-      })
-    
-    // Fetch training stats (optional - don't block on error)
-    fetch(`${apiUrl}/api/training/stats`)
-      .then(res => {
-        if (res.ok) return res.json()
-        return null
-      })
-      .then(data => {
-        if (data) setTrainingStats(data)
-      })
-      .catch(err => {
-        console.error('Error fetching training stats:', err)
-        // Don't break the dashboard if stats aren't available
       })
   }, [filter])
 
@@ -105,117 +89,6 @@ function Dashboard({ stats, settings }) {
     }
   }
 
-  const reviewDetection = async (detectionId, reviewType, correctedCount = null) => {
-    setReviewingId(detectionId)
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-    
-    try {
-      const payload = {
-        detection_id: detectionId,
-        review_type: reviewType,
-        reviewer: 'user'
-      }
-      
-      if (correctedCount !== null) {
-        payload.corrected_deer_count = correctedCount
-      }
-
-      const response = await fetch(`${apiUrl}/api/detections/${detectionId}/review`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-      
-      if (response.ok) {
-        // Update the detection in state to show it's been reviewed
-        setDetections(prev => prev.map(d => 
-          d.id === detectionId ? { ...d, reviewed: true, review_type: reviewType } : d
-        ))
-      } else {
-        alert('❌ Error submitting review')
-      }
-    } catch (error) {
-      console.error('Error reviewing detection:', error)
-      alert('❌ Error submitting review')
-    } finally {
-      setReviewingId(null)
-    }
-  }
-
-  const exportAndSyncToGoogleDrive = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-    setLoading(true)
-    
-    try {
-      // Step 1: Export training data
-      const exportResponse = await fetch(`${apiUrl}/api/training/export`)
-      if (!exportResponse.ok) {
-        throw new Error('Export failed')
-      }
-      const exportData = await exportResponse.json()
-      
-      // Step 2: Sync to Google Drive
-      const syncResponse = await fetch(`${apiUrl}/api/training/sync-to-drive`, {
-        method: 'POST'
-      })
-      if (!syncResponse.ok) {
-        throw new Error('Drive sync failed')
-      }
-      const syncData = await syncResponse.json()
-      
-      alert(`✅ Success!\n\n📦 Exported ${exportData.total_images} images with ${exportData.total_annotations} annotations\n\n☁️ Synced to Google Drive: ${syncData.version}\n\nReady for training in Google Colab!`)
-      
-    } catch (error) {
-      console.error('Error exporting/syncing:', error)
-      alert('❌ Error: ' + error.message + '\n\nMake sure backend is running and Google Drive is configured.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const reportMissedDetection = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-    
-    // Prompt for details
-    const timestamp = prompt('When did you see the deer? (e.g., "2024-11-15 18:30" or leave blank for now)')
-    if (timestamp === null) return // User cancelled
-    
-    const camera = prompt('Which camera? (e.g., Front Yard, Back Yard)')
-    if (!camera) {
-      alert('❌ Camera name is required')
-      return
-    }
-    
-    const deerCount = prompt('How many deer did you see?', '1')
-    if (!deerCount) return
-    
-    const notes = prompt('Any additional notes? (optional)', '')
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/detections/missed`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          timestamp: timestamp || new Date().toISOString(),
-          camera_name: camera,
-          deer_count: parseInt(deerCount),
-          notes: notes || '',
-          reporter: 'user'
-        })
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        alert(`✅ Missed detection reported!\n\nReport ID: ${data.report_id}\nTotal missed reports: ${data.total_missed}\n\nThis will help improve the model during next training.`)
-      } else {
-        alert('❌ Error reporting missed detection')
-      }
-    } catch (error) {
-      console.error('Error reporting missed detection:', error)
-      alert('❌ Error reporting missed detection')
-    }
-  }
-
   return (
     <div className="dashboard">
       <div className="stats-grid">
@@ -238,33 +111,6 @@ function Dashboard({ stats, settings }) {
           </p>
         </div>
       </div>
-
-      {trainingStats && (
-        <div className="training-stats-banner">
-          <div className="training-stat">
-            <span className="stat-label">📊 Reviewed</span>
-            <span className="stat-number">{trainingStats.reviewed_detections}</span>
-          </div>
-          <div className="training-stat">
-            <span className="stat-label">✓ Correct</span>
-            <span className="stat-number">{trainingStats.review_breakdown.correct}</span>
-          </div>
-          <div className="training-stat">
-            <span className="stat-label">✗ False Positives</span>
-            <span className="stat-number">{trainingStats.review_breakdown.false_positive}</span>
-          </div>
-          <div className="training-stat">
-            <span className="stat-label">➕ Missed</span>
-            <span className="stat-number">{trainingStats.missed_reports}</span>
-          </div>
-          <div className={`training-readiness ${trainingStats.ready_for_training ? 'ready' : 'not-ready'}`}>
-            {trainingStats.ready_for_training 
-              ? '✅ Ready for Training' 
-              : `⏳ Need ${50 - trainingStats.reviewed_detections} more reviews`
-            }
-          </div>
-        </div>
-      )}
 
       <div className="detection-history">
         <div className="history-header">
@@ -290,21 +136,6 @@ function Dashboard({ stats, settings }) {
                 All Time
               </button>
             </div>
-            <button 
-              className="sync-button"
-              onClick={exportAndSyncToGoogleDrive}
-              disabled={loading}
-              title="Export reviewed detections and sync to Google Drive for training"
-            >
-              {loading ? '⏳ Syncing...' : '☁️ Sync to Drive'}
-            </button>
-            <button 
-              className="report-missed-button"
-              onClick={reportMissedDetection}
-              title="Report a deer detection that the system missed"
-            >
-              ➕ Report Missed
-            </button>
             <button 
               className={`mode-toggle ${demoMode ? 'demo-active' : ''}`} 
               onClick={toggleMode}
