@@ -118,9 +118,17 @@ function Training() {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
     setLoading(true)
     
+    console.log('Loading detections from:', `${apiUrl}/api/detections?limit=200`)
+    
     try {
       const response = await fetch(`${apiUrl}/api/detections?limit=200`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
       const data = await response.json()
+      console.log('Loaded detections:', data.length, 'items')
       
       // Filter based on selection
       let filtered = data
@@ -130,10 +138,12 @@ function Training() {
         filtered = data.filter(d => d.reviewed)
       }
       
+      console.log('Filtered detections:', filtered.length, 'items (filter:', filter, ')')
       setDetections(filtered)
       setCurrentIndex(0)
     } catch (error) {
       console.error('Error loading detections:', error)
+      alert(`Failed to load detections: ${error.message}`)
     } finally {
       setLoading(false)
     }
