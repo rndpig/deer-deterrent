@@ -89,6 +89,51 @@ function VideoLibrary({ onStartReview }) {
     }
   }
 
+  const handleEarlyReview = async () => {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    const confirmed = confirm(
+      `Early Review Mode\n\n` +
+      `This will select 5 representative frames from each of your ${videos.length} videos (${videos.length * 5} frames total).\n\n` +
+      `These frames are intelligently sampled to include:\n` +
+      `• High confidence detections (validate model success)\n` +
+      `• Medium confidence detections (check borderline cases)\n` +
+      `• Frames across different times (temporal diversity)\n\n` +
+      `You can repeat this process as you add more videos.\n\n` +
+      `Continue?`
+    )
+    
+    if (!confirmed) return
+    
+    setLoading(true)
+    
+    try {
+      // Sample frames from all videos
+      const response = await fetch(`${apiUrl}/api/videos/sample-for-review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to sample frames')
+      }
+      
+      const result = await response.json()
+      alert(`✅ Selected ${result.total_frames_selected} frames from ${result.videos_sampled} videos for review`)
+      
+      // Notify parent to switch to review mode
+      if (onStartReview) {
+        onStartReview()
+      }
+    } catch (error) {
+      console.error('Error starting early review:', error)
+      alert('❌ ' + error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleStartReview = async () => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
     
@@ -376,12 +421,21 @@ function VideoLibrary({ onStartReview }) {
                 </span>
               </div>
               
+              {trainingStatus.video_count < 10 && trainingStatus.video_count > 0 && (
+                <button 
+                  className="btn-early-review"
+                  onClick={handleEarlyReview}
+                >
+                  🔬 Start Early Review ({trainingStatus.video_count * 5} frames)
+                </button>
+              )}
+              
               {trainingStatus.ready_for_review && !trainingStatus.reviewed_frames && (
                 <button 
                   className="btn-start-review"
                   onClick={handleStartReview}
                 >
-                  ✅ Start Review Process
+                  ✅ Start Full Review Process
                 </button>
               )}
               

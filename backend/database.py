@@ -322,6 +322,20 @@ def update_frame_review(frame_id: int, reviewed: bool, review_type: Optional[str
     conn.commit()
     conn.close()
 
+def mark_frame_for_training(frame_id: int):
+    """Mark a frame as selected for training review."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        UPDATE frames 
+        SET selected_for_training = 1
+        WHERE id = ?
+    """, (frame_id,))
+    
+    conn.commit()
+    conn.close()
+
 def get_training_frames() -> List[Dict]:
     """Get all frames selected for training."""
     conn = get_connection()

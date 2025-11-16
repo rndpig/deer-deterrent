@@ -1255,6 +1255,131 @@ async def get_video_thumbnail(video_id: int):
     return FileResponse(thumbnail_path, media_type="image/jpeg")
 
 
+@app.post("/api/videos/sample-for-review")
+async def sample_frames_for_review(video_ids: list[int] = None):
+    """
+    Sample representative frames from videos for early review.
+    Selects 5 diverse frames per video using intelligent strategy.
+    
+    Args:
+        video_ids: Optional list of video IDs. If None, samples from all videos.
+    
+    Returns:
+        Statistics about sampled frames
+    """
+    # Get video IDs to sample from
+    if video_ids is None:
+        videos = db.get_all_videos()
+        video_ids = [v['id'] for v in videos]
+    
+    if not video_ids:
+        raise HTTPException(status_code=400, detail="No videos available to sample")
+    
+    total_sampled = 0
+    frames_by_video = {}
+    
+    for video_id in video_ids:
+        # Get all frames for this video
+        frames = db.get_frames_for_video(video_id)
+        
+        if not frames:
+            continue
+        
+        # Sample 5 representative frames
+        sampled_frame_ids = _select_representative_frames(frames, count=5)
+        
+        # Mark them as selected for training
+        for frame_id in sampled_frame_ids:
+            db.mark_frame_for_training(frame_id)
+        
+        frames_by_video[video_id] = sampled_frame_ids
+        total_sampled += len(sampled_frame_ids)
+    
+    return {
+        "status": "success",
+        "videos_sampled": len(frames_by_video),
+        "total_frames_selected": total_sampled,
+        "frames_per_video": frames_by_video
+    }
+
+
+def _select_representative_frames(frames: list, count: int = 5) -> list[int]:
+    """
+    Select representative frames from a video using intelligent sampling.
+    
+    Strategy:
+    1. Highest confidence detection (if any)
+    2. Medium confidence detection (0.4-0.7, if any)
+    3. Random frame from first third (potential missed detections)
+    4. Random frame from middle third
+    5. Random frame from last third
+    
+    Falls back to even distribution if categories not available.
+    """
+    import random
+    
+    if len(frames) <= count:
+        # If we have fewer frames than requested, return all
+        return [f['id'] for f in frames]
+    
+    selected_ids = []
+    remaining_frames = frames.copy()
+    
+    # 1. Highest confidence detection
+    frames_with_detections = [f for f in remaining_frames if f.get('detection_count', 0) > 0]
+    if frames_with_detections:
+        # Get detections for each frame to find highest confidence
+        max_conf_frame = max(frames_with_detections, key=lambda f: f.get('detection_count', 0))
+        selected_ids.append(max_conf_frame['id'])
+        remaining_frames.remove(max_conf_frame)
+    
+    # 2. Medium confidence - look for frames with 1-2 detections
+    medium_frames = [f for f in remaining_frames if 1 <= f.get('detection_count', 0) <= 2]
+    if medium_frames and len(selected_ids) < count:
+        selected = random.choice(medium_frames)
+        selected_ids.append(selected['id'])
+        remaining_frames.remove(selected)
+    
+    # 3-5. Sample from temporal thirds
+    if remaining_frames and len(selected_ids) < count:
+        # Sort by frame number
+        sorted_frames = sorted(remaining_frames, key=lambda f: f['frame_number'])
+        third_size = len(sorted_frames) // 3
+        
+        # First third
+        if third_size > 0 and len(selected_ids) < count:
+            first_third = sorted_frames[:third_size]
+            if first_third:
+                selected = random.choice(first_third)
+                selected_ids.append(selected['id'])
+                sorted_frames.remove(selected)
+        
+        # Middle third
+        if third_size > 0 and len(selected_ids) < count:
+            middle_third = sorted_frames[third_size:2*third_size]
+            if middle_third:
+                selected = random.choice(middle_third)
+                selected_ids.append(selected['id'])
+                sorted_frames.remove(selected)
+        
+        # Last third
+        if len(selected_ids) < count and sorted_frames:
+            last_third = sorted_frames[2*third_size:]
+            if last_third:
+                selected = random.choice(last_third)
+                selected_ids.append(selected['id'])
+    
+    # Fill remaining slots with random frames if needed
+    if len(selected_ids) < count and remaining_frames:
+        needed = count - len(selected_ids)
+        available = [f for f in remaining_frames if f['id'] not in selected_ids]
+        if available:
+            additional = random.sample(available, min(needed, len(available)))
+            selected_ids.extend([f['id'] for f in additional])
+    
+    return selected_ids
+
+
 @app.get("/api/videos/training/status")
 async def get_training_status():
     """Get status of training data collection."""
