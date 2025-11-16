@@ -6,6 +6,7 @@ function VideoLibrary({ onStartReview }) {
   const [loading, setLoading] = useState(true)
   const [trainingStatus, setTrainingStatus] = useState(null)
   const [deleting, setDeleting] = useState(null)
+  const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
     loadVideos()
@@ -103,6 +104,47 @@ function VideoLibrary({ onStartReview }) {
     }
   }
 
+  const handleUploadClick = () => {
+    document.getElementById('video-upload-input').click()
+  }
+
+  const handleVideoUpload = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    setUploading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('video', file)
+
+      const response = await fetch(`${apiUrl}/api/upload`, {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Upload failed')
+      }
+
+      const result = await response.json()
+      alert(`✅ Video uploaded! Extracted ${result.frames_extracted} frames with ${result.detections} detections`)
+
+      // Reload videos and status
+      await loadVideos()
+      await loadTrainingStatus()
+    } catch (error) {
+      console.error('Error uploading video:', error)
+      alert(`❌ Upload failed: ${error.message}`)
+    } finally {
+      setUploading(false)
+      // Reset file input
+      event.target.value = ''
+    }
+  }
+
   const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
@@ -124,6 +166,14 @@ function VideoLibrary({ onStartReview }) {
 
   return (
     <div className="video-library">
+      <input
+        type="file"
+        id="video-upload-input"
+        accept="video/*"
+        style={{ display: 'none' }}
+        onChange={handleVideoUpload}
+      />
+      
       <div className="library-header">
         <div className="header-left">
           <h1>📹 Video Library</h1>
@@ -131,6 +181,14 @@ function VideoLibrary({ onStartReview }) {
         </div>
         
         <div className="header-right">
+          <button 
+            className="btn-upload-video"
+            onClick={handleUploadClick}
+            disabled={uploading}
+          >
+            {uploading ? '⏳ Uploading...' : '📤 Upload Video'}
+          </button>
+          
           {trainingStatus && (
             <div className="training-status-card">
               <div className="status-row">
