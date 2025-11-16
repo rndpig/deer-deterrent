@@ -260,105 +260,78 @@ function EarlyReview({ onBack }) {
     )
   }
 
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const imageUrl = currentFrame.image_url?.startsWith('http') 
+    ? currentFrame.image_url 
+    : `${apiUrl}${currentFrame.image_url}`
+
   return (
     <div className="early-review-container">
+      {/* Compact header with all info in one line */}
       <div className="review-header">
-        <button 
-          className="btn-back-to-library"
-          onClick={onBack}
-        >
-          ← Back to Library
+        <button className="btn-back-to-library" onClick={onBack}>
+          ← Back
         </button>
-        <div className="review-stats">
-          <span className="stat-item">
-            <strong>{currentIndex + 1}</strong> / {frames.length}
-          </span>
-          {trainingStats && (
-            <>
-              <span className="stat-item">
-                Reviewed: <strong>{trainingStats.reviewed_frames}</strong>
-              </span>
-              <span className="stat-item">
-                For Training: <strong>{trainingStats.frames_for_training}</strong>
-              </span>
-            </>
-          )}
+        
+        <div className="header-info">
+          <span className="frame-counter"><strong>{currentIndex + 1}</strong> / {frames.length}</span>
+          <span className="divider">|</span>
+          <span>Video: {currentFrame.video_filename}</span>
+          <span className="divider">|</span>
+          <span>Frame: {currentFrame.frame_number}</span>
+          <span className="divider">|</span>
+          <span>Time: {currentFrame.timestamp_in_video?.toFixed(2)}s</span>
+          <span className="divider">|</span>
+          <span>Detections: {currentFrame.detection_count || 0}</span>
+          <span className="divider">|</span>
+          <span>Manual: {currentFrame.annotation_count || 0}</span>
+        </div>
+
+        <div className="header-actions">
+          <button className="btn-header btn-prev" onClick={previousFrame} disabled={currentIndex === 0}>
+            ←
+          </button>
+          <button className="btn-header btn-next" onClick={nextFrame} disabled={currentIndex === frames.length - 1}>
+            →
+          </button>
+          <button className="btn-header btn-correct" onClick={() => reviewFrame('correct')}>
+            ✓ Correct
+          </button>
+          <button className="btn-header btn-annotate" onClick={() => setShowAnnotationTool(true)}>
+            ✏️ Add Box
+          </button>
+          <button className="btn-header btn-skip" onClick={nextFrame}>
+            Skip
+          </button>
         </div>
       </div>
 
+      {/* Fullscreen image viewer */}
       <div className="review-content">
-        <div className="frame-viewer">
-          <div className="image-container">
-            <img 
-              ref={imageRef}
-              src={currentFrame.image_url}
-              alt="Frame"
-              className="frame-image"
-            />
-            <canvas 
-              ref={canvasRef}
-              className="frame-canvas"
-            />
-          </div>
-          
-          <div className="frame-info">
-            <div className="info-row">
-              <span>Video: {currentFrame.video_filename}</span>
-              <span>Frame: {currentFrame.frame_number}</span>
-              <span>Time: {currentFrame.timestamp_in_video?.toFixed(2)}s</span>
-            </div>
-            <div className="info-row">
-              <span>Detections: {currentFrame.detection_count || 0}</span>
-              <span>Manual: {currentFrame.annotation_count || 0}</span>
-            </div>
-          </div>
+        <div className="image-container">
+          <img 
+            ref={imageRef}
+            src={imageUrl}
+            alt="Frame"
+            className="frame-image"
+          />
+          <canvas 
+            ref={canvasRef}
+            className="frame-canvas"
+          />
         </div>
+      </div>
 
-        <div className="review-actions">
-          <button 
-            className="btn-action btn-prev"
-            onClick={previousFrame}
-            disabled={currentIndex === 0}
-          >
-            ← Previous
-          </button>
-
-          <div className="review-buttons">
-            <button 
-              className="btn-review btn-correct"
-              onClick={() => reviewFrame('correct')}
-            >
-              ✓ Correct (C)
-            </button>
-            
-            <button 
-              className="btn-review btn-annotate"
-              onClick={() => setShowAnnotationTool(true)}
-            >
-              ✏️ Add Box (Space)
-            </button>
-            
-            <button 
-              className="btn-review btn-skip"
-              onClick={nextFrame}
-            >
-              → Skip
-            </button>
-          </div>
-
-          <button 
-            className="btn-action btn-next"
-            onClick={nextFrame}
-            disabled={currentIndex === frames.length - 1}
-          >
-            Next →
-          </button>
-        </div>
+      {/* Footer with shortcuts */}
+      <div className="review-footer">
+        <span><strong>Shortcuts:</strong> Arrow Keys • C (correct) • Space (add box)</span>
+        <span className="divider">|</span>
+        <span><strong>Colors:</strong> <span style={{color: '#10b981'}}>Green = Model</span> • <span style={{color: '#3b82f6'}}>Blue = Manual</span></span>
       </div>
 
       {showAnnotationTool && (
         <AnnotationTool
-          imageUrl={currentFrame.image_url}
+          imageUrl={imageUrl}
           existingAnnotations={currentFrame.annotations || []}
           existingDetections={currentFrame.detections || []}
           onSave={handleAnnotationSave}
@@ -367,12 +340,6 @@ function EarlyReview({ onBack }) {
           setIsOpen={setShowAnnotationTool}
         />
       )}
-
-      <div className="keyboard-shortcuts">
-        <strong>Shortcuts:</strong> Arrow Keys (navigate) • C (mark correct) • Space (add bounding box)
-        <br />
-        <strong>Box Colors:</strong> <span style={{color: '#10b981'}}>Green = Model Detections</span> • <span style={{color: '#3b82f6'}}>Blue = Manual Annotations</span>
-      </div>
     </div>
   )
 }
