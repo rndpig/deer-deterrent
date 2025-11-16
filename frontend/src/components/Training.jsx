@@ -31,6 +31,9 @@ function Training() {
   const canvasRef = useRef(null)
   const imageRef = useRef(null)
 
+  // Current detection
+  const currentDetection = detections[currentIndex]
+
   // Draw bounding boxes on canvas when detection changes
   useEffect(() => {
     if (!currentDetection || !imageRef.current || !canvasRef.current) return
@@ -450,8 +453,6 @@ function Training() {
       alert('❌ Error deleting frames')
     }
   }
-
-  const currentDetection = detections[currentIndex]
 
   if (loading) {
     return (
