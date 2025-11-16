@@ -16,6 +16,8 @@ function Training() {
   const [uploadError, setUploadError] = useState(null)
   const [uploadSuccess, setUploadSuccess] = useState(null)
   const [showVideoSection, setShowVideoSection] = useState(true)
+  const [sampleRate, setSampleRate] = useState(15) // Default: every 15th frame (~2/sec at 30fps)
+  const [estimatedFrames, setEstimatedFrames] = useState(0)
   
   // Annotation tool state
   const [showAnnotationTool, setShowAnnotationTool] = useState(false)
@@ -180,6 +182,19 @@ function Training() {
       setSelectedFile(file)
       setUploadError(null)
       setUploadSuccess(null)
+      
+      // Estimate frames (assume 30fps, will be adjusted by actual video)
+      const videoElement = document.createElement('video')
+      videoElement.preload = 'metadata'
+      videoElement.onloadedmetadata = () => {
+        const duration = videoElement.duration
+        const fps = 30 // Estimate, actual will be calculated on backend
+        const totalFrames = Math.floor(duration * fps)
+        const estimated = Math.floor(totalFrames / sampleRate)
+        setEstimatedFrames(estimated)
+        URL.revokeObjectURL(videoElement.src)
+      }
+      videoElement.src = URL.createObjectURL(file)
     }
   }
 
@@ -192,6 +207,7 @@ function Training() {
     
     const formData = new FormData()
     formData.append('video', selectedFile)
+    formData.append('sample_rate', sampleRate.toString())
     
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
     
@@ -207,8 +223,9 @@ function Training() {
       }
       
       const data = await response.json()
-      setUploadSuccess(`✅ Video processed! ${data.frames_extracted} frames extracted, ${data.detections_found} detections found. Frames added to review queue.`)
+      setUploadSuccess(`✅ Video processed! ${data.frames_extracted} frames extracted (every ${sampleRate}${sampleRate === 1 ? 'st' : sampleRate === 2 ? 'nd' : sampleRate === 3 ? 'rd' : 'th'} frame), ${data.detections_found} detections found. Frames added to review queue.`)
       setSelectedFile(null)
+      setEstimatedFrames(0)
       
       // Reload detections to show new frames
       loadDetections()
@@ -294,6 +311,27 @@ function Training() {
                 Upload Ring footage with missed deer detections. Video will be split into frames 
                 and processed for review.
               </p>
+              
+              <div className="sampling-controls">
+                <label className="sampling-label">
+                  <span className="label-text">Frame Sampling Rate:</span>
+                  <select 
+                    value={sampleRate} 
+                    onChange={(e) => setSampleRate(parseInt(e.target.value))}
+                    className="sampling-select"
+                  >
+                    <option value="10">High Detail (every 10th frame, ~3/sec)</option>
+                    <option value="15">Balanced (every 15th frame, ~2/sec) - Recommended</option>
+                    <option value="30">Quick Review (every 30th frame, ~1/sec)</option>
+                    <option value="60">Sparse (every 60th frame, ~0.5/sec)</option>
+                  </select>
+                </label>
+                {selectedFile && estimatedFrames > 0 && (
+                  <span className="frame-estimate">
+                    📊 Estimated: ~{estimatedFrames} frames to review
+                  </span>
+                )}
+              </div>
               
               <div className="file-input-wrapper">
                 <input 

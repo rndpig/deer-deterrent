@@ -482,23 +482,27 @@ async def get_video_frame(frame_name: str):
 
 
 @app.post("/api/videos/upload")
-async def upload_video_for_training(video: UploadFile = File(...)):
+async def upload_video_for_training(video: UploadFile = File(...), sample_rate: int = 15):
     """
     Upload video for training data extraction.
-    Extracts ALL frames, runs detection on each, and saves for manual review/annotation.
+    Extracts frames at specified sampling rate, runs detection, and saves for review/annotation.
     
-    This is different from /api/detect/video which only samples frames.
+    Args:
+        video: Uploaded video file
+        sample_rate: Extract every Nth frame (default: 15, ~2 frames/sec at 30fps)
+    
     This endpoint:
-    - Extracts every single frame
-    - Runs detection on all frames
+    - Extracts every Nth frame based on sample_rate
+    - Runs detection on sampled frames
     - Saves video archive
-    - Creates detection records for ALL frames (detected + non-detected)
+    - Creates detection records for sampled frames
     - Adds frames to review queue
     
     Returns:
         frames_extracted: Total frames extracted
         detections_found: Frames with automatic detections
         video_saved: Path to archived video
+        sample_rate: Sampling rate used
     """
     if not CV2_AVAILABLE:
         raise HTTPException(status_code=503, detail="OpenCV not available")
@@ -506,6 +510,12 @@ async def upload_video_for_training(video: UploadFile = File(...)):
     det = load_detector()
     if not det:
         raise HTTPException(status_code=503, detail="Detector not initialized")
+    
+    # Validate sample_rate
+    if sample_rate < 1:
+        sample_rate = 1
+    elif sample_rate > 120:
+        sample_rate = 120
     
     # Create directories
     video_archive_dir = Path("data/video_archive")
@@ -543,45 +553,48 @@ async def upload_video_for_training(video: UploadFile = File(...)):
             if not ret:
                 break
             
-            # Save frame to disk
-            frame_filename = f"{timestamp}_frame_{frame_num:06d}.jpg"
-            frame_path = frames_dir / frame_filename
-            cv2.imwrite(str(frame_path), frame)
+            # Only process every Nth frame based on sample_rate
+            if frame_num % sample_rate == 0:
+                # Save frame to disk
+                frame_filename = f"{timestamp}_frame_{frame_num:06d}.jpg"
+                frame_path = frames_dir / frame_filename
+                cv2.imwrite(str(frame_path), frame)
+                
+                # Run detection on this frame
+                detections, annotated = det.detect(frame, return_annotated=True)
+                
+                # Save annotated version if there are detections
+                if detections:
+                    annotated_filename = f"{timestamp}_frame_{frame_num:06d}_annotated.jpg"
+                    annotated_path = frames_dir / annotated_filename
+                    cv2.imwrite(str(annotated_path), annotated)
+                    detections_found += 1
+                
+                # Create detection record for sampled frames
+                # This allows users to draw bounding boxes on missed detections
+                detection_record = {
+                    "id": f"{timestamp}_frame_{frame_num}",
+                    "timestamp": datetime.now().isoformat(),
+                    "camera_name": "Manual Upload",
+                    "zone_name": f"Video: {video.filename}",
+                    "deer_count": len(detections) if detections else 0,
+                    "confidence": max([d['confidence'] for d in detections]) if detections else 0.0,
+                    "sprinklers_activated": False,
+                    "image_path": f"/api/training-frames/{frame_filename}",
+                    "annotated_image_path": f"/api/training-frames/{annotated_filename}" if detections else None,
+                    "video_source": video_filename,
+                    "frame_number": frame_num,
+                    "timestamp_seconds": frame_num / fps if fps > 0 else 0,
+                    "detections": detections if detections else [],
+                    "manual_annotations": [],  # To be filled by user
+                    "reviewed": False,
+                    "from_video_upload": True
+                }
+                
+                detection_history.append(detection_record)
+                frame_records.append(detection_record)
+                frames_extracted += 1
             
-            # Run detection on this frame
-            detections, annotated = det.detect(frame, return_annotated=True)
-            
-            # Save annotated version if there are detections
-            if detections:
-                annotated_filename = f"{timestamp}_frame_{frame_num:06d}_annotated.jpg"
-                annotated_path = frames_dir / annotated_filename
-                cv2.imwrite(str(annotated_path), annotated)
-                detections_found += 1
-            
-            # Create detection record for ALL frames (including no-detection frames)
-            # This allows users to draw bounding boxes on missed detections
-            detection_record = {
-                "id": f"{timestamp}_frame_{frame_num}",
-                "timestamp": datetime.now().isoformat(),
-                "camera_name": "Manual Upload",
-                "zone_name": f"Video: {video.filename}",
-                "deer_count": len(detections) if detections else 0,
-                "confidence": max([d['confidence'] for d in detections]) if detections else 0.0,
-                "sprinklers_activated": False,
-                "image_path": f"/api/training-frames/{frame_filename}",
-                "annotated_image_path": f"/api/training-frames/{annotated_filename}" if detections else None,
-                "video_source": video_filename,
-                "frame_number": frame_num,
-                "timestamp_seconds": frame_num / fps if fps > 0 else 0,
-                "detections": detections if detections else [],
-                "manual_annotations": [],  # To be filled by user
-                "reviewed": False,
-                "from_video_upload": True
-            }
-            
-            detection_history.append(detection_record)
-            frame_records.append(detection_record)
-            frames_extracted += 1
             frame_num += 1
         
         cap.release()
@@ -592,9 +605,11 @@ async def upload_video_for_training(video: UploadFile = File(...)):
             "video_saved": str(video_save_path),
             "frames_extracted": frames_extracted,
             "detections_found": detections_found,
+            "sample_rate": sample_rate,
             "fps": fps,
+            "total_frames": total_frames,
             "duration_seconds": total_frames / fps if fps > 0 else 0,
-            "message": f"Video processed: {frames_extracted} frames extracted, {detections_found} with detections"
+            "message": f"Video processed: {frames_extracted} frames extracted (every {sample_rate} frame{'s' if sample_rate > 1 else ''}), {detections_found} with detections"
         }
     
     except Exception as e:
