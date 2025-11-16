@@ -223,13 +223,24 @@ function Training() {
       }
       
       const data = await response.json()
-      setUploadSuccess(`✅ Video processed! ${data.frames_extracted} frames extracted (every ${sampleRate}${sampleRate === 1 ? 'st' : sampleRate === 2 ? 'nd' : sampleRate === 3 ? 'rd' : 'th'} frame), ${data.detections_found} detections found. Frames added to review queue.`)
+      setUploadSuccess(`✅ Video processed! ${data.frames_extracted} frames extracted (every ${sampleRate}${sampleRate === 1 ? 'st' : sampleRate === 2 ? 'nd' : sampleRate === 3 ? 'rd' : 'th'} frame), ${data.detections_found} with detections. Scroll down to review frames below.`)
       setSelectedFile(null)
       setEstimatedFrames(0)
       
+      // Close upload section to show review interface
+      setShowVideoSection(false)
+      
+      // Switch to 'All' filter to show newly uploaded frames and reload
+      setFilter('all')
+      setCurrentIndex(0)
+      
       // Reload detections to show new frames
-      loadDetections()
-      loadTrainingStats()
+      // Note: loadDetections will be triggered by the filter change above via useEffect
+      setTimeout(() => {
+        loadDetections()
+        loadTrainingStats()
+      }, 100)
+      
     } catch (err) {
       setUploadError(err.message || 'Error processing video')
       console.error('Upload error:', err)
