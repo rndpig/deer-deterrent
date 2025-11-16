@@ -293,6 +293,27 @@ function VideoLibrary({ onStartReview }) {
     }
   }
 
+  // Keyboard navigation for frame analysis
+  useEffect(() => {
+    if (!showFrameAnalysis) return
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        handlePrevFrame()
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        handleNextFrame()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        setShowFrameAnalysis(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showFrameAnalysis, currentFrameIndex, videoFrames.length])
+
   const formatDate = (dateString) => {
     const date = new Date(dateString)
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
