@@ -110,10 +110,12 @@ def init_database():
     
     if 'camera' not in columns:
         cursor.execute("ALTER TABLE videos ADD COLUMN camera TEXT")
+        print("✓ Added 'camera' column to videos table")
         logger.info("Added 'camera' column to videos table")
     
     if 'captured_at' not in columns:
         cursor.execute("ALTER TABLE videos ADD COLUMN captured_at TEXT")
+        print("✓ Added 'captured_at' column to videos table")
         logger.info("Added 'captured_at' column to videos table")
     
     conn.commit()
