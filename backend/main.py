@@ -173,6 +173,11 @@ async def get_stats():
 @app.get("/api/detections", response_model=List[DetectionEvent])
 async def get_detections(limit: int = 50, offset: int = 0):
     """Get detection history."""
+    # Ensure all records have max_confidence field (migration for old records)
+    for detection in detection_history:
+        if 'max_confidence' not in detection:
+            detection['max_confidence'] = detection.get('confidence', 0.0)
+    
     return detection_history[offset:offset + limit]
 
 
