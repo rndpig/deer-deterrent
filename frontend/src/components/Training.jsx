@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import './Training.css'
 import AnnotationTool from './AnnotationTool'
+import VideoLibrary from './VideoLibrary'
 
 function Training() {
+  const [viewMode, setViewMode] = useState('library') // 'library' or 'review'
   const [detections, setDetections] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -121,10 +123,15 @@ function Training() {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
     setLoading(true)
     
-    console.log('Loading detections from:', `${apiUrl}/api/detections?limit=200`)
+    // If in review mode, load training frames instead of all detections
+    const endpoint = viewMode === 'review' 
+      ? `${apiUrl}/api/training/frames`
+      : `${apiUrl}/api/detections?limit=200`
+    
+    console.log('Loading detections from:', endpoint)
     
     try {
-      const response = await fetch(`${apiUrl}/api/detections?limit=200`)
+      const response = await fetch(endpoint)
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
@@ -133,12 +140,14 @@ function Training() {
       const data = await response.json()
       console.log('Loaded detections:', data.length, 'items')
       
-      // Filter based on selection
+      // Filter based on selection (only for legacy detections endpoint)
       let filtered = data
-      if (filter === 'unreviewed') {
-        filtered = data.filter(d => !d.reviewed)
-      } else if (filter === 'reviewed') {
-        filtered = data.filter(d => d.reviewed)
+      if (viewMode !== 'review') {
+        if (filter === 'unreviewed') {
+          filtered = data.filter(d => !d.reviewed)
+        } else if (filter === 'reviewed') {
+          filtered = data.filter(d => d.reviewed)
+        }
       }
       
       console.log('Filtered detections:', filtered.length, 'items (filter:', filter, ')')
@@ -457,6 +466,25 @@ function Training() {
     }
   }
 
+  const handleStartReview = () => {
+    setViewMode('review')
+    setFilter('unreviewed')
+    loadDetections()
+  }
+
+  const handleBackToLibrary = () => {
+    setViewMode('library')
+  }
+
+  // Show library view
+  if (viewMode === 'library') {
+    return (
+      <div className="training-container">
+        <VideoLibrary onStartReview={handleStartReview} />
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="training-container">
@@ -471,7 +499,16 @@ function Training() {
   return (
     <div className="training-container">
       <div className="training-header">
-        <h1>🎓 Model Improvement</h1>
+        <div className="header-row">
+          <button 
+            className="btn-back-to-library"
+            onClick={handleBackToLibrary}
+            title="Back to Video Library"
+          >
+            ← Back to Library
+          </button>
+          <h1>🎓 Frame Review</h1>
+        </div>
         
         {/* Video Upload Section */}
         <div className="video-upload-section">
