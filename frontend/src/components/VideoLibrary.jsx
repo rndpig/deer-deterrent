@@ -28,6 +28,7 @@ function VideoLibrary({ onStartReview }) {
       }
       
       const data = await response.json()
+      console.log('Loaded videos:', data) // Debug: see what we're getting
       setVideos(data)
     } catch (error) {
       console.error('Error loading videos:', error)
@@ -254,6 +255,7 @@ function VideoLibrary({ onStartReview }) {
   }
 
   const formatCameraName = (video) => {
+    console.log('Formatting camera for video:', video.id, 'camera field:', video.camera, 'camera_name field:', video.camera_name) // Debug
     // Use camera field if available, otherwise fall back to camera_name
     if (video.camera) {
       const names = {
