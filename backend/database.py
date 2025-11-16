@@ -187,6 +187,37 @@ def delete_video(video_id: int) -> bool:
     
     return deleted
 
+def update_video_metadata(video_id: int, camera: str = None, captured_at: str = None) -> bool:
+    """Update video metadata (camera and/or captured_at timestamp)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    updates = []
+    params = []
+    
+    if camera is not None:
+        updates.append("camera = ?")
+        params.append(camera)
+    
+    if captured_at is not None:
+        updates.append("captured_at = ?")
+        params.append(captured_at)
+    
+    if not updates:
+        conn.close()
+        return False
+    
+    query = f"UPDATE videos SET {', '.join(updates)} WHERE id = ?"
+    params.append(video_id)
+    
+    cursor.execute(query, params)
+    updated = cursor.rowcount > 0
+    
+    conn.commit()
+    conn.close()
+    
+    return updated
+
 def get_video_count() -> int:
     """Get total number of videos."""
     conn = get_connection()

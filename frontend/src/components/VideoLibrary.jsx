@@ -7,6 +7,10 @@ function VideoLibrary({ onStartReview }) {
   const [trainingStatus, setTrainingStatus] = useState(null)
   const [deleting, setDeleting] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const [uploadedVideo, setUploadedVideo] = useState(null)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [selectedCamera, setSelectedCamera] = useState('front')
+  const [captureDateTime, setCaptureDateTime] = useState('')
 
   useEffect(() => {
     loadVideos()
@@ -130,11 +134,24 @@ function VideoLibrary({ onStartReview }) {
       }
 
       const result = await response.json()
-      alert(`✅ Video uploaded! Extracted ${result.frames_extracted} frames with ${result.detections} detections`)
-
-      // Reload videos and status
-      await loadVideos()
-      await loadTrainingStatus()
+      
+      // Store upload result and show confirmation dialog
+      setUploadedVideo({
+        ...result,
+        filename: file.name
+      })
+      
+      // Set default date/time to now
+      const now = new Date()
+      const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16)
+      setCaptureDateTime(localDateTime)
+      
+      // Set default camera to front
+      setSelectedCamera('front')
+      
+      setShowConfirmDialog(true)
     } catch (error) {
       console.error('Error uploading video:', error)
       alert(`❌ Upload failed: ${error.message}`)
@@ -142,6 +159,59 @@ function VideoLibrary({ onStartReview }) {
       setUploading(false)
       // Reset file input
       event.target.value = ''
+    }
+  }
+
+  const handleConfirmVideo = async () => {
+    if (!uploadedVideo) return
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+    try {
+      // Update video metadata
+      const response = await fetch(`${apiUrl}/api/videos/${uploadedVideo.video_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          camera: selectedCamera,
+          captured_at: captureDateTime
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update video metadata')
+      }
+
+      alert(`✅ Video confirmed! Extracted ${uploadedVideo.frames_extracted} frames with ${uploadedVideo.detections} detections`)
+
+      // Reload videos and status
+      await loadVideos()
+      await loadTrainingStatus()
+
+      // Close dialog
+      setShowConfirmDialog(false)
+      setUploadedVideo(null)
+    } catch (error) {
+      console.error('Error confirming video:', error)
+      alert(`❌ Error: ${error.message}`)
+    }
+  }
+
+  const handleCancelVideo = async () => {
+    if (!uploadedVideo) return
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+    try {
+      // Delete the uploaded video
+      await fetch(`${apiUrl}/api/videos/${uploadedVideo.video_id}`, {
+        method: 'DELETE'
+      })
+
+      setShowConfirmDialog(false)
+      setUploadedVideo(null)
+    } catch (error) {
+      console.error('Error canceling video:', error)
     }
   }
 
@@ -292,6 +362,72 @@ function VideoLibrary({ onStartReview }) {
               {10 - trainingStatus.video_count} more video{10 - trainingStatus.video_count !== 1 ? 's' : ''} needed 
               before review process can begin
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* Video Confirmation Dialog */}
+      {showConfirmDialog && uploadedVideo && (
+        <div className="dialog-overlay">
+          <div className="dialog-box">
+            <h2>📹 Confirm Video Details</h2>
+            <p className="dialog-subtitle">
+              Extracted {uploadedVideo.frames_extracted} frames with {uploadedVideo.detections} detections
+            </p>
+
+            <div className="dialog-form">
+              <div className="form-group">
+                <label htmlFor="video-filename">Filename</label>
+                <input
+                  type="text"
+                  id="video-filename"
+                  value={uploadedVideo.filename}
+                  disabled
+                  className="form-input-disabled"
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="video-camera">Camera *</label>
+                <select
+                  id="video-camera"
+                  value={selectedCamera}
+                  onChange={(e) => setSelectedCamera(e.target.value)}
+                  className="form-select"
+                >
+                  <option value="front">Front</option>
+                  <option value="side">Side</option>
+                  <option value="driveway">Driveway</option>
+                  <option value="backyard">Backyard</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="video-datetime">Capture Date/Time *</label>
+                <input
+                  type="datetime-local"
+                  id="video-datetime"
+                  value={captureDateTime}
+                  onChange={(e) => setCaptureDateTime(e.target.value)}
+                  className="form-input"
+                />
+              </div>
+            </div>
+
+            <div className="dialog-actions">
+              <button
+                className="btn-dialog-cancel"
+                onClick={handleCancelVideo}
+              >
+                Cancel & Delete
+              </button>
+              <button
+                className="btn-dialog-confirm"
+                onClick={handleConfirmVideo}
+              >
+                ✅ Confirm & Save
+              </button>
+            </div>
           </div>
         </div>
       )}

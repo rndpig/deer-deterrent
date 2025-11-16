@@ -1105,6 +1105,19 @@ async def delete_video_endpoint(video_id: int):
     return {"status": "success", "message": "Video deleted"}
 
 
+@app.patch("/api/videos/{video_id}")
+async def update_video_metadata(video_id: int, camera: str = None, captured_at: str = None):
+    """Update video metadata (camera and/or capture timestamp)."""
+    video = db.get_video(video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    # Update video metadata in database
+    db.update_video_metadata(video_id, camera=camera, captured_at=captured_at)
+    
+    return {"status": "success", "message": "Video metadata updated"}
+
+
 @app.get("/api/videos/training/status")
 async def get_training_status():
     """Get status of training data collection."""
