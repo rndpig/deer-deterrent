@@ -1125,6 +1125,69 @@ async def update_video_metadata(video_id: int, request: dict):
     return {"status": "success", "message": "Video metadata updated"}
 
 
+@app.get("/api/videos/{video_id}/stream")
+async def stream_video(video_id: int):
+    """Stream a video file."""
+    video = db.get_video(video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    video_path = Path(video.get('video_path', ''))
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Video file not found")
+    
+    return FileResponse(video_path, media_type="video/mp4")
+
+
+@app.get("/api/videos/{video_id}/thumbnail")
+async def get_video_thumbnail(video_id: int):
+    """Get thumbnail (first frame) of a video."""
+    if not CV2_AVAILABLE:
+        raise HTTPException(status_code=503, detail="OpenCV not available")
+    
+    video = db.get_video(video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    video_path = Path(video.get('video_path', ''))
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Video file not found")
+    
+    # Check if thumbnail already exists
+    thumbnail_dir = Path("data/thumbnails")
+    thumbnail_dir.mkdir(parents=True, exist_ok=True)
+    thumbnail_path = thumbnail_dir / f"video_{video_id}_thumb.jpg"
+    
+    if thumbnail_path.exists():
+        return FileResponse(thumbnail_path, media_type="image/jpeg")
+    
+    # Generate thumbnail from first frame
+    import cv2
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise HTTPException(status_code=500, detail="Could not open video file")
+    
+    ret, frame = cap.read()
+    cap.release()
+    
+    if not ret:
+        raise HTTPException(status_code=500, detail="Could not extract frame from video")
+    
+    # Resize to thumbnail size (maintaining aspect ratio)
+    height, width = frame.shape[:2]
+    max_width = 320
+    if width > max_width:
+        ratio = max_width / width
+        new_width = max_width
+        new_height = int(height * ratio)
+        frame = cv2.resize(frame, (new_width, new_height))
+    
+    # Save thumbnail
+    cv2.imwrite(str(thumbnail_path), frame)
+    
+    return FileResponse(thumbnail_path, media_type="image/jpeg")
+
+
 @app.get("/api/videos/training/status")
 async def get_training_status():
     """Get status of training data collection."""

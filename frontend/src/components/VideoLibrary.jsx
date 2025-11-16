@@ -11,6 +11,16 @@ function VideoLibrary({ onStartReview }) {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [selectedCamera, setSelectedCamera] = useState('front')
   const [captureDateTime, setCaptureDateTime] = useState('')
+  
+  // Video player state
+  const [showVideoPlayer, setShowVideoPlayer] = useState(false)
+  const [playingVideo, setPlayingVideo] = useState(null)
+  
+  // Frame analysis state
+  const [showFrameAnalysis, setShowFrameAnalysis] = useState(false)
+  const [analysisVideo, setAnalysisVideo] = useState(null)
+  const [videoFrames, setVideoFrames] = useState([])
+  const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
 
   useEffect(() => {
     loadVideos()
@@ -249,6 +259,41 @@ function VideoLibrary({ onStartReview }) {
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
+  const handlePlayVideo = (video) => {
+    setPlayingVideo(video)
+    setShowVideoPlayer(true)
+  }
+
+  const handleViewFrames = async (video) => {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/videos/${video.id}`)
+      if (!response.ok) throw new Error('Failed to load video details')
+      
+      const data = await response.json()
+      setAnalysisVideo(video)
+      setVideoFrames(data.frames || [])
+      setCurrentFrameIndex(0)
+      setShowFrameAnalysis(true)
+    } catch (error) {
+      console.error('Error loading frames:', error)
+      alert('Failed to load video frames')
+    }
+  }
+
+  const handleNextFrame = () => {
+    if (currentFrameIndex < videoFrames.length - 1) {
+      setCurrentFrameIndex(currentFrameIndex + 1)
+    }
+  }
+
+  const handlePrevFrame = () => {
+    if (currentFrameIndex > 0) {
+      setCurrentFrameIndex(currentFrameIndex - 1)
+    }
+  }
+
   const formatDate = (dateString) => {
     const date = new Date(dateString)
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -343,9 +388,28 @@ function VideoLibrary({ onStartReview }) {
         <div className="video-grid">
           {videos.map((video) => (
             <div key={video.id} className="video-card">
-              <div className="video-thumbnail">
-                <div className="thumbnail-placeholder">
+              <div 
+                className="video-thumbnail"
+                onClick={() => handlePlayVideo(video)}
+                style={{ cursor: 'pointer' }}
+                title="Click to play video"
+              >
+                {video.video_path ? (
+                  <img 
+                    src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/videos/${video.id}/thumbnail`}
+                    alt={video.filename}
+                    className="thumbnail-image"
+                    onError={(e) => {
+                      e.target.style.display = 'none'
+                      e.target.nextElementSibling.style.display = 'flex'
+                    }}
+                  />
+                ) : null}
+                <div className="thumbnail-placeholder" style={video.video_path ? { display: 'none' } : {}}>
                   <span className="thumbnail-icon">🎥</span>
+                </div>
+                <div className="play-overlay">
+                  <div className="play-button">▶</div>
                 </div>
                 <div className="video-stats">
                   <span className="stat-badge">{video.frame_count} frames</span>
@@ -366,6 +430,13 @@ function VideoLibrary({ onStartReview }) {
               </div>
               
               <div className="video-actions">
+                <button 
+                  className="btn-view-frames"
+                  onClick={() => handleViewFrames(video)}
+                  title="View all frames with detections"
+                >
+                  🖼️ View Frames
+                </button>
                 <button 
                   className="btn-edit"
                   onClick={() => handleEditVideo(video)}
@@ -449,6 +520,126 @@ function VideoLibrary({ onStartReview }) {
                 ✅ Confirm & Save
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Video Player Modal */}
+      {showVideoPlayer && playingVideo && (
+        <div className="dialog-overlay" onClick={() => setShowVideoPlayer(false)}>
+          <div className="video-player-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="video-player-header">
+              <h2>{playingVideo.filename}</h2>
+              <button 
+                className="btn-close-modal"
+                onClick={() => setShowVideoPlayer(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="video-player-content">
+              <video 
+                controls 
+                autoPlay
+                className="video-player"
+                src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/videos/${playingVideo.id}/stream`}
+              >
+                Your browser does not support video playback.
+              </video>
+            </div>
+            <div className="video-player-info">
+              <span>{formatCameraName(playingVideo)}</span>
+              <span>•</span>
+              <span>{formatDate(playingVideo.captured_at || playingVideo.upload_date)}</span>
+              <span>•</span>
+              <span>{playingVideo.frame_count} frames</span>
+              <span>•</span>
+              <span>{playingVideo.detection_count} detections</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Frame Analysis Modal */}
+      {showFrameAnalysis && analysisVideo && (
+        <div className="dialog-overlay" onClick={() => setShowFrameAnalysis(false)}>
+          <div className="frame-analysis-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="frame-analysis-header">
+              <h2>🔍 Frame Analysis: {analysisVideo.filename}</h2>
+              <button 
+                className="btn-close-modal"
+                onClick={() => setShowFrameAnalysis(false)}
+              >
+                ✕
+              </button>
+            </div>
+            
+            {videoFrames.length === 0 ? (
+              <div className="no-frames">
+                <p>No frames extracted from this video yet.</p>
+              </div>
+            ) : (
+              <>
+                <div className="frame-viewer">
+                  <button 
+                    className="frame-nav-btn prev"
+                    onClick={handlePrevFrame}
+                    disabled={currentFrameIndex === 0}
+                  >
+                    ‹
+                  </button>
+                  
+                  <div className="frame-display">
+                    <img 
+                      src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${videoFrames[currentFrameIndex]?.image_path}`}
+                      alt={`Frame ${videoFrames[currentFrameIndex]?.frame_number}`}
+                      className="frame-image"
+                    />
+                    <div className="frame-info-overlay">
+                      <div className="frame-counter">
+                        Frame {currentFrameIndex + 1} of {videoFrames.length}
+                      </div>
+                      <div className="frame-details">
+                        <span>Frame #{videoFrames[currentFrameIndex]?.frame_number}</span>
+                        <span>•</span>
+                        <span>{videoFrames[currentFrameIndex]?.timestamp_in_video?.toFixed(2)}s</span>
+                        <span>•</span>
+                        <span>{videoFrames[currentFrameIndex]?.detection_count || 0} detections</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    className="frame-nav-btn next"
+                    onClick={handleNextFrame}
+                    disabled={currentFrameIndex >= videoFrames.length - 1}
+                  >
+                    ›
+                  </button>
+                </div>
+                
+                <div className="frame-navigation">
+                  <div className="frame-thumbnails">
+                    {videoFrames.map((frame, idx) => (
+                      <div
+                        key={frame.id}
+                        className={`frame-thumb ${idx === currentFrameIndex ? 'active' : ''} ${frame.detection_count > 0 ? 'has-detection' : ''}`}
+                        onClick={() => setCurrentFrameIndex(idx)}
+                        title={`Frame ${frame.frame_number} - ${frame.detection_count} detections`}
+                      >
+                        <img 
+                          src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${frame.image_path}`}
+                          alt={`Thumb ${idx}`}
+                        />
+                        {frame.detection_count > 0 && (
+                          <div className="detection-badge">{frame.detection_count}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
