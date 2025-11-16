@@ -248,10 +248,30 @@
   padding: 0.75rem 1rem;
   border-top: 1px solid #e5e7eb;
   background: #f9fafb;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-edit {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-edit:hover {
+  background: #bfdbfe;
+  border-color: #93c5fd;
 }
 
 .btn-delete {
-  width: 100%;
+  flex: 1;
   padding: 0.5rem 1rem;
   background: #fee2e2;
   color: #991b1b;

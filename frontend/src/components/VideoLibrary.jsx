@@ -166,6 +166,7 @@ function VideoLibrary({ onStartReview }) {
     if (!uploadedVideo) return
 
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const isEditing = !!videos.find(v => v.id === uploadedVideo.video_id)
 
     try {
       // Update video metadata
@@ -182,7 +183,11 @@ function VideoLibrary({ onStartReview }) {
         throw new Error('Failed to update video metadata')
       }
 
-      alert(`✅ Video confirmed! Extracted ${uploadedVideo.frames_extracted} frames with ${uploadedVideo.detections} detections`)
+      if (isEditing) {
+        // Just a silent update for edits
+      } else {
+        alert(`✅ Video confirmed! Extracted ${uploadedVideo.frames_extracted} frames with ${uploadedVideo.detections} detections`)
+      }
 
       // Reload videos and status
       await loadVideos()
@@ -213,6 +218,34 @@ function VideoLibrary({ onStartReview }) {
     } catch (error) {
       console.error('Error canceling video:', error)
     }
+  }
+
+  const handleEditVideo = (video) => {
+    // Parse camera from camera_name (e.g., "Manual Upload" -> "front", or existing camera value)
+    const cameraMap = {
+      'Front': 'front',
+      'Side': 'side',
+      'Driveway': 'driveway',
+      'Backyard': 'backyard'
+    }
+    const camera = video.camera || cameraMap[video.camera_name] || 'front'
+    
+    // Parse date/time
+    const dateTime = video.captured_at || video.upload_date
+    const localDateTime = new Date(dateTime)
+      .toISOString()
+      .slice(0, 16)
+    
+    // Set up for editing
+    setUploadedVideo({
+      video_id: video.id,
+      filename: video.filename,
+      frames_extracted: video.frame_count,
+      detections: video.detection_count
+    })
+    setSelectedCamera(camera)
+    setCaptureDateTime(localDateTime)
+    setShowConfirmDialog(true)
   }
 
   const formatDuration = (seconds) => {
@@ -341,6 +374,13 @@ function VideoLibrary({ onStartReview }) {
               
               <div className="video-actions">
                 <button 
+                  className="btn-edit"
+                  onClick={() => handleEditVideo(video)}
+                  title="Edit camera and date/time"
+                >
+                  ✏️ Edit
+                </button>
+                <button 
                   className="btn-delete"
                   onClick={() => deleteVideo(video.id, video.filename)}
                   disabled={deleting === video.id}
@@ -351,18 +391,6 @@ function VideoLibrary({ onStartReview }) {
               </div>
             </div>
           ))}
-        </div>
-      )}
-      
-      {videos.length > 0 && trainingStatus && !trainingStatus.ready_for_review && (
-        <div className="progress-footer">
-          <div className="progress-message">
-            <span className="progress-icon">📊</span>
-            <span>
-              {10 - trainingStatus.video_count} more video{10 - trainingStatus.video_count !== 1 ? 's' : ''} needed 
-              before review process can begin
-            </span>
-          </div>
         </div>
       )}
 

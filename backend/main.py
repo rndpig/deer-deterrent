@@ -192,22 +192,25 @@ async def get_stats():
 
 @app.get("/api/detections", response_model=List[DetectionEvent])
 async def get_detections(limit: int = 50, offset: int = 0):
-    """Get detection history."""
+    """Get detection history (excludes manual video uploads)."""
     # Ensure all records have max_confidence field (migration for old records)
     for detection in detection_history:
         if 'max_confidence' not in detection:
             detection['max_confidence'] = detection.get('confidence', 0.0)
     
-    return detection_history[offset:offset + limit]
+    # Filter out manual uploads
+    filtered = [d for d in detection_history if d.get("camera_name") != "Manual Upload"]
+    return filtered[offset:offset + limit]
 
 
 @app.get("/api/detections/recent")
 async def get_recent_detections(hours: int = 24):
-    """Get detections from last N hours."""
+    """Get detections from last N hours (excludes manual video uploads)."""
     cutoff = datetime.now() - timedelta(hours=hours)
     recent = [
         d for d in detection_history
         if datetime.fromisoformat(d["timestamp"]) > cutoff
+        and d.get("camera_name") != "Manual Upload"  # Exclude manual uploads
     ]
     return recent
 
