@@ -87,6 +87,12 @@ class DetectionEvent(BaseModel):
     max_confidence: float
     image_path: str
     sprinklers_activated: bool
+    reviewed: bool = False
+    review_type: str = None
+    id: str = None
+    detections: list = []
+    manual_annotations: list = []
+    frame_number: int = None
 
 class DetectionReview(BaseModel):
     detection_id: str
