@@ -22,6 +22,10 @@ function Training() {
   // Annotation tool state
   const [showAnnotationTool, setShowAnnotationTool] = useState(false)
   const [annotating, setAnnotating] = useState(false)
+  
+  // Camera selection for uploaded frames
+  const [selectedCamera, setSelectedCamera] = useState('Front Camera')
+  const cameraOptions = ['Front Camera', 'Side Camera', 'Driveway Camera', 'Backyard Camera']
 
   useEffect(() => {
     loadDetections()
@@ -559,11 +563,44 @@ function Training() {
               <>
                 <div className="image-container">
                   {currentDetection.image_path ? (
-                    <img 
-                      src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${currentDetection.image_path}`}
-                      alt="Detection"
-                      className="detection-image"
-                    />
+                    <div className="image-wrapper">
+                      <img 
+                        src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${currentDetection.image_path}`}
+                        alt="Detection"
+                        className="detection-image"
+                        id="frame-image"
+                      />
+                      <svg className="detection-overlay" viewBox="0 0 1280 720">
+                        {/* Draw existing detection boxes */}
+                        {currentDetection.detections?.map((det, idx) => (
+                          <rect
+                            key={`det-${idx}`}
+                            x={det.bbox.x1}
+                            y={det.bbox.y1}
+                            width={det.bbox.x2 - det.bbox.x1}
+                            height={det.bbox.y2 - det.bbox.y1}
+                            fill="none"
+                            stroke="#10b981"
+                            strokeWidth="3"
+                            strokeDasharray="none"
+                          />
+                        ))}
+                        {/* Draw manual annotation boxes */}
+                        {currentDetection.manual_annotations?.map((box, idx) => (
+                          <rect
+                            key={`manual-${idx}`}
+                            x={box.x * 1280}
+                            y={box.y * 720}
+                            width={box.width * 1280}
+                            height={box.height * 720}
+                            fill="none"
+                            stroke="#f59e0b"
+                            strokeWidth="3"
+                            strokeDasharray="5,5"
+                          />
+                        ))}
+                      </svg>
+                    </div>
                   ) : (
                     <div className="no-image">
                       <p>📷 No image available</p>
@@ -571,33 +608,50 @@ function Training() {
                   )}
                 </div>
 
-                <div className="detection-info">
-                  <div className="info-row">
-                    <span className="info-label">Camera:</span>
-                    <span className="info-value">{currentDetection.camera_name}</span>
+                <div className="detection-info-compact">
+                  <div className="info-group">
+                    <label>Camera:</label>
+                    <select 
+                      value={currentDetection.camera_name}
+                      onChange={async (e) => {
+                        const newCamera = e.target.value
+                        // Update locally first
+                        setDetections(prev => prev.map(d => 
+                          d.id === currentDetection.id 
+                            ? { ...d, camera_name: newCamera }
+                            : d
+                        ))
+                        // Update on backend
+                        try {
+                          await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/detections/${currentDetection.id}/camera?camera_name=${encodeURIComponent(newCamera)}`, {
+                            method: 'PATCH'
+                          })
+                        } catch (error) {
+                          console.error('Error updating camera:', error)
+                        }
+                      }}
+                      className="camera-select"
+                    >
+                      {cameraOptions.map(cam => (
+                        <option key={cam} value={cam}>{cam}</option>
+                      ))}
+                    </select>
                   </div>
-                  <div className="info-row">
-                    <span className="info-label">Zone:</span>
-                    <span className="info-value">{currentDetection.zone_name}</span>
+                  <div className="info-group">
+                    <span className="info-label">Detected:</span>
+                    <span className="info-value">🦌 {currentDetection.deer_count} ({(currentDetection.max_confidence * 100).toFixed(0)}%)</span>
                   </div>
-                  <div className="info-row">
-                    <span className="info-label">Deer Count:</span>
-                    <span className="info-value deer-count">🦌 {currentDetection.deer_count}</span>
+                  <div className="info-group">
+                    <span className="info-label">Manual:</span>
+                    <span className="info-value">📦 {currentDetection.manual_annotations?.length || 0}</span>
                   </div>
-                  <div className="info-row">
-                    <span className="info-label">Confidence:</span>
-                    <span className="info-value">{(currentDetection.max_confidence * 100).toFixed(1)}%</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Time:</span>
-                    <span className="info-value">{new Date(currentDetection.timestamp).toLocaleString()}</span>
+                  <div className="info-group">
+                    <span className="info-label">Frame:</span>
+                    <span className="info-value">{currentDetection.frame_number || 'N/A'}</span>
                   </div>
                   {currentDetection.reviewed && (
-                    <div className="info-row reviewed-status">
-                      <span className="info-label">Status:</span>
-                      <span className="info-value reviewed">
-                        ✓ Reviewed as {currentDetection.review_type}
-                      </span>
+                    <div className="info-group">
+                      <span className="reviewed-badge">✓ {currentDetection.review_type}</span>
                     </div>
                   )}
                 </div>
@@ -605,89 +659,62 @@ function Training() {
             )}
           </div>
 
-          <div className="review-panel">
-            <h2>Review This Detection</h2>
-            
-            <div className="review-buttons-large">
+          <div className="review-panel-compact">
+            <div className="action-row">
               <button 
-                className="review-button correct"
+                className="btn-compact btn-correct"
                 onClick={() => reviewDetection('correct')}
                 disabled={currentDetection?.reviewed}
+                title="Mark as correct (Keyboard: 1)"
               >
-                <div className="button-icon">✓</div>
-                <div className="button-label">Correct</div>
-                <div className="button-hint">Keyboard: 1</div>
+                ✓ Correct
               </button>
               
               <button 
-                className="review-button false-positive"
+                className="btn-compact btn-false"
                 onClick={() => reviewDetection('false_positive')}
                 disabled={currentDetection?.reviewed}
+                title="Mark as false positive (Keyboard: 2)"
               >
-                <div className="button-icon">✗</div>
-                <div className="button-label">False Positive</div>
-                <div className="button-hint">Keyboard: 2</div>
+                ✗ False Positive
               </button>
               
               <button 
-                className="review-button incorrect-count"
+                className="btn-compact btn-wrong"
                 onClick={() => {
                   const count = prompt('Enter correct deer count:')
                   if (count) reviewDetection('incorrect_count', parseInt(count))
                 }}
                 disabled={currentDetection?.reviewed}
+                title="Enter correct count (Keyboard: 3)"
               >
-                <div className="button-icon">#</div>
-                <div className="button-label">Wrong Count</div>
-                <div className="button-hint">Keyboard: 3</div>
+                # Wrong Count
+              </button>
+              
+              <button 
+                className="btn-compact btn-annotate"
+                onClick={() => setShowAnnotationTool(true)}
+                disabled={currentDetection?.reviewed}
+                title="Draw bounding boxes for missed deer"
+              >
+                📦 Add Boxes
+              </button>
+              
+              <button 
+                className="btn-compact btn-delete"
+                onClick={deleteCurrentFrame}
+                title="Delete this frame"
+              >
+                🗑️ Delete
               </button>
             </div>
             
-            <div className="annotation-section">
-              <h3>📦 Missed Detection?</h3>
-              <p className="annotation-hint">
-                If deer were present but not detected, draw bounding boxes to improve the model.
-              </p>
-              <button 
-                className="annotation-button"
-                onClick={() => setShowAnnotationTool(true)}
-                disabled={currentDetection?.reviewed}
-              >
-                ✏️ Draw Bounding Boxes
-              </button>
-              {currentDetection?.manual_annotations?.length > 0 && (
-                <div className="annotation-status">
-                  ✅ {currentDetection.manual_annotations.length} box{currentDetection.manual_annotations.length !== 1 ? 'es' : ''} drawn
-                </div>
-              )}
-            </div>
-
-            <div className="delete-section">
-              <button 
-                className="delete-button"
-                onClick={deleteCurrentFrame}
-                title="Delete this frame from the review queue"
-              >
-                🗑️ Delete This Frame
-              </button>
-            </div>
-
-            <div className="keyboard-shortcuts">
-              <h3>⌨️ Keyboard Shortcuts</h3>
-              <div className="shortcut-list">
-                <div className="shortcut">
-                  <kbd>←</kbd> <kbd>→</kbd> <span>Navigate</span>
-                </div>
-                <div className="shortcut">
-                  <kbd>1</kbd> <span>Mark Correct</span>
-                </div>
-                <div className="shortcut">
-                  <kbd>2</kbd> <span>False Positive</span>
-                </div>
-                <div className="shortcut">
-                  <kbd>3</kbd> <span>Wrong Count</span>
-                </div>
-              </div>
+            <div className="shortcuts-compact">
+              <span className="shortcut-hint">⌨️ Shortcuts:</span>
+              <kbd>←/→</kbd> Navigate
+              <kbd>1</kbd> Correct
+              <kbd>2</kbd> False
+              <kbd>3</kbd> Count
             </div>
           </div>
         </div>

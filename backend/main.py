@@ -864,6 +864,31 @@ async def save_manual_annotations(detection_id: str, payload: dict):
     }
 
 
+@app.patch("/api/detections/{detection_id}/camera")
+async def update_detection_camera(detection_id: str, camera_name: str):
+    """Update the camera name for a detection."""
+    global detection_history
+    
+    # Find the detection
+    detection = None
+    for d in detection_history:
+        if d["id"] == detection_id:
+            detection = d
+            break
+    
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    
+    # Update camera name
+    detection["camera_name"] = camera_name
+    
+    return {
+        "status": "success",
+        "detection_id": detection_id,
+        "camera_name": camera_name
+    }
+
+
 @app.delete("/api/detections/{detection_id}")
 async def delete_detection(detection_id: str):
     """Delete a detection from the review queue."""
