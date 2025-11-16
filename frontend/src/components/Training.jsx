@@ -24,8 +24,8 @@ function Training() {
   const [annotating, setAnnotating] = useState(false)
   
   // Camera selection for uploaded frames
-  const [selectedCamera, setSelectedCamera] = useState('Front Camera')
-  const cameraOptions = ['Front Camera', 'Side Camera', 'Driveway Camera', 'Backyard Camera']
+  const [selectedCamera, setSelectedCamera] = useState('Front')
+  const cameraOptions = ['Front', 'Side', 'Driveway', 'Backyard']
   
   // Canvas ref for drawing bounding boxes
   const canvasRef = useRef(null)
@@ -210,14 +210,17 @@ function Training() {
   }
 
   const handleKeyPress = (e) => {
+    // Don't trigger if user is typing in an input field
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+    
     if (e.key === 'ArrowRight') nextDetection()
     if (e.key === 'ArrowLeft') previousDetection()
-    if (e.key === '1') reviewDetection('correct')
-    if (e.key === '2') reviewDetection('false_positive')
-    if (e.key === '3') {
-      const count = prompt('Enter correct deer count:')
-      if (count) reviewDetection('incorrect_count', parseInt(count))
+    if (e.key === ' ' || e.key === 'Spacebar') {
+      e.preventDefault()
+      setShowAnnotationTool(true)
     }
+    if (e.key === 'c' || e.key === 'C') reviewDetection('correct')
+    if (e.key === 'Delete') deleteCurrentFrame()
   }
 
   useEffect(() => {
@@ -731,48 +734,27 @@ function Training() {
                   {/* Action Buttons Section */}
                   <div className="control-section actions-section">
                     <button 
-                      className="btn-action btn-correct"
-                      onClick={() => reviewDetection('correct')}
-                      disabled={currentDetection?.reviewed}
-                      title="Correct (1)"
-                    >
-                      ✓ Correct
-                    </button>
-                    
-                    <button 
-                      className="btn-action btn-false"
-                      onClick={() => reviewDetection('false_positive')}
-                      disabled={currentDetection?.reviewed}
-                      title="False Positive (2)"
-                    >
-                      ✗ False
-                    </button>
-                    
-                    <button 
-                      className="btn-action btn-wrong"
-                      onClick={() => {
-                        const count = prompt('Enter correct deer count:')
-                        if (count) reviewDetection('incorrect_count', parseInt(count))
-                      }}
-                      disabled={currentDetection?.reviewed}
-                      title="Wrong Count (3)"
-                    >
-                      # Count
-                    </button>
-                    
-                    <button 
-                      className="btn-action btn-annotate"
+                      className="btn-action btn-annotate-primary"
                       onClick={() => setShowAnnotationTool(true)}
-                      disabled={currentDetection?.reviewed}
-                      title="Add Bounding Boxes"
+                      disabled={currentDetection?.reviewed && currentDetection?.review_type === 'correct'}
+                      title="Add missing deer (Space)"
                     >
                       📦 Add Boxes
                     </button>
                     
                     <button 
+                      className="btn-action btn-correct"
+                      onClick={() => reviewDetection('correct')}
+                      disabled={currentDetection?.reviewed}
+                      title="Mark as correct (C)"
+                    >
+                      ✓ Correct
+                    </button>
+                    
+                    <button 
                       className="btn-action btn-delete"
                       onClick={deleteCurrentFrame}
-                      title="Delete Frame"
+                      title="Delete frame (Del)"
                     >
                       🗑️ Delete
                     </button>
@@ -780,7 +762,7 @@ function Training() {
                   
                   {/* Keyboard Hints */}
                   <div className="control-section hints-section">
-                    <span className="hint-text">⌨️ <kbd>←</kbd><kbd>→</kbd> <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span>
+                    <span className="hint-text">⌨️ <kbd>←</kbd><kbd>→</kbd> <kbd>Space</kbd> Add <kbd>C</kbd> Correct <kbd>Del</kbd> Delete</span>
                   </div>
                 </div>
               </>

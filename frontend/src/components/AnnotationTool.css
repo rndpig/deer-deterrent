@@ -4,37 +4,35 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.95);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 2rem;
 }
 
-.annotation-tool-content {
-  background: white;
-  border-radius: 12px;
-  max-width: 1400px;
-  width: 100%;
-  max-height: 90vh;
+.annotation-tool-fullscreen {
+  background: #1a1a1a;
+  width: 100vw;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
-.annotation-header {
+.annotation-header-compact {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
-  border-bottom: 2px solid #e5e7eb;
+  padding: 0.75rem 1.5rem;
+  background: #2d2d2d;
+  border-bottom: 1px solid #404040;
 }
 
-.annotation-header h2 {
+.annotation-header-compact h2 {
   margin: 0;
-  color: #1f2937;
+  color: #f3f4f6;
+  font-size: 1.25rem;
 }
 
 .close-btn {
@@ -42,30 +40,24 @@
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #6b7280;
+  color: #9ca3af;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   transition: all 0.2s;
 }
 
 .close-btn:hover {
-  background: #f3f4f6;
-  color: #1f2937;
+  background: #404040;
+  color: #f3f4f6;
 }
 
-.annotation-instructions {
-  padding: 1rem 1.5rem;
-  background: #eff6ff;
-  border-bottom: 1px solid #dbeafe;
+.annotation-main-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
 }
 
-.annotation-instructions p {
-  margin: 0.25rem 0;
-  font-size: 0.875rem;
-  color: #1e40af;
-}
-
-.annotation-canvas-container {
+.annotation-canvas-full {
   flex: 1;
   display: flex;
   align-items: center;
@@ -76,10 +68,10 @@
   position: relative;
 }
 
-.annotation-canvas-container canvas {
+.annotation-canvas-full canvas {
   max-width: 100%;
   max-height: 100%;
-  border: 2px solid #374151;
+  border: 2px solid #404040;
   border-radius: 4px;
 }
 
@@ -88,51 +80,73 @@
   font-size: 1.25rem;
 }
 
-.annotation-sidebar {
-  padding: 1.5rem;
-  border-top: 2px solid #e5e7eb;
-  background: #f9fafb;
+.annotation-sidebar-compact {
+  width: 280px;
+  background: #2d2d2d;
+  border-left: 1px solid #404040;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
 }
 
-.box-list h3 {
+.annotation-instructions-compact {
+  padding: 1rem;
+  background: #1e3a8a;
+  border-bottom: 1px solid #1e40af;
+}
+
+.annotation-instructions-compact p {
+  margin: 0.5rem 0;
+  font-size: 0.8rem;
+  color: #dbeafe;
+  line-height: 1.4;
+}
+
+.box-list-compact {
+  padding: 1rem;
+  flex: 1;
+}
+
+.box-list-compact h3 {
   margin: 0 0 1rem 0;
-  color: #1f2937;
-  font-size: 1rem;
+  color: #f3f4f6;
+  font-size: 0.95rem;
 }
 
 .no-boxes {
-  color: #6b7280;
-  font-size: 0.875rem;
+  color: #9ca3af;
+  font-size: 0.85rem;
   font-style: italic;
 }
 
-.box-list ul {
+.box-list-compact ul {
   list-style: none;
   padding: 0;
   margin: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.5rem;
 }
 
-.box-list li {
+.box-list-compact li {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: white;
-  border: 1px solid #d1d5db;
+  justify-content: space-between;
+  padding: 0.5rem;
+  background: #1f2937;
+  border: 1px solid #404040;
   border-radius: 6px;
-  font-size: 0.875rem;
+  font-size: 0.85rem;
+  color: #e5e7eb;
 }
 
 .remove-box-btn {
   background: #fee2e2;
   color: #991b1b;
   border: none;
-  padding: 0.25rem 0.75rem;
+  padding: 0.25rem 0.5rem;
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   cursor: pointer;
   font-weight: 600;
   transition: all 0.2s;
@@ -146,9 +160,9 @@
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
-  padding: 1.5rem;
-  border-top: 2px solid #e5e7eb;
-  background: white;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #404040;
+  background: #2d2d2d;
 }
 
 .btn-primary, .btn-secondary {
@@ -168,7 +182,6 @@
 
 .btn-primary:hover:not(:disabled) {
   background: #1d4ed8;
-  transform: translateY(-1px);
 }
 
 .btn-primary:disabled {
@@ -177,80 +190,15 @@
 }
 
 .btn-secondary {
-  background: #e5e7eb;
-  color: #374151;
+  background: #374151;
+  color: #e5e7eb;
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: #d1d5db;
+  background: #4b5563;
 }
 
 .btn-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-@media (prefers-color-scheme: dark) {
-  .annotation-tool-content {
-    background: #1f2937;
-  }
-  
-  .annotation-header {
-    border-bottom-color: #374151;
-  }
-  
-  .annotation-header h2 {
-    color: #f3f4f6;
-  }
-  
-  .close-btn {
-    color: #9ca3af;
-  }
-  
-  .close-btn:hover {
-    background: #374151;
-    color: #f3f4f6;
-  }
-  
-  .annotation-instructions {
-    background: #1e3a8a;
-    border-bottom-color: #1e40af;
-  }
-  
-  .annotation-instructions p {
-    color: #dbeafe;
-  }
-  
-  .annotation-sidebar {
-    background: #111827;
-    border-top-color: #374151;
-  }
-  
-  .box-list h3 {
-    color: #f3f4f6;
-  }
-  
-  .no-boxes {
-    color: #9ca3af;
-  }
-  
-  .box-list li {
-    background: #1f2937;
-    border-color: #4b5563;
-    color: #e5e7eb;
-  }
-  
-  .annotation-actions {
-    background: #1f2937;
-    border-top-color: #374151;
-  }
-  
-  .btn-secondary {
-    background: #374151;
-    color: #e5e7eb;
-  }
-  
-  .btn-secondary:hover:not(:disabled) {
-    background: #4b5563;
-  }
 }

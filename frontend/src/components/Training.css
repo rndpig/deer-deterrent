@@ -710,6 +710,21 @@
   background: #d97706;
 }
 
+.btn-action.btn-annotate-primary {
+  background: #3b82f6;
+  color: white;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.75rem 1.25rem;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.btn-action.btn-annotate-primary:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
 .btn-action.btn-annotate {
   background: #3b82f6;
   color: white;

@@ -88,11 +88,14 @@ class DetectionEvent(BaseModel):
     image_path: str
     sprinklers_activated: bool
     reviewed: bool = False
-    review_type: str = None
-    id: str = None
-    detections: list = []
-    manual_annotations: list = []
-    frame_number: int = None
+    review_type: Optional[str] = None
+    id: Optional[str] = None
+    detections: List[Dict] = []
+    manual_annotations: List[Dict] = []
+    frame_number: Optional[int] = None
+
+    class Config:
+        extra = "allow"  # Allow extra fields from detection_history
 
 class DetectionReview(BaseModel):
     detection_id: str

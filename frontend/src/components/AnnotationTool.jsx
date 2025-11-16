@@ -148,52 +148,54 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
 
   return (
     <div className="annotation-tool-modal">
-      <div className="annotation-tool-content">
-        <div className="annotation-header">
+      <div className="annotation-tool-fullscreen">
+        <div className="annotation-header-compact">
           <h2>📦 Draw Bounding Boxes</h2>
           <button className="close-btn" onClick={onCancel}>✕</button>
         </div>
         
-        <div className="annotation-instructions">
-          <p>🖱️ Click and drag to draw a box around each deer</p>
-          <p>📐 Draw tight boxes around the deer's body</p>
-          <p>🗑️ Click "Remove Last" to undo mistakes</p>
-        </div>
-        
-        <div className="annotation-canvas-container">
-          {!imageLoaded && <div className="loading">Loading image...</div>}
-          <canvas
-            ref={canvasRef}
-            width={800}
-            height={600}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            style={{ cursor: drawing ? 'crosshair' : 'default' }}
-          />
-        </div>
-        
-        <div className="annotation-sidebar">
-          <div className="box-list">
-            <h3>Bounding Boxes ({boxes.length})</h3>
-            {boxes.length === 0 ? (
-              <p className="no-boxes">No boxes drawn yet</p>
-            ) : (
-              <ul>
-                {boxes.map((box, index) => (
-                  <li key={index}>
-                    <span>Deer {index + 1}</span>
-                    <button 
-                      className="remove-box-btn"
-                      onClick={() => handleRemoveBox(index)}
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+        <div className="annotation-main-area">
+          <div className="annotation-canvas-full">
+            {!imageLoaded && <div className="loading">Loading image...</div>}
+            <canvas
+              ref={canvasRef}
+              width={1920}
+              height={1080}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              style={{ cursor: drawing ? 'crosshair' : 'default' }}
+            />
+          </div>
+          
+          <div className="annotation-sidebar-compact">
+            <div className="annotation-instructions-compact">
+              <p>🖱️ Click and drag to draw a box around each deer</p>
+              <p>📐 Draw tight boxes around the deer's body</p>
+              <p>🗑️ Click "Remove" to undo mistakes</p>
+            </div>
+            
+            <div className="box-list-compact">
+              <h3>Bounding Boxes ({boxes.length})</h3>
+              {boxes.length === 0 ? (
+                <p className="no-boxes">No boxes drawn yet</p>
+              ) : (
+                <ul>
+                  {boxes.map((box, index) => (
+                    <li key={index}>
+                      <span>Deer {index + 1}</span>
+                      <button 
+                        className="remove-box-btn"
+                        onClick={() => handleRemoveBox(index)}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
         
