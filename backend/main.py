@@ -23,6 +23,9 @@ project_root = str(Path(__file__).parent.parent)
 sys.path.insert(0, project_root)
 print(f"Project root: {project_root}")
 
+# Import database module
+import database as db
+
 # Lazy imports - only load when needed
 detector = None
 
@@ -57,6 +60,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database and load detector."""
+    print("Initializing database...")
+    db.init_database()
+    print("Database ready!")
+
 # CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,
@@ -73,7 +84,7 @@ app.add_middleware(
 
 # Initialize detector
 detector = None
-detection_history = []
+detection_history = []  # Legacy - will be phased out
 detection_reviews = {}  # Store manual reviews for training
 missed_detections = []  # Store user-reported missed deer
 active_websockets = []
@@ -556,6 +567,17 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
         
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration_seconds = total_frames / fps if fps > 0 else 0
+        
+        # Add video to database
+        video_id = db.add_video(
+            filename=video.filename,
+            camera_name="Manual Upload",
+            duration=duration_seconds,
+            fps=fps,
+            total_frames=total_frames,
+            video_path=str(video_save_path)
+        )
         
         frames_extracted = 0
         detections_found = 0
@@ -584,8 +606,26 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
                     cv2.imwrite(str(annotated_path), annotated)
                     detections_found += 1
                 
-                # Create detection record for sampled frames
-                # This allows users to draw bounding boxes on missed detections
+                # Add frame to database
+                timestamp_in_video = frame_num / fps if fps > 0 else 0
+                frame_id = db.add_frame(
+                    video_id=video_id,
+                    frame_number=frame_num,
+                    timestamp_in_video=timestamp_in_video,
+                    image_path=f"/api/training-frames/{frame_filename}",
+                    has_detections=len(detections) > 0
+                )
+                
+                # Add detections to database
+                for detection in detections:
+                    db.add_detection(
+                        frame_id=frame_id,
+                        bbox=detection['bbox'],
+                        confidence=detection['confidence'],
+                        class_name=detection.get('class_name', 'deer')
+                    )
+                
+                # Also keep in memory for legacy compatibility (temporarily)
                 max_conf = max([d['confidence'] for d in detections]) if detections else 0.0
                 detection_record = {
                     "id": f"{timestamp}_frame_{frame_num}",
@@ -594,15 +634,15 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
                     "zone_name": f"Video: {video.filename}",
                     "deer_count": len(detections) if detections else 0,
                     "confidence": max_conf,
-                    "max_confidence": max_conf,  # Add for API response compatibility
+                    "max_confidence": max_conf,
                     "sprinklers_activated": False,
                     "image_path": f"/api/training-frames/{frame_filename}",
                     "annotated_image_path": f"/api/training-frames/{annotated_filename}" if detections else None,
                     "video_source": video_filename,
                     "frame_number": frame_num,
-                    "timestamp_seconds": frame_num / fps if fps > 0 else 0,
+                    "timestamp_seconds": timestamp_in_video,
                     "detections": detections if detections else [],
-                    "manual_annotations": [],  # To be filled by user
+                    "manual_annotations": [],
                     "reviewed": False,
                     "from_video_upload": True
                 }
@@ -617,6 +657,7 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
         
         return {
             "success": True,
+            "video_id": video_id,
             "video_filename": video_filename,
             "video_saved": str(video_save_path),
             "frames_extracted": frames_extracted,
@@ -624,7 +665,7 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
             "sample_rate": sample_rate,
             "fps": fps,
             "total_frames": total_frames,
-            "duration_seconds": total_frames / fps if fps > 0 else 0,
+            "duration_seconds": duration_seconds,
             "message": f"Video processed: {frames_extracted} frames extracted (every {sample_rate} frame{'s' if sample_rate > 1 else ''}), {detections_found} with detections"
         }
     
@@ -1018,7 +1059,140 @@ async def get_missed_detections():
 
 @app.get("/api/training/stats")
 async def get_training_stats():
-    """Get training and review statistics."""
+    """Get training and review statistics from database."""
+    stats = db.get_training_statistics()
+    return stats
+
+
+# Video Library Endpoints
+@app.get("/api/videos")
+async def get_videos():
+    """Get all uploaded videos with metadata."""
+    videos = db.get_all_videos()
+    return videos
+
+
+@app.get("/api/videos/{video_id}")
+async def get_video_details(video_id: int):
+    """Get detailed information about a specific video."""
+    video = db.get_video(video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    # Get frames for this video
+    frames = db.get_frames_for_video(video_id)
+    video['frames'] = frames
+    
+    return video
+
+
+@app.delete("/api/videos/{video_id}")
+async def delete_video_endpoint(video_id: int):
+    """Delete a video and all associated data."""
+    video = db.get_video(video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    # Delete video file if it exists
+    if video.get('video_path'):
+        video_path = Path(video['video_path'])
+        if video_path.exists():
+            video_path.unlink()
+    
+    # Delete from database (cascades to frames, detections, annotations)
+    db.delete_video(video_id)
+    
+    return {"status": "success", "message": "Video deleted"}
+
+
+@app.get("/api/videos/training/status")
+async def get_training_status():
+    """Get status of training data collection."""
+    stats = db.get_training_statistics()
+    return {
+        "video_count": stats['video_count'],
+        "ready_for_review": stats['ready_for_review'],
+        "ready_for_training": stats['ready_for_training'],
+        "reviewed_frames": stats['reviewed_frames'],
+        "annotation_count": stats['annotation_count']
+    }
+
+
+@app.post("/api/training/select-frames")
+async def select_training_frames(target_count: int = 120):
+    """
+    Select diverse frames across all videos for training review.
+    Uses smart algorithm to ensure diversity.
+    """
+    stats = db.get_training_statistics()
+    
+    if stats['video_count'] < 10:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Need at least 10 videos. Currently have {stats['video_count']}"
+        )
+    
+    # Run frame selection algorithm
+    selected_frame_ids = db.select_diverse_frames(target_count)
+    
+    return {
+        "status": "success",
+        "frames_selected": len(selected_frame_ids),
+        "frame_ids": selected_frame_ids
+    }
+
+
+@app.get("/api/training/frames")
+async def get_selected_training_frames():
+    """Get all frames selected for training review."""
+    frames = db.get_training_frames()
+    
+    # Convert to format expected by frontend
+    formatted_frames = []
+    for frame in frames:
+        formatted_frame = {
+            "id": f"frame_{frame['id']}",
+            "timestamp": frame['created_at'],
+            "camera_name": frame['camera_name'],
+            "zone_name": f"Video: {frame['filename']}",
+            "deer_count": frame['detection_count'],
+            "max_confidence": max([d['confidence'] for d in frame['detections']]) if frame['detections'] else 0.0,
+            "image_path": frame['image_path'],
+            "sprinklers_activated": False,
+            "reviewed": frame['reviewed'],
+            "review_type": frame['review_type'],
+            "detections": [
+                {
+                    'bbox': {
+                        'x1': d['bbox_x1'],
+                        'y1': d['bbox_y1'],
+                        'x2': d['bbox_x2'],
+                        'y2': d['bbox_y2']
+                    },
+                    'confidence': d['confidence'],
+                    'class_name': d['class_name']
+                }
+                for d in frame['detections']
+            ],
+            "manual_annotations": [
+                {
+                    'x': a['bbox_x'],
+                    'y': a['bbox_y'],
+                    'width': a['bbox_width'],
+                    'height': a['bbox_height']
+                }
+                for a in frame['annotations']
+            ],
+            "frame_number": frame['frame_number']
+        }
+        formatted_frames.append(formatted_frame)
+    
+    return formatted_frames
+
+
+@app.get("/api/training/stats/legacy")
+async def get_training_stats_legacy():
+    """Get training and review statistics (legacy in-memory version)."""
     # Count reviewed detections by type
     review_counts = {
         'correct': 0,
