@@ -1109,11 +1109,15 @@ async def delete_video_endpoint(video_id: int):
 
 
 @app.patch("/api/videos/{video_id}")
-async def update_video_metadata(video_id: int, camera: str = None, captured_at: str = None):
+async def update_video_metadata(video_id: int, request: dict):
     """Update video metadata (camera and/or capture timestamp)."""
     video = db.get_video(video_id)
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+    
+    # Extract camera and captured_at from request body
+    camera = request.get('camera')
+    captured_at = request.get('captured_at')
     
     # Update video metadata in database
     db.update_video_metadata(video_id, camera=camera, captured_at=captured_at)
