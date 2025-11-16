@@ -3,6 +3,7 @@ import './App.css'
 import './components/Auth.css'
 import Dashboard from './components/Dashboard'
 import Training from './components/Training'
+import EarlyReview from './components/EarlyReview'
 import Settings from './components/Settings'
 import AuthButton from './components/AuthButton'
 import { useAuth } from './hooks/useAuth'
@@ -12,6 +13,7 @@ function App() {
   const [stats, setStats] = useState(null)
   const [settings, setSettings] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [trainingMode, setTrainingMode] = useState('full') // 'full' or 'early'
   const [ws, setWs] = useState(null)
   const [unauthorized, setUnauthorized] = useState(false)
 
@@ -142,7 +144,8 @@ function App() {
 
       <main className="app-content">
         {activeTab === 'dashboard' && <Dashboard stats={stats} settings={settings} />}
-        {activeTab === 'training' && <Training />}
+        {activeTab === 'training' && trainingMode === 'full' && <Training onSwitchToEarlyReview={() => setTrainingMode('early')} />}
+        {activeTab === 'training' && trainingMode === 'early' && <EarlyReview onBack={() => setTrainingMode('full')} />}
         {activeTab === 'settings' && <Settings settings={settings} setSettings={setSettings} />}
       </main>
     </div>

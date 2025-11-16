@@ -3,7 +3,7 @@ import './Training.css'
 import AnnotationTool from './AnnotationTool'
 import VideoLibrary from './VideoLibrary'
 
-function Training() {
+function Training({ onSwitchToEarlyReview }) {
   const [viewMode, setViewMode] = useState('library') // 'library' or 'review'
   const [detections, setDetections] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -480,7 +480,10 @@ function Training() {
   if (viewMode === 'library') {
     return (
       <div className="training-container">
-        <VideoLibrary onStartReview={handleStartReview} />
+        <VideoLibrary 
+          onStartReview={handleStartReview} 
+          onStartEarlyReview={onSwitchToEarlyReview}
+        />
       </div>
     )
   }

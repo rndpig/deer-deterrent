@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './VideoLibrary.css'
 
-function VideoLibrary({ onStartReview }) {
+function VideoLibrary({ onStartReview, onStartEarlyReview }) {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
   const [trainingStatus, setTrainingStatus] = useState(null)
@@ -106,9 +106,9 @@ function VideoLibrary({ onStartReview }) {
         throw new Error(error.detail || 'Failed to sample frames')
       }
       
-      // Silently succeed and navigate to review
-      if (onStartReview) {
-        onStartReview()
+      // Silently succeed and navigate to early review interface
+      if (onStartEarlyReview) {
+        onStartEarlyReview()
       }
     } catch (error) {
       console.error('Error starting early review:', error)
