@@ -203,35 +203,8 @@ function Dashboard({ stats, settings }) {
                           {detection.review_type === 'incorrect_count' && '# Adjusted'}
                           {detection.review_type === 'missed_deer' && '+ Missed'}
                         </span>
-                      ) : reviewingId === detection.id ? (
-                        <span className="reviewing">...</span>
                       ) : (
-                        <div className="review-buttons">
-                          <button 
-                            className="review-btn correct"
-                            onClick={() => reviewDetection(detection.id, 'correct')}
-                            title="Mark as correct"
-                          >
-                            ✓
-                          </button>
-                          <button 
-                            className="review-btn false-positive"
-                            onClick={() => reviewDetection(detection.id, 'false_positive')}
-                            title="Mark as false positive"
-                          >
-                            ✗
-                          </button>
-                          <button 
-                            className="review-btn incorrect-count"
-                            onClick={() => {
-                              const count = prompt('Enter correct deer count:')
-                              if (count) reviewDetection(detection.id, 'incorrect_count', parseInt(count))
-                            }}
-                            title="Adjust deer count"
-                          >
-                            #
-                          </button>
-                        </div>
+                        <span className="not-reviewed">—</span>
                       )}
                     </td>
                   </tr>
