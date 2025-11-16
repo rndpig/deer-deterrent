@@ -33,13 +33,17 @@ function Training() {
 
   // Draw bounding boxes on canvas when detection changes
   useEffect(() => {
-    if (currentDetection && imageRef.current && canvasRef.current) {
-      const img = imageRef.current
-      const canvas = canvasRef.current
-      
-      // Wait for image to load
-      const drawBoxes = () => {
+    if (!currentDetection || !imageRef.current || !canvasRef.current) return
+    
+    const img = imageRef.current
+    const canvas = canvasRef.current
+    
+    // Wait for image to load
+    const drawBoxes = () => {
+      try {
         const ctx = canvas.getContext('2d')
+        if (!ctx) return
+        
         canvas.width = img.naturalWidth || img.width
         canvas.height = img.naturalHeight || img.height
         
@@ -93,15 +97,17 @@ function Training() {
             ctx.fillText(`Manual ${idx + 1}`, box.x * canvas.width + 5, box.y * canvas.height - 5)
           })
         }
-      }
-      
-      if (img.complete) {
-        drawBoxes()
-      } else {
-        img.onload = drawBoxes
+      } catch (error) {
+        console.error('Error drawing boxes:', error)
       }
     }
-  }, [currentDetection, currentIndex])
+    
+    if (img.complete && img.naturalWidth > 0) {
+      drawBoxes()
+    } else {
+      img.onload = drawBoxes
+    }
+  }, [currentDetection])
 
   useEffect(() => {
     loadDetections()
@@ -613,28 +619,6 @@ function Training() {
       ) : (
         <div className="review-interface">
           <div className="image-viewer">
-            <div className="navigation-controls">
-              <button 
-                onClick={previousDetection}
-                disabled={currentIndex === 0}
-                className="nav-button"
-              >
-                ← Previous
-              </button>
-              
-              <span className="image-counter">
-                {currentIndex + 1} / {detections.length}
-              </span>
-              
-              <button 
-                onClick={nextDetection}
-                disabled={currentIndex === detections.length - 1}
-                className="nav-button"
-              >
-                Next →
-              </button>
-            </div>
-
             {currentDetection && (
               <>
                 <div className="image-container">
@@ -658,114 +642,130 @@ function Training() {
                   )}
                 </div>
 
-                <div className="detection-info-compact">
-                  <div className="info-group">
-                    <label>Camera:</label>
-                    <select 
-                      value={currentDetection.camera_name}
-                      onChange={async (e) => {
-                        const newCamera = e.target.value
-                        // Update locally first
-                        setDetections(prev => prev.map(d => 
-                          d.id === currentDetection.id 
-                            ? { ...d, camera_name: newCamera }
-                            : d
-                        ))
-                        // Update on backend
-                        try {
-                          await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/detections/${currentDetection.id}/camera?camera_name=${encodeURIComponent(newCamera)}`, {
-                            method: 'PATCH'
-                          })
-                        } catch (error) {
-                          console.error('Error updating camera:', error)
-                        }
-                      }}
-                      className="camera-select"
+                {/* Single horizontal control bar with everything */}
+                <div className="control-bar">
+                  {/* Navigation Section */}
+                  <div className="control-section nav-section">
+                    <button 
+                      onClick={previousDetection}
+                      disabled={currentIndex === 0}
+                      className="btn-nav"
                     >
-                      {cameraOptions.map(cam => (
-                        <option key={cam} value={cam}>{cam}</option>
-                      ))}
-                    </select>
+                      ← Prev
+                    </button>
+                    <span className="frame-counter">
+                      {currentIndex + 1} / {detections.length}
+                    </span>
+                    <button 
+                      onClick={nextDetection}
+                      disabled={currentIndex === detections.length - 1}
+                      className="btn-nav"
+                    >
+                      Next →
+                    </button>
                   </div>
-                  <div className="info-group">
-                    <span className="info-label">Detected:</span>
-                    <span className="info-value">🦌 {currentDetection.deer_count} ({(currentDetection.max_confidence * 100).toFixed(0)}%)</span>
-                  </div>
-                  <div className="info-group">
-                    <span className="info-label">Manual:</span>
-                    <span className="info-value">📦 {currentDetection.manual_annotations?.length || 0}</span>
-                  </div>
-                  <div className="info-group">
-                    <span className="info-label">Frame:</span>
-                    <span className="info-value">{currentDetection.frame_number || 'N/A'}</span>
-                  </div>
-                  {currentDetection.reviewed && (
-                    <div className="info-group">
-                      <span className="reviewed-badge">✓ {currentDetection.review_type}</span>
+                  
+                  {/* Frame Info Section */}
+                  <div className="control-section info-section">
+                    <div className="info-item">
+                      <label>Camera:</label>
+                      <select 
+                        value={currentDetection.camera_name}
+                        onChange={async (e) => {
+                          const newCamera = e.target.value
+                          setDetections(prev => prev.map(d => 
+                            d.id === currentDetection.id 
+                              ? { ...d, camera_name: newCamera }
+                              : d
+                          ))
+                          try {
+                            await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/detections/${currentDetection.id}/camera?camera_name=${encodeURIComponent(newCamera)}`, {
+                              method: 'PATCH'
+                            })
+                          } catch (error) {
+                            console.error('Error updating camera:', error)
+                          }
+                        }}
+                        className="camera-select-compact"
+                      >
+                        {cameraOptions.map(cam => (
+                          <option key={cam} value={cam}>{cam}</option>
+                        ))}
+                      </select>
                     </div>
-                  )}
+                    <div className="info-item">
+                      <span className="info-badge green">Auto: {currentDetection.deer_count}</span>
+                    </div>
+                    <div className="info-item">
+                      <span className="info-badge orange">Manual: {currentDetection.manual_annotations?.length || 0}</span>
+                    </div>
+                    <div className="info-item">
+                      <span className="info-text">Frame #{currentDetection.frame_number || 'N/A'}</span>
+                    </div>
+                    {currentDetection.reviewed && (
+                      <div className="info-item">
+                        <span className="info-badge reviewed">✓ {currentDetection.review_type}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Action Buttons Section */}
+                  <div className="control-section actions-section">
+                    <button 
+                      className="btn-action btn-correct"
+                      onClick={() => reviewDetection('correct')}
+                      disabled={currentDetection?.reviewed}
+                      title="Correct (1)"
+                    >
+                      ✓ Correct
+                    </button>
+                    
+                    <button 
+                      className="btn-action btn-false"
+                      onClick={() => reviewDetection('false_positive')}
+                      disabled={currentDetection?.reviewed}
+                      title="False Positive (2)"
+                    >
+                      ✗ False
+                    </button>
+                    
+                    <button 
+                      className="btn-action btn-wrong"
+                      onClick={() => {
+                        const count = prompt('Enter correct deer count:')
+                        if (count) reviewDetection('incorrect_count', parseInt(count))
+                      }}
+                      disabled={currentDetection?.reviewed}
+                      title="Wrong Count (3)"
+                    >
+                      # Count
+                    </button>
+                    
+                    <button 
+                      className="btn-action btn-annotate"
+                      onClick={() => setShowAnnotationTool(true)}
+                      disabled={currentDetection?.reviewed}
+                      title="Add Bounding Boxes"
+                    >
+                      📦 Add Boxes
+                    </button>
+                    
+                    <button 
+                      className="btn-action btn-delete"
+                      onClick={deleteCurrentFrame}
+                      title="Delete Frame"
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
+                  
+                  {/* Keyboard Hints */}
+                  <div className="control-section hints-section">
+                    <span className="hint-text">⌨️ <kbd>←</kbd><kbd>→</kbd> <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span>
+                  </div>
                 </div>
               </>
             )}
-          </div>
-
-          <div className="review-panel-compact">
-            <div className="action-row">
-              <button 
-                className="btn-compact btn-correct"
-                onClick={() => reviewDetection('correct')}
-                disabled={currentDetection?.reviewed}
-                title="Mark as correct (Keyboard: 1)"
-              >
-                ✓ Correct
-              </button>
-              
-              <button 
-                className="btn-compact btn-false"
-                onClick={() => reviewDetection('false_positive')}
-                disabled={currentDetection?.reviewed}
-                title="Mark as false positive (Keyboard: 2)"
-              >
-                ✗ False Positive
-              </button>
-              
-              <button 
-                className="btn-compact btn-wrong"
-                onClick={() => {
-                  const count = prompt('Enter correct deer count:')
-                  if (count) reviewDetection('incorrect_count', parseInt(count))
-                }}
-                disabled={currentDetection?.reviewed}
-                title="Enter correct count (Keyboard: 3)"
-              >
-                # Wrong Count
-              </button>
-              
-              <button 
-                className="btn-compact btn-annotate"
-                onClick={() => setShowAnnotationTool(true)}
-                disabled={currentDetection?.reviewed}
-                title="Draw bounding boxes for missed deer"
-              >
-                📦 Add Boxes
-              </button>
-              
-              <button 
-                className="btn-compact btn-delete"
-                onClick={deleteCurrentFrame}
-                title="Delete this frame"
-              >
-                🗑️ Delete
-              </button>
-            </div>
-            
-            <div className="shortcuts-compact">
-              <span className="shortcut-hint">⌨️ Shortcuts:</span>
-              <kbd>←/→</kbd> Navigate
-              <kbd>1</kbd> Correct
-              <kbd>2</kbd> False
-              <kbd>3</kbd> Count
-            </div>
           </div>
         </div>
       )}
