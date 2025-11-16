@@ -687,6 +687,73 @@ async def get_training_frame(frame_name: str):
     return FileResponse(frame_path)
 
 
+@app.get("/api/frames/{frame_id}/annotated")
+async def get_annotated_frame(frame_id: int):
+    """Get frame with bounding boxes drawn for all detections."""
+    if not CV2_AVAILABLE:
+        raise HTTPException(status_code=503, detail="OpenCV not available")
+    
+    frame = db.get_frame(frame_id)
+    if not frame:
+        raise HTTPException(status_code=404, detail="Frame not found")
+    
+    # Get the original frame path
+    image_path = frame.get('image_path', '')
+    if image_path.startswith('/api/training-frames/'):
+        frame_filename = image_path.replace('/api/training-frames/', '')
+        frame_path = Path("data/training_frames") / frame_filename
+    else:
+        raise HTTPException(status_code=404, detail="Frame path not found")
+    
+    if not frame_path.exists():
+        raise HTTPException(status_code=404, detail="Frame file not found")
+    
+    # Check if annotated version already exists
+    annotated_path = frame_path.parent / frame_path.name.replace('.jpg', '_annotated.jpg')
+    if annotated_path.exists():
+        return FileResponse(annotated_path, media_type="image/jpeg")
+    
+    # Generate annotated frame on the fly
+    import cv2
+    import numpy as np
+    
+    img = cv2.imread(str(frame_path))
+    if img is None:
+        raise HTTPException(status_code=500, detail="Could not read frame")
+    
+    # Draw detections
+    detections = frame.get('detections', [])
+    for det in detections:
+        x1 = int(det['bbox_x1'])
+        y1 = int(det['bbox_y1'])
+        x2 = int(det['bbox_x2'])
+        y2 = int(det['bbox_y2'])
+        confidence = det['confidence']
+        
+        # Draw bounding box
+        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        
+        # Draw label
+        label = f"deer {confidence:.2f}"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        thickness = 2
+        
+        # Get text size for background
+        (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, thickness)
+        
+        # Draw background rectangle
+        cv2.rectangle(img, (x1, y1 - text_height - 10), (x1 + text_width, y1), (0, 255, 0), -1)
+        
+        # Draw text
+        cv2.putText(img, label, (x1, y1 - 5), font, font_scale, (0, 0, 0), thickness)
+    
+    # Save annotated version for future use
+    cv2.imwrite(str(annotated_path), img)
+    
+    return FileResponse(annotated_path, media_type="image/jpeg")
+
+
 @app.get("/api/images/{image_name}")
 async def get_detection_image(image_name: str):
     """Serve detection images."""

@@ -591,7 +591,7 @@ function VideoLibrary({ onStartReview }) {
                   
                   <div className="frame-display">
                     <img 
-                      src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${videoFrames[currentFrameIndex]?.image_path}`}
+                      src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/frames/${videoFrames[currentFrameIndex]?.id}/annotated`}
                       alt={`Frame ${videoFrames[currentFrameIndex]?.frame_number}`}
                       className="frame-image"
                     />
