@@ -148,8 +148,8 @@ function VideoLibrary({ onStartReview }) {
         .slice(0, 16)
       setCaptureDateTime(localDateTime)
       
-      // Set default camera to front
-      setSelectedCamera('front')
+      // Set default camera to side (first in dropdown)
+      setSelectedCamera('side')
       
       setShowConfirmDialog(true)
     } catch (error) {
@@ -183,13 +183,7 @@ function VideoLibrary({ onStartReview }) {
         throw new Error('Failed to update video metadata')
       }
 
-      if (isEditing) {
-        // Just a silent update for edits
-      } else {
-        alert(`✅ Video confirmed! Extracted ${uploadedVideo.frames_extracted} frames with ${uploadedVideo.detections} detections`)
-      }
-
-      // Reload videos and status
+      // Reload videos and status (no alert needed)
       await loadVideos()
       await loadTrainingStatus()
 
@@ -221,14 +215,14 @@ function VideoLibrary({ onStartReview }) {
   }
 
   const handleEditVideo = (video) => {
-    // Parse camera from camera_name (e.g., "Manual Upload" -> "front", or existing camera value)
+    // Parse camera from camera_name (e.g., "Manual Upload" -> "side", or existing camera value)
     const cameraMap = {
       'Front': 'front',
       'Side': 'side',
       'Driveway': 'driveway',
       'Backyard': 'backyard'
     }
-    const camera = video.camera || cameraMap[video.camera_name] || 'front'
+    const camera = video.camera || cameraMap[video.camera_name] || 'side'
     
     // Parse date/time
     const dateTime = video.captured_at || video.upload_date
@@ -257,6 +251,21 @@ function VideoLibrary({ onStartReview }) {
   const formatDate = (dateString) => {
     const date = new Date(dateString)
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+
+  const formatCameraName = (video) => {
+    // Use camera field if available, otherwise fall back to camera_name
+    if (video.camera) {
+      const names = {
+        'side': 'Side',
+        'driveway': 'Driveway',
+        'front': 'Front',
+        'backyard': 'Backyard'
+      }
+      return names[video.camera] || video.camera
+    }
+    // Skip "Manual Upload" text
+    return video.camera_name === 'Manual Upload' ? '—' : video.camera_name
   }
 
   if (loading) {
@@ -339,36 +348,18 @@ function VideoLibrary({ onStartReview }) {
                 <div className="video-stats">
                   <span className="stat-badge">{video.frame_count} frames</span>
                   <span className="stat-badge">{video.detection_count} detections</span>
+                  <span className="stat-badge stat-badge-dark">
+                    {formatDuration(video.duration_seconds)} @ {Math.round(video.fps)}fps
+                  </span>
                 </div>
               </div>
               
               <div className="video-info">
                 <h3 className="video-title">{video.filename}</h3>
                 
-                <div className="video-details">
-                  <div className="detail-row">
-                    <span className="detail-label">📅</span>
-                    <span className="detail-value">{formatDate(video.upload_date)}</span>
-                  </div>
-                  
-                  <div className="detail-row">
-                    <span className="detail-label">📷</span>
-                    <span className="detail-value">{video.camera_name}</span>
-                  </div>
-                  
-                  <div className="detail-row">
-                    <span className="detail-label">⏱️</span>
-                    <span className="detail-value">
-                      {formatDuration(video.duration_seconds)} @ {Math.round(video.fps)}fps
-                    </span>
-                  </div>
-                  
-                  {video.annotation_count > 0 && (
-                    <div className="detail-row">
-                      <span className="detail-label">📦</span>
-                      <span className="detail-value">{video.annotation_count} annotations</span>
-                    </div>
-                  )}
+                <div className="video-metadata">
+                  <span className="metadata-left">{formatDate(video.captured_at || video.upload_date)}</span>
+                  <span className="metadata-right">{formatCameraName(video)}</span>
                 </div>
               </div>
               
@@ -423,9 +414,9 @@ function VideoLibrary({ onStartReview }) {
                   onChange={(e) => setSelectedCamera(e.target.value)}
                   className="form-select"
                 >
-                  <option value="front">Front</option>
                   <option value="side">Side</option>
                   <option value="driveway">Driveway</option>
+                  <option value="front">Front</option>
                   <option value="backyard">Backyard</option>
                 </select>
               </div>

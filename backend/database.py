@@ -104,6 +104,18 @@ def init_database():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_detections_frame ON detections(frame_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_annotations_frame ON annotations(frame_id)")
     
+    # Migration: Add camera and captured_at columns if they don't exist
+    cursor.execute("PRAGMA table_info(videos)")
+    columns = [row[1] for row in cursor.fetchall()]
+    
+    if 'camera' not in columns:
+        cursor.execute("ALTER TABLE videos ADD COLUMN camera TEXT")
+        logger.info("Added 'camera' column to videos table")
+    
+    if 'captured_at' not in columns:
+        cursor.execute("ALTER TABLE videos ADD COLUMN captured_at TEXT")
+        logger.info("Added 'captured_at' column to videos table")
+    
     conn.commit()
     conn.close()
     
