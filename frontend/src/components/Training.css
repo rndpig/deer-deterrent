@@ -281,57 +281,15 @@
   }
 }
 
-.training-progress {
-  display: flex;
-  gap: 2rem;
-  align-items: center;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  padding: 1.5rem;
-  border-radius: 8px;
-  color: white;
-  margin-bottom: 1rem;
-}
-
-.progress-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.progress-label {
-  font-size: 0.75rem;
-  opacity: 0.9;
-}
-
-.progress-value {
-  font-size: 1.75rem;
-  font-weight: bold;
-}
-
-.progress-value.correct {
-  color: #10b981;
-}
-
-.progress-value.false {
-  color: #ef4444;
-}
-
-.readiness-badge {
-  margin-left: auto;
-  padding: 0.75rem 1.5rem;
+.training-badge-compact {
+  padding: 0.5rem 1rem;
   border-radius: 6px;
+  font-size: 0.875rem;
   font-weight: 600;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
   white-space: nowrap;
-}
-
-.readiness-badge.ready {
-  background: rgba(16, 185, 129, 0.2);
-  border: 2px solid #10b981;
-}
-
-.readiness-badge.not-ready {
-  background: rgba(251, 191, 36, 0.2);
-  border: 2px solid #fbbf24;
 }
 
 .training-actions {
@@ -357,10 +315,17 @@
 }
 
 @media (prefers-color-scheme: dark) {
+  .training-badge-compact {
+    background: #1e3a8a;
+    color: #dbeafe;
+    border-color: #1e40af;
+  }
+  
   .filter-group {
     background: #2a2a2a;
   }
 }
+
 
 .filter-group button {
   background: transparent;

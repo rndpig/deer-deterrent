@@ -556,29 +556,6 @@ function Training() {
             </div>
           )}
         </div>
-        
-        {trainingStats && (
-          <div className="training-progress">
-            <div className="progress-stat">
-              <span className="progress-label">Reviewed</span>
-              <span className="progress-value">{trainingStats.reviewed_detections}</span>
-            </div>
-            <div className="progress-stat">
-              <span className="progress-label">Correct</span>
-              <span className="progress-value correct">{trainingStats.review_breakdown.correct}</span>
-            </div>
-            <div className="progress-stat">
-              <span className="progress-label">False Positive</span>
-              <span className="progress-value false">{trainingStats.review_breakdown.false_positive}</span>
-            </div>
-            <div className={`readiness-badge ${trainingStats.ready_for_training ? 'ready' : 'not-ready'}`}>
-              {trainingStats.ready_for_training 
-                ? '✅ Ready' 
-                : `Need ${50 - trainingStats.reviewed_detections} more`
-              }
-            </div>
-          </div>
-        )}
 
         <div className="training-actions">
           <div className="filter-group">
@@ -603,6 +580,14 @@ function Training() {
           </div>
           
           <div className="action-buttons">
+            {trainingStats && (
+              <div className="training-badge-compact" title={`Reviewed: ${trainingStats.reviewed_detections} | Correct: ${trainingStats.review_breakdown.correct} | False: ${trainingStats.review_breakdown.false_positive}`}>
+                {trainingStats.ready_for_training 
+                  ? '✅ Ready to Train' 
+                  : `📊 ${trainingStats.reviewed_detections}/50 reviewed`
+                }
+              </div>
+            )}
             {detections.length > 0 && (
               <button 
                 className="clear-button"
