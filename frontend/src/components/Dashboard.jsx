@@ -5,7 +5,6 @@ function Dashboard({ stats, settings }) {
   const [detections, setDetections] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('last24h') // last24h, last7d, all
-  const [demoMode, setDemoMode] = useState(false)
 
   useEffect(() => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -25,69 +24,6 @@ function Dashboard({ stats, settings }) {
         setLoading(false)
       })
   }, [filter])
-
-  const loadDemoData = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-    
-    try {
-      setLoading(true)
-      const response = await fetch(`${apiUrl}/api/demo/load`, { method: 'POST' })
-      
-      if (!response.ok) {
-        throw new Error(`Failed to load demo data: ${response.statusText}`)
-      }
-      
-      const data = await response.json()
-      console.log('Demo data loaded:', data)
-      
-      // Refresh the detections by re-fetching
-      const endpoint = filter === 'all' 
-        ? `${apiUrl}/api/detections?limit=100`
-        : `${apiUrl}/api/detections/recent?hours=${filter === 'last24h' ? 24 : 168}`
-      
-      const refreshResponse = await fetch(endpoint)
-      const refreshData = await refreshResponse.json()
-      setDetections(refreshData)
-      setDemoMode(true)
-      setLoading(false)
-    } catch (err) {
-      console.error('Error loading demo data:', err)
-      setLoading(false)
-      alert('❌ Error loading demo data. Make sure backend is running.')
-    }
-  }
-
-  const clearData = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-    
-    try {
-      setLoading(true)
-      const response = await fetch(`${apiUrl}/api/demo/clear`, { method: 'POST' })
-      
-      if (!response.ok) {
-        throw new Error(`Failed to clear data: ${response.statusText}`)
-      }
-      
-      console.log('Data cleared')
-      
-      // Refresh to show empty state
-      setDetections([])
-      setDemoMode(false)
-      setLoading(false)
-    } catch (err) {
-      console.error('Error clearing data:', err)
-      setLoading(false)
-      alert('❌ Error clearing data. Make sure backend is running.')
-    }
-  }
-
-  const toggleMode = async () => {
-    if (demoMode) {
-      await clearData()
-    } else {
-      await loadDemoData()
-    }
-  }
 
   return (
     <div className="dashboard">
@@ -136,13 +72,6 @@ function Dashboard({ stats, settings }) {
                 All Time
               </button>
             </div>
-            <button 
-              className={`mode-toggle ${demoMode ? 'demo-active' : ''}`} 
-              onClick={toggleMode}
-              title={demoMode ? 'Switch to Live Mode' : 'Load Demo Data'}
-            >
-              {demoMode ? '🧪 Demo Mode - Switch to Live' : '💦 Live Mode - Load Demo'}
-            </button>
           </div>
         </div>
         
@@ -151,7 +80,7 @@ function Dashboard({ stats, settings }) {
         ) : detections.length === 0 ? (
           <div className="empty-state">
             <p>No detections found</p>
-            <p className="hint">Click "Load Demo Data" to see example detections or wait for deer to be detected</p>
+            <p className="hint">Wait for deer to be detected or check the Model Improvement tab to review uploaded videos</p>
           </div>
         ) : (
           <div className="history-table-container">
