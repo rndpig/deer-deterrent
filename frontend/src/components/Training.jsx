@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './Training.css'
+import AnnotationTool from './AnnotationTool'
 
 function Training() {
   const [detections, setDetections] = useState([])
@@ -8,6 +9,17 @@ function Training() {
   const [syncing, setSyncing] = useState(false)
   const [trainingStats, setTrainingStats] = useState(null)
   const [filter, setFilter] = useState('unreviewed') // unreviewed, all, reviewed
+  
+  // Video upload state
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
+  const [uploadSuccess, setUploadSuccess] = useState(null)
+  const [showVideoSection, setShowVideoSection] = useState(true)
+  
+  // Annotation tool state
+  const [showAnnotationTool, setShowAnnotationTool] = useState(false)
+  const [annotating, setAnnotating] = useState(false)
 
   useEffect(() => {
     loadDetections()
@@ -151,6 +163,107 @@ function Training() {
     }
   }
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/avi']
+      if (!validTypes.includes(file.type) && !file.name.match(/\.(mp4|mov|avi)$/i)) {
+        setUploadError('Please select a valid video file (MP4, MOV, or AVI)')
+        return
+      }
+      
+      if (file.size > 100 * 1024 * 1024) {
+        setUploadError('File size must be less than 100MB')
+        return
+      }
+      
+      setSelectedFile(file)
+      setUploadError(null)
+      setUploadSuccess(null)
+    }
+  }
+
+  const handleVideoUpload = async () => {
+    if (!selectedFile) return
+    
+    setUploading(true)
+    setUploadError(null)
+    setUploadSuccess(null)
+    
+    const formData = new FormData()
+    formData.append('video', selectedFile)
+    
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/videos/upload`, {
+        method: 'POST',
+        body: formData
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Upload failed')
+      }
+      
+      const data = await response.json()
+      setUploadSuccess(`✅ Video processed! ${data.frames_extracted} frames extracted, ${data.detections_found} detections found. Frames added to review queue.`)
+      setSelectedFile(null)
+      
+      // Reload detections to show new frames
+      loadDetections()
+      loadTrainingStats()
+    } catch (err) {
+      setUploadError(err.message || 'Error processing video')
+      console.error('Upload error:', err)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleResetUpload = () => {
+    setSelectedFile(null)
+    setUploadError(null)
+    setUploadSuccess(null)
+  }
+
+  const handleSaveAnnotations = async (boxes) => {
+    if (!currentDetection) return
+    
+    setAnnotating(true)
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/detections/${currentDetection.id}/annotate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bounding_boxes: boxes,
+          deer_count: boxes.length,
+          annotator: 'user'
+        })
+      })
+      
+      if (response.ok) {
+        // Update local detection with annotations
+        setDetections(prev => prev.map(d => 
+          d.id === currentDetection.id 
+            ? { ...d, manual_annotations: boxes, deer_count: boxes.length }
+            : d
+        ))
+        setShowAnnotationTool(false)
+        loadTrainingStats()
+      } else {
+        alert('❌ Error saving annotations')
+      }
+    } catch (error) {
+      console.error('Error saving annotations:', error)
+      alert('❌ Error saving annotations')
+    } finally {
+      setAnnotating(false)
+    }
+  }
+
   const currentDetection = detections[currentIndex]
 
   if (loading) {
@@ -164,7 +277,70 @@ function Training() {
   return (
     <div className="training-container">
       <div className="training-header">
-        <h1>🎓 Training Review</h1>
+        <h1>🎓 Model Improvement</h1>
+        
+        {/* Video Upload Section */}
+        <div className="video-upload-section">
+          <button 
+            className="section-toggle"
+            onClick={() => setShowVideoSection(!showVideoSection)}
+          >
+            🎥 Upload Video for Analysis {showVideoSection ? '▼' : '▶'}
+          </button>
+          
+          {showVideoSection && (
+            <div className="upload-panel">
+              <p className="upload-description">
+                Upload Ring footage with missed deer detections. Video will be split into frames 
+                and processed for review.
+              </p>
+              
+              <div className="file-input-wrapper">
+                <input 
+                  type="file" 
+                  id="video-file"
+                  accept="video/mp4,video/quicktime,video/x-msvideo,.mp4,.mov,.avi"
+                  onChange={handleFileSelect}
+                  disabled={uploading}
+                  style={{ display: 'none' }}
+                />
+                <label htmlFor="video-file" className="file-select-label">
+                  {selectedFile ? (
+                    <span>📹 {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+                  ) : (
+                    <span>⬆️ Choose Video File (MP4, MOV, AVI - max 100MB)</span>
+                  )}
+                </label>
+                
+                {selectedFile && !uploading && (
+                  <div className="upload-actions-inline">
+                    <button className="btn-primary" onClick={handleVideoUpload}>
+                      🔍 Process Video
+                    </button>
+                    <button className="btn-secondary" onClick={handleResetUpload}>
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {uploading && (
+                <div className="upload-status">
+                  <div className="spinner-small"></div>
+                  <span>Processing video... Extracting frames and running detection...</span>
+                </div>
+              )}
+              
+              {uploadError && (
+                <div className="error-banner">⚠️ {uploadError}</div>
+              )}
+              
+              {uploadSuccess && (
+                <div className="success-banner">{uploadSuccess}</div>
+              )}
+            </div>
+          )}
+        </div>
         
         {trainingStats && (
           <div className="training-progress">
@@ -343,6 +519,25 @@ function Training() {
                 <div className="button-hint">Keyboard: 3</div>
               </button>
             </div>
+            
+            <div className="annotation-section">
+              <h3>📦 Missed Detection?</h3>
+              <p className="annotation-hint">
+                If deer were present but not detected, draw bounding boxes to improve the model.
+              </p>
+              <button 
+                className="annotation-button"
+                onClick={() => setShowAnnotationTool(true)}
+                disabled={currentDetection?.reviewed}
+              >
+                ✏️ Draw Bounding Boxes
+              </button>
+              {currentDetection?.manual_annotations?.length > 0 && (
+                <div className="annotation-status">
+                  ✅ {currentDetection.manual_annotations.length} box{currentDetection.manual_annotations.length !== 1 ? 'es' : ''} drawn
+                </div>
+              )}
+            </div>
 
             <div className="keyboard-shortcuts">
               <h3>⌨️ Keyboard Shortcuts</h3>
@@ -363,6 +558,16 @@ function Training() {
             </div>
           </div>
         </div>
+      )}
+      
+      {/* Annotation Tool Modal */}
+      {showAnnotationTool && currentDetection && (
+        <AnnotationTool
+          imageSrc={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${currentDetection.image_path}`}
+          existingBoxes={currentDetection.manual_annotations || []}
+          onSave={handleSaveAnnotations}
+          onCancel={() => setShowAnnotationTool(false)}
+        />
       )}
     </div>
   )

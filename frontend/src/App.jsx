@@ -4,7 +4,6 @@ import './components/Auth.css'
 import Dashboard from './components/Dashboard'
 import Training from './components/Training'
 import Settings from './components/Settings'
-import VideoUpload from './components/VideoUpload'
 import AuthButton from './components/AuthButton'
 import { useAuth } from './hooks/useAuth'
 
@@ -130,13 +129,7 @@ function App() {
             className={activeTab === 'training' ? 'active' : ''}
             onClick={() => setActiveTab('training')}
           >
-            Training
-          </button>
-          <button 
-            className={activeTab === 'video' ? 'active' : ''}
-            onClick={() => setActiveTab('video')}
-          >
-            Video Analysis
+            Model Improvement
           </button>
           <button 
             className={activeTab === 'settings' ? 'active' : ''}
@@ -150,7 +143,6 @@ function App() {
       <main className="app-content">
         {activeTab === 'dashboard' && <Dashboard stats={stats} settings={settings} />}
         {activeTab === 'training' && <Training />}
-        {activeTab === 'video' && <VideoUpload />}
         {activeTab === 'settings' && <Settings settings={settings} setSettings={setSettings} />}
       </main>
     </div>

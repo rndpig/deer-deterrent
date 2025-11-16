@@ -481,6 +481,137 @@ async def get_video_frame(frame_name: str):
     return FileResponse(frame_path)
 
 
+@app.post("/api/videos/upload")
+async def upload_video_for_training(video: UploadFile = File(...)):
+    """
+    Upload video for training data extraction.
+    Extracts ALL frames, runs detection on each, and saves for manual review/annotation.
+    
+    This is different from /api/detect/video which only samples frames.
+    This endpoint:
+    - Extracts every single frame
+    - Runs detection on all frames
+    - Saves video archive
+    - Creates detection records for ALL frames (detected + non-detected)
+    - Adds frames to review queue
+    
+    Returns:
+        frames_extracted: Total frames extracted
+        detections_found: Frames with automatic detections
+        video_saved: Path to archived video
+    """
+    if not CV2_AVAILABLE:
+        raise HTTPException(status_code=503, detail="OpenCV not available")
+    
+    det = load_detector()
+    if not det:
+        raise HTTPException(status_code=503, detail="Detector not initialized")
+    
+    # Create directories
+    video_archive_dir = Path("data/video_archive")
+    frames_dir = Path("data/training_frames")
+    video_archive_dir.mkdir(parents=True, exist_ok=True)
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        # Save video to archive
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        video_filename = f"{timestamp}_{video.filename}"
+        video_save_path = video_archive_dir / video_filename
+        
+        with video_save_path.open("wb") as buffer:
+            shutil.copyfileobj(video.file, buffer)
+        
+        import cv2
+        import numpy as np
+        
+        # Open video for frame extraction
+        cap = cv2.VideoCapture(str(video_save_path))
+        if not cap.isOpened():
+            raise HTTPException(status_code=400, detail="Could not open video file")
+        
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        frames_extracted = 0
+        detections_found = 0
+        frame_records = []
+        
+        frame_num = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            # Save frame to disk
+            frame_filename = f"{timestamp}_frame_{frame_num:06d}.jpg"
+            frame_path = frames_dir / frame_filename
+            cv2.imwrite(str(frame_path), frame)
+            
+            # Run detection on this frame
+            detections, annotated = det.detect(frame, return_annotated=True)
+            
+            # Save annotated version if there are detections
+            if detections:
+                annotated_filename = f"{timestamp}_frame_{frame_num:06d}_annotated.jpg"
+                annotated_path = frames_dir / annotated_filename
+                cv2.imwrite(str(annotated_path), annotated)
+                detections_found += 1
+            
+            # Create detection record for ALL frames (including no-detection frames)
+            # This allows users to draw bounding boxes on missed detections
+            detection_record = {
+                "id": f"{timestamp}_frame_{frame_num}",
+                "timestamp": datetime.now().isoformat(),
+                "camera_name": "Manual Upload",
+                "zone_name": f"Video: {video.filename}",
+                "deer_count": len(detections) if detections else 0,
+                "confidence": max([d['confidence'] for d in detections]) if detections else 0.0,
+                "sprinklers_activated": False,
+                "image_path": f"/api/training-frames/{frame_filename}",
+                "annotated_image_path": f"/api/training-frames/{annotated_filename}" if detections else None,
+                "video_source": video_filename,
+                "frame_number": frame_num,
+                "timestamp_seconds": frame_num / fps if fps > 0 else 0,
+                "detections": detections if detections else [],
+                "manual_annotations": [],  # To be filled by user
+                "reviewed": False,
+                "from_video_upload": True
+            }
+            
+            detection_history.append(detection_record)
+            frame_records.append(detection_record)
+            frames_extracted += 1
+            frame_num += 1
+        
+        cap.release()
+        
+        return {
+            "success": True,
+            "video_filename": video_filename,
+            "video_saved": str(video_save_path),
+            "frames_extracted": frames_extracted,
+            "detections_found": detections_found,
+            "fps": fps,
+            "duration_seconds": total_frames / fps if fps > 0 else 0,
+            "message": f"Video processed: {frames_extracted} frames extracted, {detections_found} with detections"
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing video: {str(e)}")
+    finally:
+        await video.close()
+
+
+@app.get("/api/training-frames/{frame_name}")
+async def get_training_frame(frame_name: str):
+    """Serve training frames."""
+    frame_path = Path("data/training_frames") / frame_name
+    if not frame_path.exists():
+        raise HTTPException(status_code=404, detail="Frame not found")
+    return FileResponse(frame_path)
+
+
 @app.get("/api/images/{image_name}")
 async def get_detection_image(image_name: str):
     """Serve detection images."""
@@ -673,6 +804,44 @@ async def get_detection_review(detection_id: str):
     }
 
 
+@app.post("/api/detections/{detection_id}/annotate")
+async def save_manual_annotations(detection_id: str, payload: dict):
+    """
+    Save manual bounding box annotations for a detection.
+    Used when user draws boxes around missed deer.
+    
+    Args:
+        detection_id: The detection ID
+        payload: {
+            bounding_boxes: [{"x": int, "y": int, "width": int, "height": int}, ...],
+            deer_count: int,
+            annotator: str
+        }
+    """
+    # Find the detection in history
+    detection = None
+    for d in detection_history:
+        if d.get("id") == detection_id:
+            detection = d
+            break
+    
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+    
+    # Save annotations
+    detection["manual_annotations"] = payload.get("bounding_boxes", [])
+    detection["deer_count"] = payload.get("deer_count", len(payload.get("bounding_boxes", [])))
+    detection["annotated_by"] = payload.get("annotator", "user")
+    detection["annotated_at"] = datetime.now().isoformat()
+    
+    return {
+        "status": "success",
+        "detection_id": detection_id,
+        "annotations_saved": len(payload.get("bounding_boxes", [])),
+        "deer_count": detection["deer_count"]
+    }
+
+
 @app.post("/api/detections/missed")
 async def report_missed_detection(report: MissedDetection):
     """Report a detection that was missed by the ML model."""
@@ -738,7 +907,10 @@ async def get_training_stats():
 
 @app.get("/api/training/export")
 async def export_training_data():
-    """Export reviewed detections in COCO format for training."""
+    """
+    Export reviewed detections in COCO format for training.
+    Includes both automatic detections and manual annotations.
+    """
     from datetime import datetime
     import json
     from pathlib import Path
@@ -747,45 +919,110 @@ async def export_training_data():
     export_dir = Path("temp/training_export")
     export_dir.mkdir(parents=True, exist_ok=True)
     
-    # Filter reviewed detections
-    reviewed = [
-        {**detection_reviews[det_id], "id": det_id}
-        for det_id in detection_reviews
-        if detection_reviews[det_id]["review_type"] in ["correct", "incorrect_count"]
-    ]
+    # Collect all reviewed detections and detections with manual annotations
+    export_detections = []
     
-    if not reviewed:
-        raise HTTPException(status_code=404, detail="No reviewed detections to export")
+    # 1. Get reviewed detections from detection_reviews
+    for det_id in detection_reviews:
+        review = detection_reviews[det_id]
+        if review["review_type"] in ["correct", "incorrect_count"]:
+            # Find the full detection
+            detection = None
+            for d in detection_history:
+                if d.get("id") == det_id:
+                    detection = d
+                    break
+            if detection:
+                export_detections.append({
+                    "detection": detection,
+                    "review": review,
+                    "source": "reviewed"
+                })
+    
+    # 2. Get detections with manual annotations (even if not formally reviewed)
+    for detection in detection_history:
+        if detection.get("manual_annotations") and len(detection["manual_annotations"]) > 0:
+            # Check if not already added
+            if not any(d["detection"].get("id") == detection.get("id") for d in export_detections):
+                export_detections.append({
+                    "detection": detection,
+                    "review": None,
+                    "source": "manual_annotation"
+                })
+    
+    if not export_detections:
+        raise HTTPException(status_code=404, detail="No training data to export (no reviews or annotations)")
     
     # Build COCO format dataset
     images = []
     annotations = []
+    annotation_id = 1
     
-    for i, review in enumerate(reviewed):
-        detection = review["detection"]
+    for i, item in enumerate(export_detections):
+        detection = item["detection"]
+        review = item["review"]
         
         # Image entry
         image_entry = {
             "id": i + 1,
             "file_name": Path(detection["image_path"]).name if detection.get("image_path") else f"detection_{i}.jpg",
-            "width": 1920,  # Adjust based on your camera resolution
+            "width": 1920,  # Default - should be read from image if available
             "height": 1080,
             "date_captured": detection["timestamp"]
         }
         images.append(image_entry)
         
-        # Annotation entry (simplified - would need bounding boxes from actual detections)
-        deer_count = review.get("corrected_deer_count") or detection["deer_count"]
-        for j in range(deer_count):
-            annotation = {
-                "id": len(annotations) + 1,
-                "image_id": i + 1,
-                "category_id": 1,  # Deer category
-                "bbox": [0, 0, 100, 100],  # Placeholder - needs actual bbox data
-                "area": 10000,
-                "iscrowd": 0
-            }
-            annotations.append(annotation)
+        # Add annotations
+        # Priority: manual_annotations > automatic detections
+        if detection.get("manual_annotations") and len(detection["manual_annotations"]) > 0:
+            # Use manual bounding boxes
+            for bbox in detection["manual_annotations"]:
+                annotation = {
+                    "id": annotation_id,
+                    "image_id": i + 1,
+                    "category_id": 1,  # Deer category
+                    "bbox": [bbox["x"], bbox["y"], bbox["width"], bbox["height"]],  # COCO format: [x, y, width, height]
+                    "area": bbox["width"] * bbox["height"],
+                    "iscrowd": 0,
+                    "source": "manual"
+                }
+                annotations.append(annotation)
+                annotation_id += 1
+        
+        elif detection.get("detections") and len(detection["detections"]) > 0:
+            # Use automatic detections if available
+            for det in detection["detections"]:
+                if "bbox" in det:
+                    annotation = {
+                        "id": annotation_id,
+                        "image_id": i + 1,
+                        "category_id": 1,
+                        "bbox": det["bbox"],  # Already in COCO format from detector
+                        "area": det["bbox"][2] * det["bbox"][3],
+                        "iscrowd": 0,
+                        "confidence": det.get("confidence", 0),
+                        "source": "automatic"
+                    }
+                    annotations.append(annotation)
+                    annotation_id += 1
+        
+        else:
+            # Fallback: create annotation based on deer_count
+            deer_count = review.get("corrected_deer_count") if review else detection.get("deer_count", 0)
+            if deer_count > 0:
+                # Create placeholder annotations (will need manual correction)
+                for j in range(deer_count):
+                    annotation = {
+                        "id": annotation_id,
+                        "image_id": i + 1,
+                        "category_id": 1,
+                        "bbox": [0, 0, 100, 100],  # Placeholder
+                        "area": 10000,
+                        "iscrowd": 0,
+                        "source": "placeholder"
+                    }
+                    annotations.append(annotation)
+                    annotation_id += 1
     
     # COCO dataset structure
     coco_data = {
@@ -793,7 +1030,8 @@ async def export_training_data():
             "description": "Deer Deterrent Training Dataset",
             "version": "1.0",
             "year": datetime.now().year,
-            "date_created": datetime.now().isoformat()
+            "date_created": datetime.now().isoformat(),
+            "contributor": "Deer Deterrent System"
         },
         "licenses": [],
         "categories": [
@@ -808,16 +1046,20 @@ async def export_training_data():
     }
     
     # Save to file
-    export_path = export_dir / f"annotations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    export_path = export_dir / f"annotations_{timestamp}.json"
     with open(export_path, 'w') as f:
         json.dump(coco_data, f, indent=2)
     
     return {
         "status": "success",
         "export_path": str(export_path),
-        "images_count": len(images),
-        "annotations_count": len(annotations),
-        "reviewed_detections": len(reviewed)
+        "total_images": len(images),
+        "total_annotations": len(annotations),
+        "manual_annotations": sum(1 for a in annotations if a.get("source") == "manual"),
+        "automatic_detections": sum(1 for a in annotations if a.get("source") == "automatic"),
+        "reviewed_detections": sum(1 for item in export_detections if item["source"] == "reviewed"),
+        "timestamp": timestamp
     }
 
 

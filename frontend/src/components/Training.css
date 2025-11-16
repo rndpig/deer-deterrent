@@ -13,9 +13,189 @@
   color: #1f2937;
 }
 
+/* Video Upload Section */
+.video-upload-section {
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+.section-toggle {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  background: #fff;
+  border: none;
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: #2563eb;
+  transition: background 0.2s;
+}
+
+.section-toggle:hover {
+  background: #f3f4f6;
+}
+
+.upload-panel {
+  padding: 1.5rem;
+}
+
+.upload-description {
+  margin: 0 0 1rem 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.file-input-wrapper {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.file-select-label {
+  flex: 1;
+  min-width: 300px;
+  padding: 1rem;
+  background: white;
+  border: 2px dashed #d1d5db;
+  border-radius: 6px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  color: #6b7280;
+}
+
+.file-select-label:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.upload-actions-inline {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-primary, .btn-secondary {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: #2563eb;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.btn-secondary:hover {
+  background: #d1d5db;
+}
+
+.upload-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #eff6ff;
+  border-radius: 6px;
+  margin-top: 1rem;
+  color: #1e40af;
+}
+
+.spinner-small {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #dbeafe;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-banner {
+  padding: 1rem;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  color: #991b1b;
+  margin-top: 1rem;
+}
+
+.success-banner {
+  padding: 1rem;
+  background: #d1fae5;
+  border: 1px solid #6ee7b7;
+  border-radius: 6px;
+  color: #065f46;
+  margin-top: 1rem;
+}
+
 @media (prefers-color-scheme: dark) {
   .training-header h1 {
     color: #f3f4f6;
+  }
+  
+  .video-upload-section {
+    background: #1f2937;
+    border-color: #374151;
+  }
+  
+  .section-toggle {
+    background: #111827;
+    color: #60a5fa;
+  }
+  
+  .section-toggle:hover {
+    background: #1f2937;
+  }
+  
+  .upload-panel {
+    background: #1f2937;
+  }
+  
+  .upload-description {
+    color: #9ca3af;
+  }
+  
+  .file-select-label {
+    background: #111827;
+    border-color: #4b5563;
+    color: #9ca3af;
+  }
+  
+  .file-select-label:hover {
+    border-color: #60a5fa;
+    background: #1e3a8a;
+    color: #60a5fa;
+  }
+  
+  .btn-secondary {
+    background: #374151;
+    color: #e5e7eb;
+  }
+  
+  .btn-secondary:hover {
+    background: #4b5563;
   }
 }
 
@@ -23,7 +203,7 @@
   display: flex;
   gap: 2rem;
   align-items: center;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   padding: 1.5rem;
   border-radius: 8px;
   color: white;
@@ -398,6 +578,85 @@
   font-size: 0.75rem;
   opacity: 0.8;
   font-weight: 400;
+}
+
+/* Annotation Section */
+.annotation-section {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #eff6ff;
+  border: 2px solid #bfdbfe;
+  border-radius: 8px;
+}
+
+.annotation-section h3 {
+  margin: 0 0 0.5rem 0;
+  color: #1e40af;
+  font-size: 1rem;
+}
+
+.annotation-hint {
+  margin: 0 0 1rem 0;
+  font-size: 0.875rem;
+  color: #1e40af;
+  opacity: 0.9;
+}
+
+.annotation-button {
+  width: 100%;
+  padding: 1rem;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.annotation-button:hover:not(:disabled) {
+  background: #1d4ed8;
+  transform: translateY(-2px);
+}
+
+.annotation-button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.annotation-status {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #d1fae5;
+  border: 1px solid #6ee7b7;
+  border-radius: 6px;
+  color: #065f46;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+@media (prefers-color-scheme: dark) {
+  .annotation-section {
+    background: #1e3a8a;
+    border-color: #1e40af;
+  }
+  
+  .annotation-section h3 {
+    color: #dbeafe;
+  }
+  
+  .annotation-hint {
+    color: #dbeafe;
+  }
+  
+  .annotation-status {
+    background: #064e3b;
+    border-color: #059669;
+    color: #d1fae5;
+  }
 }
 
 /* Keyboard Shortcuts */
