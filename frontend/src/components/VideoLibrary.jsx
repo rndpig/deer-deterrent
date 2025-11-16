@@ -454,14 +454,14 @@ function VideoLibrary({ onStartReview }) {
                   onClick={() => handleViewFrames(video)}
                   title="View all frames with detections"
                 >
-                  🖼️ View Frames
+                  Frames
                 </button>
                 <button 
                   className="btn-edit"
                   onClick={() => handleEditVideo(video)}
                   title="Edit camera and date/time"
                 >
-                  ✏️ Edit
+                  Edit
                 </button>
                 <button 
                   className="btn-delete"
@@ -469,7 +469,7 @@ function VideoLibrary({ onStartReview }) {
                   disabled={deleting === video.id}
                   title="Delete video and frames"
                 >
-                  {deleting === video.id ? '⏳' : '🗑️'} Delete
+                  {deleting === video.id ? 'Wait...' : 'Delete'}
                 </button>
               </div>
             </div>
