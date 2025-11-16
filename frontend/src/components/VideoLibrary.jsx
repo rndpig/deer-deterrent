@@ -584,7 +584,20 @@ function VideoLibrary({ onStartReview }) {
         <div className="dialog-overlay" onClick={() => setShowFrameAnalysis(false)}>
           <div className="frame-analysis-modal" onClick={(e) => e.stopPropagation()}>
             <div className="frame-analysis-header">
-              <h2>🔍 Frame Analysis: {analysisVideo.filename}</h2>
+              <div className="header-content">
+                <h2>🔍 {analysisVideo.filename}</h2>
+                {videoFrames.length > 0 && videoFrames[currentFrameIndex] && (
+                  <div className="frame-metadata">
+                    <span className="meta-highlight">Frame {currentFrameIndex + 1} of {videoFrames.length}</span>
+                    <span>•</span>
+                    <span>#{videoFrames[currentFrameIndex].frame_number}</span>
+                    <span>•</span>
+                    <span>{videoFrames[currentFrameIndex].timestamp_in_video?.toFixed(2)}s</span>
+                    <span>•</span>
+                    <span>{videoFrames[currentFrameIndex].detection_count || 0} detections</span>
+                  </div>
+                )}
+              </div>
               <button 
                 className="btn-close-modal"
                 onClick={() => setShowFrameAnalysis(false)}
@@ -614,18 +627,6 @@ function VideoLibrary({ onStartReview }) {
                       alt={`Frame ${videoFrames[currentFrameIndex]?.frame_number}`}
                       className="frame-image"
                     />
-                    <div className="frame-info-overlay">
-                      <div className="frame-counter">
-                        Frame {currentFrameIndex + 1} of {videoFrames.length}
-                      </div>
-                      <div className="frame-details">
-                        <span>Frame #{videoFrames[currentFrameIndex]?.frame_number}</span>
-                        <span>•</span>
-                        <span>{videoFrames[currentFrameIndex]?.timestamp_in_video?.toFixed(2)}s</span>
-                        <span>•</span>
-                        <span>{videoFrames[currentFrameIndex]?.detection_count || 0} detections</span>
-                      </div>
-                    </div>
                   </div>
                   
                   <button 

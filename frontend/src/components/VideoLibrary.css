@@ -689,18 +689,40 @@
 }
 
 .frame-analysis-header {
-  padding: 0.5rem 1rem;
+  padding: 0.625rem 1rem;
   border-bottom: 1px solid #2d3548;
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
+  gap: 1rem;
+}
+
+.frame-analysis-header .header-content {
+  flex: 1;
+  min-width: 0;
 }
 
 .frame-analysis-header h2 {
-  margin: 0;
+  margin: 0 0 0.25rem 0;
   font-size: 0.95rem;
   color: #e5e7eb;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.frame-metadata {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #9ca3af;
+  align-items: center;
+}
+
+.meta-highlight {
+  color: #e5e7eb;
+  font-weight: 600;
 }
 
 .frame-viewer {
@@ -756,34 +778,9 @@
   max-height: 100%;
   width: auto;
   height: auto;
-  border-radius: 8px;
+  border-radius: 6px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   object-fit: contain;
-}
-
-.frame-info-overlay {
-  position: absolute;
-  bottom: 0.25rem;
-  left: 0.5rem;
-  right: 0.5rem;
-  background: rgba(0, 0, 0, 0.7);
-  padding: 0.375rem 0.5rem;
-  border-radius: 4px;
-  backdrop-filter: blur(4px);
-}
-
-.frame-counter {
-  color: #fff;
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-bottom: 0.125rem;
-}
-
-.frame-details {
-  color: #d1d5db;
-  font-size: 0.7rem;
-  display: flex;
-  gap: 0.375rem;
 }
 
 .frame-navigation {
