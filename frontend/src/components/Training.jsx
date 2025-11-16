@@ -451,6 +451,9 @@ function Training() {
     )
   }
 
+  // Debug logging
+  console.log('Detections:', detections.length, 'Current:', currentIndex, 'Detection:', currentDetection)
+
   return (
     <div className="training-container">
       <div className="training-header">
@@ -619,7 +622,9 @@ function Training() {
       ) : (
         <div className="review-interface">
           <div className="image-viewer">
-            {currentDetection && (
+            {!currentDetection ? (
+              <div className="loading">Loading frame...</div>
+            ) : (
               <>
                 <div className="image-container">
                   {currentDetection.image_path ? (
@@ -629,6 +634,9 @@ function Training() {
                         src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${currentDetection.image_path}`}
                         alt="Detection"
                         className="detection-image"
+                        onError={(e) => {
+                          console.error('Image failed to load:', e)
+                        }}
                       />
                       <canvas 
                         ref={canvasRef}
