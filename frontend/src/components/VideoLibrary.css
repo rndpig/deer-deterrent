@@ -396,7 +396,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -405,23 +405,24 @@
 }
 
 .dialog-box {
-  background: white;
+  background: #1f2937;
+  border: 2px solid #374151;
   border-radius: 16px;
   padding: 2rem;
   max-width: 500px;
   width: 100%;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
 }
 
 .dialog-box h2 {
   margin: 0 0 0.5rem 0;
-  color: #1f2937;
+  color: #f3f4f6;
   font-size: 1.5rem;
 }
 
 .dialog-subtitle {
   margin: 0 0 1.5rem 0;
-  color: #6b7280;
+  color: #9ca3af;
   font-size: 0.95rem;
 }
 
@@ -441,35 +442,43 @@
 .form-group label {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #374151;
+  color: #d1d5db;
 }
 
 .form-input,
 .form-select,
 .form-input-disabled {
   padding: 0.75rem;
-  border: 2px solid #d1d5db;
+  border: 2px solid #4b5563;
   border-radius: 8px;
   font-size: 0.95rem;
   font-family: inherit;
   transition: border-color 0.2s;
+  background: #111827;
+  color: #f3f4f6;
+}
+
+.form-select option {
+  background: #111827;
+  color: #f3f4f6;
 }
 
 .form-input:focus,
 .form-select:focus {
   outline: none;
   border-color: #2563eb;
+  background: #1f2937;
 }
 
 .form-input-disabled {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: #374151;
+  color: #9ca3af;
   cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .form-select {
   cursor: pointer;
-  background: white;
 }
 
 .dialog-actions {
@@ -490,12 +499,12 @@
 }
 
 .btn-dialog-cancel {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: #374151;
+  color: #d1d5db;
 }
 
 .btn-dialog-cancel:hover {
-  background: #e5e7eb;
+  background: #4b5563;
 }
 
 .btn-dialog-confirm {
