@@ -202,22 +202,22 @@
 }
 
 .btn-annotate {
-  background: #f59e0b;
+  background: #3b82f6;
   color: white;
 }
 
 .btn-annotate:hover {
-  background: #d97706;
+  background: #2563eb;
   transform: translateY(-1px);
 }
 
-.btn-delete {
-  background: #ef4444;
+.btn-skip {
+  background: #6b7280;
   color: white;
 }
 
-.btn-delete:hover {
-  background: #dc2626;
+.btn-skip:hover {
+  background: #4b5563;
   transform: translateY(-1px);
 }
 

@@ -66,7 +66,7 @@ function EarlyReview({ onBack }) {
         // Draw manual annotations
         if (currentFrame.annotations && currentFrame.annotations.length > 0) {
           currentFrame.annotations.forEach((box, idx) => {
-            ctx.strokeStyle = '#f59e0b' // Orange for manual annotations
+            ctx.strokeStyle = '#3b82f6' // Blue for manual annotations
             ctx.lineWidth = 3
             ctx.strokeRect(
               box.x * canvas.width,
@@ -75,8 +75,8 @@ function EarlyReview({ onBack }) {
               box.height * canvas.height
             )
             
-            ctx.fillStyle = 'white'
-            ctx.font = '12px Arial'
+            ctx.fillStyle = '#3b82f6'
+            ctx.font = '14px Arial'
             ctx.fillText(`Manual ${idx + 1}`, box.x * canvas.width + 5, box.y * canvas.height - 5)
           })
         }
@@ -186,7 +186,6 @@ function EarlyReview({ onBack }) {
       setShowAnnotationTool(true)
     }
     if (e.key === 'c' || e.key === 'C') reviewFrame('correct')
-    if (e.key === 'Delete') deleteCurrentFrame()
   }
 
   useEffect(() => {
@@ -203,31 +202,6 @@ function EarlyReview({ onBack }) {
   const previousFrame = () => {
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1)
-    }
-  }
-
-  const deleteCurrentFrame = async () => {
-    if (!confirm('Delete this frame? This cannot be undone.')) return
-    
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-    const frame = frames[currentIndex]
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/frames/${frame.id}`, {
-        method: 'DELETE'
-      })
-      
-      if (response.ok) {
-        const updated = frames.filter((_, i) => i !== currentIndex)
-        setFrames(updated)
-        if (currentIndex >= updated.length) {
-          setCurrentIndex(Math.max(0, updated.length - 1))
-        }
-        loadTrainingStats()
-      }
-    } catch (error) {
-      console.error('Error deleting frame:', error)
-      alert('Failed to delete frame')
     }
   }
 
@@ -361,14 +335,14 @@ function EarlyReview({ onBack }) {
               className="btn-review btn-annotate"
               onClick={() => setShowAnnotationTool(true)}
             >
-              ✏️ Annotate (Space)
+              ✏️ Add Box (Space)
             </button>
             
             <button 
-              className="btn-review btn-delete"
-              onClick={deleteCurrentFrame}
+              className="btn-review btn-skip"
+              onClick={nextFrame}
             >
-              🗑️ Delete (Del)
+              → Skip
             </button>
           </div>
 
@@ -395,7 +369,9 @@ function EarlyReview({ onBack }) {
       )}
 
       <div className="keyboard-shortcuts">
-        <strong>Shortcuts:</strong> Arrow Keys (navigate) • C (correct) • Space (annotate) • Del (delete)
+        <strong>Shortcuts:</strong> Arrow Keys (navigate) • C (mark correct) • Space (add bounding box)
+        <br />
+        <strong>Box Colors:</strong> <span style={{color: '#10b981'}}>Green = Model Detections</span> • <span style={{color: '#3b82f6'}}>Blue = Manual Annotations</span>
       </div>
     </div>
   )
