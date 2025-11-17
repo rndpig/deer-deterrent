@@ -3,7 +3,7 @@ import './Training.css'
 import AnnotationTool from './AnnotationTool'
 import VideoLibrary from './VideoLibrary'
 
-function Training({ onSwitchToEarlyReview }) {
+function Training() {
   const [viewMode, setViewMode] = useState('library') // 'library' or 'review'
   const [detections, setDetections] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -481,8 +481,7 @@ function Training({ onSwitchToEarlyReview }) {
     return (
       <div className="training-container">
         <VideoLibrary 
-          onStartReview={handleStartReview} 
-          onStartEarlyReview={onSwitchToEarlyReview}
+          onStartReview={handleStartReview}
         />
       </div>
     )
@@ -659,141 +658,95 @@ function Training({ onSwitchToEarlyReview }) {
           </p>
         </div>
       ) : (
-        <div className="review-interface">
-          <div className="image-viewer">
-            {!currentDetection ? (
-              <div className="loading">Loading frame...</div>
-            ) : (
-              <>
-                <div className="image-container">
-                  {currentDetection.image_path ? (
-                    <div className="image-wrapper">
-                      <img 
-                        ref={imageRef}
-                        src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${currentDetection.image_path}`}
-                        alt="Detection"
-                        className="detection-image"
-                        onError={(e) => {
-                          console.error('Image failed to load:', e)
-                        }}
-                      />
-                      <canvas 
-                        ref={canvasRef}
-                        className="detection-canvas"
-                      />
-                    </div>
-                  ) : (
-                    <div className="no-image">
-                      <p>📷 No image available</p>
-                    </div>
-                  )}
-                </div>
+        <>
+          {/* Fullscreen Review Interface */}
+          <div className="fullscreen-review">
+            {/* Compact header with all info in one line */}
+            <div className="review-header">
+              <button className="btn-back-to-library-compact" onClick={handleBackToLibrary}>
+                ← Back
+              </button>
+              
+              <div className="header-info">
+                <span className="frame-counter"><strong>{currentIndex + 1}</strong> / {detections.length}</span>
+                <span className="divider">|</span>
+                <span>Camera: {currentDetection.camera_name}</span>
+                <span className="divider">|</span>
+                <span>Frame: {currentDetection.frame_number || 'N/A'}</span>
+                <span className="divider">|</span>
+                <span className="info-badge-inline green">Auto: {currentDetection.deer_count}</span>
+                <span className="divider">|</span>
+                <span className="info-badge-inline blue">Manual: {currentDetection.manual_annotations?.length || 0}</span>
+                {currentDetection.reviewed && (
+                  <>
+                    <span className="divider">|</span>
+                    <span className="info-badge-inline reviewed">✓ {currentDetection.review_type}</span>
+                  </>
+                )}
+              </div>
 
-                {/* Single horizontal control bar with everything */}
-                <div className="control-bar">
-                  {/* Navigation Section */}
-                  <div className="control-section nav-section">
-                    <button 
-                      onClick={previousDetection}
-                      disabled={currentIndex === 0}
-                      className="btn-nav"
-                    >
-                      ← Prev
-                    </button>
-                    <span className="frame-counter">
-                      {currentIndex + 1} / {detections.length}
-                    </span>
-                    <button 
-                      onClick={nextDetection}
-                      disabled={currentIndex === detections.length - 1}
-                      className="btn-nav"
-                    >
-                      Next →
-                    </button>
+              <div className="header-actions">
+                <button className="btn-header btn-prev" onClick={previousDetection} disabled={currentIndex === 0}>
+                  ←
+                </button>
+                <button className="btn-header btn-next" onClick={nextDetection} disabled={currentIndex === detections.length - 1}>
+                  →
+                </button>
+                <button 
+                  className="btn-header btn-correct" 
+                  onClick={() => reviewDetection('correct')}
+                  disabled={currentDetection?.reviewed}
+                >
+                  ✓ Correct
+                </button>
+                <button 
+                  className="btn-header btn-annotate" 
+                  onClick={() => setShowAnnotationTool(true)}
+                  disabled={currentDetection?.reviewed && currentDetection?.review_type === 'correct'}
+                >
+                  ✏️ Add Box
+                </button>
+                <button className="btn-header btn-skip" onClick={nextDetection}>
+                  Skip
+                </button>
+              </div>
+            </div>
+
+            {/* Fullscreen image viewer */}
+            <div className="review-content">
+              <div className="image-container-fullscreen">
+                {currentDetection.image_path ? (
+                  <>
+                    <img 
+                      ref={imageRef}
+                      src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${currentDetection.image_path}`}
+                      alt="Detection"
+                      className="frame-image-fullscreen"
+                      onError={(e) => {
+                        console.error('Image failed to load:', e)
+                      }}
+                    />
+                    <canvas 
+                      ref={canvasRef}
+                      className="frame-canvas-fullscreen"
+                    />
+                  </>
+                ) : (
+                  <div className="no-image">
+                    <p>📷 No image available</p>
                   </div>
-                  
-                  {/* Frame Info Section */}
-                  <div className="control-section info-section">
-                    <div className="info-item">
-                      <label>Camera:</label>
-                      <select 
-                        value={currentDetection.camera_name}
-                        onChange={async (e) => {
-                          const newCamera = e.target.value
-                          setDetections(prev => prev.map(d => 
-                            d.id === currentDetection.id 
-                              ? { ...d, camera_name: newCamera }
-                              : d
-                          ))
-                          try {
-                            await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/detections/${currentDetection.id}/camera?camera_name=${encodeURIComponent(newCamera)}`, {
-                              method: 'PATCH'
-                            })
-                          } catch (error) {
-                            console.error('Error updating camera:', error)
-                          }
-                        }}
-                        className="camera-select-compact"
-                      >
-                        {cameraOptions.map(cam => (
-                          <option key={cam} value={cam}>{cam}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-badge green">Auto: {currentDetection.deer_count}</span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-badge orange">Manual: {currentDetection.manual_annotations?.length || 0}</span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-text">Frame #{currentDetection.frame_number || 'N/A'}</span>
-                    </div>
-                    {currentDetection.reviewed && (
-                      <div className="info-item">
-                        <span className="info-badge reviewed">✓ {currentDetection.review_type}</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Action Buttons Section */}
-                  <div className="control-section actions-section">
-                    <button 
-                      className="btn-action btn-annotate-primary"
-                      onClick={() => setShowAnnotationTool(true)}
-                      disabled={currentDetection?.reviewed && currentDetection?.review_type === 'correct'}
-                      title="Add missing deer (Space)"
-                    >
-                      📦 Add Boxes
-                    </button>
-                    
-                    <button 
-                      className="btn-action btn-correct"
-                      onClick={() => reviewDetection('correct')}
-                      disabled={currentDetection?.reviewed}
-                      title="Mark as correct (C)"
-                    >
-                      ✓ Correct
-                    </button>
-                    
-                    <button 
-                      className="btn-action btn-delete"
-                      onClick={deleteCurrentFrame}
-                      title="Delete frame (Del)"
-                    >
-                      🗑️ Delete
-                    </button>
-                  </div>
-                  
-                  {/* Keyboard Hints */}
-                  <div className="control-section hints-section">
-                    <span className="hint-text">⌨️ <kbd>←</kbd><kbd>→</kbd> <kbd>Space</kbd> Add <kbd>C</kbd> Correct <kbd>Del</kbd> Delete</span>
-                  </div>
-                </div>
-              </>
-            )}
+                )}
+              </div>
+            </div>
+
+            {/* Footer with shortcuts and legend */}
+            <div className="review-footer">
+              <span><strong>Shortcuts:</strong> Arrow Keys • C (correct) • Space (add box)</span>
+              <span className="divider">|</span>
+              <span><strong>Colors:</strong> <span style={{color: '#10b981'}}>Green = Model</span> • <span style={{color: '#3b82f6'}}>Blue = Manual</span></span>
+            </div>
           </div>
-        </div>
+        </>
       )}
       
       {/* Annotation Tool Modal */}

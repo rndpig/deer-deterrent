@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './VideoLibrary.css'
 
-function VideoLibrary({ onStartReview, onStartEarlyReview }) {
+function VideoLibrary({ onStartReview }) {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
   const [trainingStatus, setTrainingStatus] = useState(null)
@@ -21,6 +21,7 @@ function VideoLibrary({ onStartReview, onStartEarlyReview }) {
   const [analysisVideo, setAnalysisVideo] = useState(null)
   const [videoFrames, setVideoFrames] = useState([])
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
+  const thumbnailRefs = useRef([])
 
   useEffect(() => {
     loadVideos()
@@ -89,35 +90,6 @@ function VideoLibrary({ onStartReview, onStartEarlyReview }) {
     }
   }
 
-  const handleEarlyReview = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-    
-    setLoading(true)
-    
-    try {
-      // Sample frames from all videos
-      const response = await fetch(`${apiUrl}/api/videos/sample-for-review`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      })
-      
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.detail || 'Failed to sample frames')
-      }
-      
-      // Silently succeed and navigate to early review interface
-      if (onStartEarlyReview) {
-        onStartEarlyReview()
-      }
-    } catch (error) {
-      console.error('Error starting early review:', error)
-      alert('❌ Failed to start review: ' + error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleStartReview = async () => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
     
@@ -133,21 +105,16 @@ function VideoLibrary({ onStartReview, onStartEarlyReview }) {
         const error = await response.json()
         throw new Error(error.detail || 'Failed to select frames')
       }
-      
-      const result = await response.json()
-      alert(`Selected ${result.frames_selected} diverse frames for review`)
-      
-      // Notify parent to switch to review mode
+
+      // Navigate to review
       if (onStartReview) {
         onStartReview()
       }
     } catch (error) {
       console.error('Error starting review:', error)
-      alert(error.message)
+      alert('❌ Failed to start review: ' + error.message)
     }
-  }
-
-  const handleUploadClick = () => {
+  }  const handleUploadClick = () => {
     document.getElementById('video-upload-input').click()
   }
 
@@ -343,6 +310,20 @@ function VideoLibrary({ onStartReview, onStartEarlyReview }) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [showFrameAnalysis, currentFrameIndex, videoFrames.length])
 
+  // Auto-scroll thumbnail carousel to center selected frame
+  useEffect(() => {
+    if (!showFrameAnalysis || videoFrames.length === 0) return
+    
+    const activeThumbnail = thumbnailRefs.current[currentFrameIndex]
+    if (activeThumbnail) {
+      activeThumbnail.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center'
+      })
+    }
+  }, [currentFrameIndex, showFrameAnalysis, videoFrames.length])
+
   const formatDate = (dateString) => {
     const date = new Date(dateString)
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -405,21 +386,12 @@ function VideoLibrary({ onStartReview, onStartEarlyReview }) {
                 </span>
               </div>
               
-              {trainingStatus.video_count < 10 && trainingStatus.video_count > 0 && (
-                <button 
-                  className="btn-early-review"
-                  onClick={handleEarlyReview}
-                >
-                  🔬 Start Early Review ({trainingStatus.video_count * 5} frames)
-                </button>
-              )}
-              
               {trainingStatus.ready_for_review && !trainingStatus.reviewed_frames && (
                 <button 
                   className="btn-start-review"
                   onClick={handleStartReview}
                 >
-                  ✅ Start Full Review Process
+                  ✅ Start Review Process
                 </button>
               )}
               
@@ -681,6 +653,7 @@ function VideoLibrary({ onStartReview, onStartEarlyReview }) {
                     {videoFrames.map((frame, idx) => (
                       <div
                         key={frame.id}
+                        ref={el => thumbnailRefs.current[idx] = el}
                         className={`frame-thumb ${idx === currentFrameIndex ? 'active' : ''} ${frame.detection_count > 0 ? 'has-detection' : ''}`}
                         onClick={() => setCurrentFrameIndex(idx)}
                         title={`Frame ${frame.frame_number} - ${frame.detection_count} detections`}
