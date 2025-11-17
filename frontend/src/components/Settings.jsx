@@ -34,7 +34,6 @@ function Settings({ settings, setSettings }) {
   const [rainbirdZones, setRainbirdZones] = useState([])
   const [ringCameras, setRingCameras] = useState([])
   const [cameraZones, setCameraZones] = useState({})
-  const [activeTab, setActiveTab] = useState(null)
 
   // Fetch Rainbird zones on component mount
   useEffect(() => {
@@ -77,13 +76,9 @@ function Settings({ settings, setSettings }) {
           // Initialize cameraZones state with camera IDs
           const initialZones = {}
           sortedCameras.forEach(cam => {
-            initialZones[cam.id] = []
+            initialZones[cam.id] = null
           })
           setCameraZones(prev => ({ ...initialZones, ...prev }))
-          // Set first camera as active tab
-          if (sortedCameras.length > 0) {
-            setActiveTab(sortedCameras[0].id)
-          }
         }
       } catch (err) {
         console.error('Error fetching Ring cameras:', err)
@@ -97,13 +92,9 @@ function Settings({ settings, setSettings }) {
         setRingCameras(fallbackCameras)
         const initialZones = {}
         fallbackCameras.forEach(cam => {
-          initialZones[cam.id] = []
+          initialZones[cam.id] = null
         })
         setCameraZones(prev => ({ ...initialZones, ...prev }))
-        // Set first camera as active tab
-        if (fallbackCameras.length > 0) {
-          setActiveTab(fallbackCameras[0].id)
-        }
       }
     }
     
@@ -135,18 +126,11 @@ function Settings({ settings, setSettings }) {
     }))
   }
 
-  const toggleZoneForCamera = (camera, zoneNumber) => {
-    setCameraZones(prev => {
-      const currentZones = prev[camera] || []
-      const isSelected = currentZones.includes(zoneNumber)
-      
-      return {
-        ...prev,
-        [camera]: isSelected
-          ? currentZones.filter(z => z !== zoneNumber)
-          : [...currentZones, zoneNumber].sort((a, b) => a - b)
-      }
-    })
+  const setZoneForCamera = (cameraId, zoneNumber) => {
+    setCameraZones(prev => ({
+      ...prev,
+      [cameraId]: zoneNumber
+    }))
   }
 
   const handleSave = async () => {
@@ -335,52 +319,32 @@ function Settings({ settings, setSettings }) {
 
         {/* Camera Zone Mappings */}
         <section className="settings-section zone-mappings">
-          <h3>Camera Zone Mappings</h3>
+          <h3>Camera → Irrigation Zone Mapping</h3>
           <p className="section-description">
-            Configure which irrigation zones to activate when deer are detected by each camera.
+            Select which irrigation zone to activate when deer are detected by each camera.
           </p>
           
           {rainbirdZones.length > 0 && ringCameras.length > 0 ? (
-            <div className="camera-tabs-container">
-              {/* Camera Tabs */}
-              <div className="camera-tabs">
-                {ringCameras.map(camera => (
-                  <button
-                    key={camera.id}
-                    className={`camera-tab ${activeTab === camera.id ? 'active' : ''}`}
-                    onClick={() => setActiveTab(camera.id)}
-                  >
+            <div className="camera-zone-grid">
+              {ringCameras.map(camera => (
+                <div key={camera.id} className="camera-zone-row">
+                  <label className="camera-label">
                     📹 {camera.name}
-                    {cameraZones[camera.id]?.length > 0 && (
-                      <span className="zone-count">{cameraZones[camera.id].length}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-              
-              {/* Active Camera Zone Content */}
-              {activeTab && ringCameras.find(cam => cam.id === activeTab) && (
-                <div className="camera-zone-content">
-                  <div className="zone-chips">
+                  </label>
+                  <select
+                    className="zone-select"
+                    value={cameraZones[camera.id] || ''}
+                    onChange={(e) => setZoneForCamera(camera.id, e.target.value ? parseInt(e.target.value) : null)}
+                  >
+                    <option value="">None</option>
                     {rainbirdZones.map(zone => (
-                      <label 
-                        key={`${activeTab}-${zone.number}`} 
-                        className={`zone-chip ${cameraZones[activeTab]?.includes(zone.number) ? 'selected' : ''}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={cameraZones[activeTab]?.includes(zone.number) || false}
-                          onChange={() => toggleZoneForCamera(activeTab, zone.number)}
-                        />
-                        <span className="chip-content">
-                          <span className="chip-number">{zone.number}</span>
-                          <span className="chip-name">{zone.name}</span>
-                        </span>
-                      </label>
+                      <option key={zone.number} value={zone.number}>
+                        Zone {zone.number} - {zone.name}
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 </div>
-              )}
+              ))}
             </div>
           ) : (
             <div className="loading-zones">
