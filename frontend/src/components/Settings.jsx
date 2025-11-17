@@ -284,7 +284,7 @@ function Settings({ settings, setSettings }) {
           </div>
 
           <div className="settings-card">
-            <h3>Sprinkler</h3>
+            <h3>Irrigation</h3>
             <div className="card-content">
               <label htmlFor="duration">Duration (sec)</label>
               <input
@@ -315,46 +315,41 @@ function Settings({ settings, setSettings }) {
               </label>
             </div>
           </div>
-        </div>
 
-        {/* Camera Zone Mappings */}
-        <section className="settings-section zone-mappings">
-          <h3>Camera → Irrigation Zone Mapping</h3>
-          <p className="section-description">
-            Select which irrigation zone to activate when deer are detected by each camera.
-          </p>
-          
-          {rainbirdZones.length > 0 && ringCameras.length > 0 ? (
-            <div className="camera-zone-grid">
-              {ringCameras.map(camera => (
-                <div key={camera.id} className="camera-zone-row">
-                  <label className="camera-label">
-                    📹 {camera.name}
-                  </label>
-                  <select
-                    className="zone-select"
-                    value={cameraZones[camera.id] || ''}
-                    onChange={(e) => setZoneForCamera(camera.id, e.target.value ? parseInt(e.target.value) : null)}
-                  >
-                    <option value="">None</option>
-                    {rainbirdZones.map(zone => (
-                      <option key={zone.number} value={zone.number}>
-                        Zone {zone.number} - {zone.name}
-                      </option>
-                    ))}
-                  </select>
+          {/* Camera Zone Mappings - Double-wide card */}
+          <div className="settings-card camera-zones-card">
+            <h3>Camera → Zone</h3>
+            <div className="card-content">
+              {rainbirdZones.length > 0 && ringCameras.length > 0 ? (
+                <div className="camera-zone-compact">
+                  {ringCameras.map(camera => (
+                    <div key={camera.id} className="camera-zone-row-compact">
+                      <label className="camera-label-compact">
+                        📹 {camera.name}
+                      </label>
+                      <select
+                        className="zone-select-compact"
+                        value={cameraZones[camera.id] || ''}
+                        onChange={(e) => setZoneForCamera(camera.id, e.target.value ? parseInt(e.target.value) : null)}
+                      >
+                        <option value="">None</option>
+                        {rainbirdZones.map(zone => (
+                          <option key={zone.number} value={zone.number}>
+                            Zone {zone.number} - {zone.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <div className="loading-zones-compact">
+                  <p>Loading cameras and zones...</p>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="loading-zones">
-              <p>Loading cameras and zones...</p>
-              <p className="help-text">
-                Make sure Ring cameras and Rainbird controller are configured.
-              </p>
-            </div>
-          )}
-        </section>
+          </div>
+        </div>
       </div>
 
       <div className="settings-actions">

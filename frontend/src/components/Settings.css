@@ -59,6 +59,11 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
+/* Double-wide card for camera zones */
+.settings-card.camera-zones-card {
+  grid-column: span 2;
+}
+
 @media (prefers-color-scheme: dark) {
   .settings-card {
     background: #2a2a2a;
@@ -336,6 +341,79 @@
 }
 
 /* Camera Zone Grid - Single Row Dropdowns */
+.camera-zone-compact {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.camera-zone-row-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.camera-label-compact {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.85rem;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .camera-label-compact {
+    color: #e5e7eb;
+  }
+}
+
+.zone-select-compact {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.zone-select-compact:hover {
+  border-color: #2563eb;
+}
+
+.zone-select-compact:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .zone-select-compact {
+    background: #1a1a1a;
+    border-color: #404040;
+    color: #e0e0e0;
+  }
+  
+  .zone-select-compact:hover {
+    border-color: #3b82f6;
+  }
+}
+
+.loading-zones-compact {
+  text-align: center;
+  padding: 1rem;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .loading-zones-compact {
+    color: #999;
+  }
+}
+
+/* Old camera zone grid styles - can be removed if not used elsewhere */
 .camera-zone-grid {
   display: flex;
   flex-direction: column;
