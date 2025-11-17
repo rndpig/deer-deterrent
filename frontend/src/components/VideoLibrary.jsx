@@ -114,7 +114,9 @@ function VideoLibrary({ onStartReview }) {
       console.error('Error starting review:', error)
       alert('❌ Failed to start review: ' + error.message)
     }
-  }  const handleUploadClick = () => {
+  }
+  
+  const handleUploadClick = () => {
     document.getElementById('video-upload-input').click()
   }
 
