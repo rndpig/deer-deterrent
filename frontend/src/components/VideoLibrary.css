@@ -30,7 +30,7 @@
 
 .header-right {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 1rem;
 }
 
@@ -48,7 +48,6 @@
   white-space: nowrap;
   display: flex;
   align-items: center;
-  height: 100%;
 }
 
 .btn-upload-video:hover:not(:disabled) {
@@ -66,7 +65,7 @@
 .training-status-card {
   background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
   padding: 1.25rem 1.5rem;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 2px solid #93c5fd;
   min-width: 280px;
 }
