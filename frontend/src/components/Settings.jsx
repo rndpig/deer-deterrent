@@ -63,8 +63,8 @@ function Settings({ settings, setSettings }) {
         const data = await response.json()
         
         if (data.cameras && data.cameras.length > 0) {
-          // Sort cameras in preferred order: Side > Driveway > Backyard > Front
-          const cameraOrder = ['side', 'driveway', 'backyard', 'front']
+          // Sort cameras in preferred order: Side > Driveway > Front > Backyard
+          const cameraOrder = ['side', 'driveway', 'front', 'backyard']
           const sortedCameras = data.cameras.sort((a, b) => {
             const aIndex = cameraOrder.findIndex(name => a.name.toLowerCase().includes(name))
             const bIndex = cameraOrder.findIndex(name => b.name.toLowerCase().includes(name))
@@ -86,8 +86,8 @@ function Settings({ settings, setSettings }) {
         const fallbackCameras = [
           { name: 'Side', id: 'side', type: 'camera' },
           { name: 'Driveway', id: 'driveway', type: 'camera' },
-          { name: 'Backyard', id: 'backyard', type: 'camera' },
-          { name: 'Front', id: 'front', type: 'camera' }
+          { name: 'Front', id: 'front', type: 'camera' },
+          { name: 'Backyard', id: 'backyard', type: 'camera' }
         ]
         setRingCameras(fallbackCameras)
         const initialZones = {}

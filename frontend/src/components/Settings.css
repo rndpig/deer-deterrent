@@ -276,7 +276,8 @@
 .settings-actions {
   display: flex;
   justify-content: flex-end;
-  padding-top: 1.5rem;
+  padding-top: 1rem;
+  margin-top: 1rem;
   border-top: 1px solid #e0e0e0;
 }
 
@@ -342,9 +343,9 @@
 
 /* Camera Zone Grid - Single Row Dropdowns */
 .camera-zone-compact {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .camera-zone-row-compact {
