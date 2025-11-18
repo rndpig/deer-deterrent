@@ -37,7 +37,7 @@ function Dashboard({ stats, settings }) {
           <p className="stat-value">{stats?.total_deer || 0}</p>
         </div>
         <div className="stat-card">
-          <h3>Irrigation Activated</h3>
+          <h3>Irrigation Zone Activations</h3>
           <p className="stat-value">{stats?.irrigation_activated || 0}</p>
         </div>
         <div className="stat-card">
