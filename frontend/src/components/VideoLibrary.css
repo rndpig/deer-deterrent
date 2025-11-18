@@ -32,6 +32,7 @@
   display: flex;
   align-items: stretch;
   gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .btn-upload-video {
@@ -67,7 +68,7 @@
   padding: 1.25rem 1.5rem;
   border-radius: 8px;
   border: 2px solid #93c5fd;
-  min-width: 280px;
+  min-width: 200px;
 }
 
 .status-row {
@@ -75,6 +76,7 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.75rem;
+  gap: 1rem;
 }
 
 .status-row:last-child {
