@@ -1,8 +1,8 @@
 # =============================================================================
-# Coordinator Dockerfile - Ring Webhook Handler & Sprinkler Controller
+# Coordinator Dockerfile - Ring Webhook Handler & Irrigation Controller
 # =============================================================================
 # This container coordinates between Ring camera events, ML detection,
-# and Rainbird sprinkler activation
+# and Rainbird irrigation activation
 # =============================================================================
 
 FROM python:3.11-slim
@@ -33,7 +33,7 @@ RUN mkdir -p /app/logs /app/snapshots /app/config
 RUN cat > /app/coordinator_service.py << 'EOF'
 #!/usr/bin/env python3
 """
-Coordinator Service - Ring Camera → ML Detection → Sprinkler Activation
+Coordinator Service - Ring Camera → ML Detection → Irrigation Activation
 Handles the complete flow from camera event to deterrent action
 """
 
@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title="Deer Deterrent Coordinator",
-    description="Coordinates Ring cameras, ML detection, and sprinkler activation",
+    description="Coordinates Ring cameras, ML detection, and irrigation activation",
     version="1.0.0"
 )
 
@@ -84,7 +84,7 @@ CONFIG = {
     "RAINBIRD_DURATION_SECONDS": int(os.getenv("RAINBIRD_DURATION_SECONDS", "30")),
     "CONFIDENCE_THRESHOLD": float(os.getenv("CONFIDENCE_THRESHOLD", "0.75")),
     "COOLDOWN_SECONDS": int(os.getenv("COOLDOWN_SECONDS", "300")),
-    "ENABLE_SPRINKLER": os.getenv("ENABLE_SPRINKLER", "true").lower() == "true",
+    "ENABLE_IRRIGATION": os.getenv("ENABLE_IRRIGATION", "true").lower() == "true",
     "ACTIVE_HOURS_START": int(os.getenv("ACTIVE_HOURS_START", "0")),
     "ACTIVE_HOURS_END": int(os.getenv("ACTIVE_HOURS_END", "24")),
 }
@@ -140,13 +140,13 @@ async def detect_deer(image_bytes: bytes) -> Dict[str, Any]:
 
 
 async def activate_rainbird(zone: str, duration: int) -> bool:
-    """Activate Rainbird sprinkler zone"""
+    """Activate Rainbird irrigation zone"""
     if not CONFIG["RAINBIRD_IP"]:
         logger.warning("Rainbird IP not configured, skipping activation")
         return False
     
-    if not CONFIG["ENABLE_SPRINKLER"]:
-        logger.info("Sprinkler activation disabled (dry-run mode)")
+    if not CONFIG["ENABLE_IRRIGATION"]:
+        logger.info("Irrigation activation disabled (dry-run mode)")
         return True
     
     try:
@@ -168,11 +168,11 @@ async def activate_rainbird(zone: str, duration: int) -> bool:
             # For now, just simulate success
             await asyncio.sleep(0.1)
             
-            logger.info(f"✓ Sprinkler zone {zone} activated for {duration}s")
+            logger.info(f"✓ Irrigation zone {zone} activated for {duration}s")
             return True
             
     except Exception as e:
-        logger.error(f"Failed to activate sprinkler: {e}")
+        logger.error(f"Failed to activate irrigation: {e}")
         return False
 
 
@@ -279,10 +279,10 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
             "confidence": confidence,
             "snapshot_path": str(snapshot_path),
             "detections": detection_result.get("detections", []),
-            "sprinkler_activated": False
+            "irrigation_activated": False
         }
         
-        # If deer detected, check cooldown and activate sprinkler
+        # If deer detected, check cooldown and activate irrigation
         if deer_detected:
             now = datetime.now()
             
@@ -294,7 +294,7 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
                     await log_to_backend(event_data)
                     return
             
-            # Activate sprinkler
+            # Activate irrigation
             success = await activate_rainbird(
                 CONFIG["RAINBIRD_ZONE"],
                 CONFIG["RAINBIRD_DURATION_SECONDS"]
@@ -302,7 +302,7 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
             
             if success:
                 last_activation_time = now
-                event_data["sprinkler_activated"] = True
+                event_data["irrigation_activated"] = True
                 logger.info("✓✓✓ DEER DETERRENT ACTIVATED ✓✓✓")
         
         # Log to backend
@@ -499,7 +499,7 @@ async def health_check():
         "active_hours": is_active_hours(),
         "config": {
             "rainbird_configured": bool(CONFIG["RAINBIRD_IP"]),
-            "sprinkler_enabled": CONFIG["ENABLE_SPRINKLER"],
+            "irrigation_enabled": CONFIG["ENABLE_IRRIGATION"],
             "cooldown_seconds": CONFIG["COOLDOWN_SECONDS"],
             "confidence_threshold": CONFIG["CONFIDENCE_THRESHOLD"]
         }

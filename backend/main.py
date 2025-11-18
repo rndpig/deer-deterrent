@@ -56,7 +56,7 @@ except ImportError:
 
 app = FastAPI(
     title="Deer Deterrent API",
-    description="Real-time deer detection and sprinkler control",
+    description="Real-time deer detection and irrigation control",
     version="1.0.0"
 )
 
@@ -97,7 +97,7 @@ class DetectionEvent(BaseModel):
     deer_count: int
     max_confidence: float
     image_path: str
-    sprinklers_activated: bool
+    irrigation_activated: bool
     reviewed: bool = False
     review_type: Optional[str] = None
     id: Optional[str] = None
@@ -130,7 +130,7 @@ class SystemSettings(BaseModel):
     active_hours_enabled: bool = True
     active_hours_start: int = 20
     active_hours_end: int = 6
-    sprinkler_duration: int = 30
+    irrigation_duration: int = 30
     zone_cooldown: int = 300
     dry_run: bool = True
 
@@ -138,7 +138,7 @@ class ZoneConfig(BaseModel):
     name: str
     camera_id: str
     detection_area: Dict[str, float]
-    sprinkler_zones: List[int]
+    irrigation_zones: List[int]
 
 # In-memory storage (will move to SQLite later)
 settings = SystemSettings()
@@ -146,7 +146,7 @@ zones = []
 stats = {
     "total_detections": 0,
     "total_deer": 0,
-    "sprinklers_activated": 0,
+    "irrigation_activated": 0,
     "last_detection": None
 }
 
@@ -481,7 +481,7 @@ async def run_video_detection(video: UploadFile = File(...)):
                 "zone_name": "Video Analysis",
                 "deer_count": results["total_deer_detected"],
                 "max_confidence": results["max_confidence"],
-                "sprinklers_activated": False,
+                "irrigation_activated": False,
                 "image_path": f"/api/video-frames/{detections_by_frame[0]['frame_number']:06d}.jpg" if detections_by_frame else None,
                 "video_analysis": True,
                 "video_filename": video.filename,
@@ -638,7 +638,7 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
                     "deer_count": len(detections) if detections else 0,
                     "confidence": max_conf,
                     "max_confidence": max_conf,
-                    "sprinklers_activated": False,
+                    "irrigation_activated": False,
                     "image_path": f"/api/training-frames/{frame_filename}",
                     "annotated_image_path": f"/api/training-frames/{annotated_filename}" if detections else None,
                     "video_source": video_filename,
@@ -881,7 +881,7 @@ async def load_demo_data():
     detection_history = []
     stats["total_detections"] = 0
     stats["total_deer"] = 0
-    stats["sprinklers_activated"] = 0
+    stats["irrigation_activated"] = 0
     
     # Generate synthetic demo data
     camera_names = ["Front Camera", "Side Camera", "Driveway Camera", "Backyard Camera"]
@@ -903,13 +903,13 @@ async def load_demo_data():
             "deer_count": deer_count,
             "max_confidence": confidence,
             "image_path": None,  # No actual image for synthetic data
-            "sprinklers_activated": not settings.dry_run
+            "irrigation_activated": not settings.dry_run
         })
         
         stats["total_detections"] += 1
         stats["total_deer"] += deer_count
         if not settings.dry_run:
-            stats["sprinklers_activated"] += 1
+            stats["irrigation_activated"] += 1
     
     # Sort by timestamp (most recent first)
     detection_history.sort(key=lambda x: x["timestamp"], reverse=True)
@@ -938,7 +938,7 @@ async def clear_demo_data():
     detection_history = []
     stats["total_detections"] = 0
     stats["total_deer"] = 0
-    stats["sprinklers_activated"] = 0
+    stats["irrigation_activated"] = 0
     stats["last_detection"] = None
     
     # Broadcast update

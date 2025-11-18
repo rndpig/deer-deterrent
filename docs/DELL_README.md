@@ -63,9 +63,9 @@ A complete AI-powered deer deterrent system running on a single Dell PC:
 │  │  :3000   │  │  :8000   │  │  :8001   │  │  :55123  │  │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘  │
 │                                                             │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
+│  ├──────────┐  ├──────────┐  ├──────────┐  ├──────────┐  │
 │  │Coordinator│ │ Database │  │   MQTT   │  │  Logs &  │  │
-│  │ Sprinkler│  │PostgreSQL│  │  Broker  │  │Snapshots │  │
+│  │Irrigation│  │PostgreSQL│  │  Broker  │  │Snapshots │  │
 │  │  :5000   │  │  :5432   │  │  :1883   │  │          │  │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘  │
 │                                                             │
@@ -76,7 +76,7 @@ A complete AI-powered deer deterrent system running on a single Dell PC:
 **Features:**
 - ✅ Real-time deer detection using YOLOv8
 - ✅ Ring camera integration via MQTT
-- ✅ Automatic sprinkler activation
+- ✅ Automatic irrigation activation
 - ✅ Web dashboard for monitoring
 - ✅ Detection history and analytics
 - ✅ Configurable cooldown periods
@@ -240,7 +240,7 @@ RAINBIRD_DURATION_SECONDS=30
 # Detection
 CONFIDENCE_THRESHOLD=0.75      # Higher = fewer false positives
 COOLDOWN_SECONDS=300           # 5 minutes between activations
-ENABLE_SPRINKLER=false         # Start with false for testing!
+ENABLE_IRRIGATION=false         # Start with false for testing!
 
 # Time-based (24-hour format)
 ACTIVE_HOURS_START=0           # 0 = midnight
@@ -255,15 +255,15 @@ JWT_SECRET_KEY=ChangeMe789!
 
 ## 🧪 Testing Before Going Live
 
-**IMPORTANT:** Always test with `ENABLE_SPRINKLER=false` first!
+**IMPORTANT:** Always test with `ENABLE_IRRIGATION=false` first!
 
-1. Deploy system with sprinkler disabled
+1. Deploy system with irrigation disabled
 2. Trigger Ring camera motion
 3. Check logs: `./manage.sh logs coordinator`
 4. Verify deer detection works
 5. Monitor for 2-3 days
 6. Adjust `CONFIDENCE_THRESHOLD` if needed
-7. Then enable sprinkler: `ENABLE_SPRINKLER=true`
+7. Then enable irrigation: `ENABLE_IRRIGATION=true`
 
 ---
 
@@ -295,7 +295,7 @@ JWT_SECRET_KEY=ChangeMe789!
 
 On Dell OptiPlex 9020:
 - **ML Inference:** 2-5 seconds per image
-- **End-to-end latency:** 3-7 seconds (motion → sprinkler)
+- **End-to-end latency:** 3-7 seconds (motion → irrigation)
 - **CPU usage:** 20-40% during detection
 - **RAM usage:** 4-6 GB total
 - **Disk usage:** ~2-5 GB (grows with snapshots)
@@ -388,7 +388,7 @@ Your system is fully operational when:
 - ✅ Dashboard loads and shows data
 - ✅ Ring cameras connected and sending events
 - ✅ ML detector successfully identifies deer
-- ✅ Sprinklers activate when deer detected
+- ✅ Irrigation activates when deer detected
 - ✅ Events logged to database
 - ✅ Cooldown prevents activation spam
 - ✅ System stable for 7+ days
@@ -410,7 +410,7 @@ Your system is fully operational when:
 
 ## 💡 Pro Tips
 
-1. **Start with ENABLE_SPRINKLER=false** - Test thoroughly before activating sprinklers
+1. **Start with ENABLE_IRRIGATION=false** - Test thoroughly before activating irrigation
 2. **Monitor for a week** - Understand your false positive rate
 3. **Adjust confidence threshold** - Find the sweet spot for your environment
 4. **Set active hours** - Maybe only run at night when deer are active

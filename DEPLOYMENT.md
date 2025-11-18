@@ -705,7 +705,7 @@ cat docker-compose.yml
 - ⚙️ **Backend** (FastAPI API server)
 - 🤖 **ML Detector** (YOLOv8 inference service)
 - 📹 **Ring MQTT** (Ring camera integration)
-- 🚰 **Coordinator** (Sprinkler activation logic)
+- 🚰 **Coordinator** (Irrigation activation logic)
 - 🗄️ **Database** (PostgreSQL)
 - 📡 **MQTT Broker** (Mosquitto)
 
@@ -1016,7 +1016,7 @@ docker compose logs coordinator | tail -30
 # - Downloaded snapshot
 # - ML detection ran
 # - Deer detected with confidence X.XX
-# - Sprinkler activation attempted
+# - Irrigation activation attempted
 ```
 
 ### 9.3 View Logs
@@ -1274,8 +1274,8 @@ Before going live with deer detection:
 - ✅ Ring camera connected and receiving events
 - ✅ Rainbird controller responding to commands
 - ✅ ML detector accurately identifying deer (>75% confidence)
-- ✅ Cooldown period configured (prevent sprinkler spam)
-- ✅ Test detection → sprinkler activation pipeline
+- ✅ Cooldown period configured (prevent irrigation spam)
+- ✅ Test detection → irrigation activation pipeline
 - ✅ Set up daily backups
 - ✅ Configure time-based rules (e.g., only active at night)
 - ✅ Monitor logs for first few days
@@ -1305,7 +1305,7 @@ Once you have deer images:
 **Add zone mapping:**
 
 ```bash
-# Configure different sprinkler zones for different cameras
+# Configure different irrigation zones for different cameras
 # Edit configs/zones.yaml
 ```
 
@@ -1391,7 +1391,7 @@ nslookup google.com
 | 3000 | Frontend | Web dashboard UI |
 | 8000 | Backend | API server |
 | 8001 | ML Detector | YOLO inference service |
-| 5000 | Coordinator | Webhook receiver & sprinkler control |
+| 5000 | Coordinator | Webhook receiver & irrigation control |
 | 5432 | PostgreSQL | Database |
 | 1883 | MQTT | Ring camera events |
 | 55123 | Ring MQTT UI | Ring configuration web interface |
@@ -1415,7 +1415,7 @@ Problem: System not detecting deer
    ├─ No → Train custom model or use wildlife-specific model
    └─ Yes → Check logs for detection results
 
-Problem: Sprinkler not activating
+Problem: Irrigation not activating
 ├─ Is Rainbird controller reachable?
 │  ├─ No → Check network, verify RAINBIRD_IP
 │  └─ Yes → Continue
@@ -1458,7 +1458,7 @@ For general Ubuntu/Docker help:
 The system will automatically:
 1. Monitor Ring cameras for motion
 2. Detect deer using ML
-3. Activate sprinklers when deer appear
+3. Activate irrigation when deer appear
 4. Log all events to the dashboard
 5. Prevent false positives with cooldown
 6. Run 24/7 reliably

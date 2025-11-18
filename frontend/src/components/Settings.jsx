@@ -10,7 +10,7 @@ function Settings({ settings, setSettings }) {
     active_hours_enabled: true,
     active_hours_start: 20,
     active_hours_end: 6,
-    sprinkler_duration: 30,
+    irrigation_duration: 30,
     zone_cooldown: 300,
     dry_run: true
   }
@@ -293,8 +293,8 @@ function Settings({ settings, setSettings }) {
                 min="5"
                 max="300"
                 step="5"
-                value={localSettings.sprinkler_duration || 30}
-                onChange={(e) => handleChange('sprinkler_duration', parseInt(e.target.value))}
+                value={localSettings.irrigation_duration || 30}
+                onChange={(e) => handleChange('irrigation_duration', parseInt(e.target.value))}
               />
               <label htmlFor="cooldown">Cooldown (min)</label>
               <input

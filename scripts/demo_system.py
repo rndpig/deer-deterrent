@@ -1,7 +1,7 @@
 """
 Demo/Test mode for deer deterrent system using static images.
 This allows testing the full detection pipeline without needing live camera feeds
-or working sprinkler controllers.
+or working irrigation controllers.
 """
 import os
 import sys
@@ -28,7 +28,7 @@ class MockDeerDeterrentSystem:
         print("Deer Deterrent System - DEMO MODE")
         print("=" * 60)
         print("\nUsing static images for testing")
-        print("No actual cameras or sprinklers will be used\n")
+        print("No actual cameras or irrigation will be used\n")
         
         # Initialize detector
         model_path = os.getenv("MODEL_PATH", "models/production/best.pt")
@@ -99,7 +99,7 @@ class MockDeerDeterrentSystem:
                 print(f"     Size: {int(bbox['x2']-bbox['x1'])}x{int(bbox['y2']-bbox['y1'])} px")
             
             # Simulate zone mapping
-            print(f"\n   💦 [DEMO] Would activate sprinklers:")
+            print(f"\n   💦 [DEMO] Would activate irrigation:")
             print(f"      Zone: Garage North (Zone #2)")
             print(f"      Duration: 30 seconds")
             print(f"      Cooldown: 5 minutes")

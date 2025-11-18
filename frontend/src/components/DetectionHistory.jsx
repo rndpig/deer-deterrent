@@ -83,7 +83,7 @@ function DetectionHistory() {
                     {(detection.max_confidence * 100).toFixed(1)}%
                   </td>
                   <td className="action">
-                    {detection.sprinklers_activated ? '💦 Activated' : '🧪 Demo'}
+                    {detection.irrigation_activated ? '💦 Activated' : '🧪 Demo'}
                   </td>
                   <td>
                     {detection.image_path && (

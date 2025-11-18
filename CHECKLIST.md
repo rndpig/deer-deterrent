@@ -178,7 +178,7 @@ Use this checklist to track your progress through the Dell deployment process.
 - [ ] Updated `RAINBIRD_IP` (will find later: `___.___.___.___ `)
 - [ ] Set `CONFIDENCE_THRESHOLD=0.75`
 - [ ] Set `COOLDOWN_SECONDS=300`
-- [ ] Set `ENABLE_SPRINKLER=false` (testing mode!)
+- [ ] Set `ENABLE_IRRIGATION=false` (testing mode!)
 - [ ] Set `ACTIVE_HOURS_START=0`
 - [ ] Set `ACTIVE_HOURS_END=24`
 - [ ] Saved `.env.dell` file
@@ -250,7 +250,7 @@ Use this checklist to track your progress through the Dell deployment process.
 
 ### Manual Rainbird Test
 - [ ] Used Rainbird mobile app to activate zone 1
-- [ ] Verified sprinklers activate correctly
+- [ ] Verified irrigation activates correctly
 - [ ] Noted which zone covers deer-prone area: Zone _____
 - [ ] Updated `.env.dell` with correct `RAINBIRD_ZONE`
 
@@ -268,14 +268,14 @@ Use this checklist to track your progress through the Dell deployment process.
 - [ ] Checked logs for test event processing
 
 ### End-to-End Test (Dry Run)
-- [ ] Verified `ENABLE_SPRINKLER=false` in `.env.dell`
+- [ ] Verified `ENABLE_IRRIGATION=false` in `.env.dell`
 - [ ] Triggered Ring camera motion event
 - [ ] Checked coordinator logs for:
   - [ ] Motion event received
   - [ ] Snapshot downloaded
   - [ ] ML detection ran
   - [ ] Deer detected (or not detected - based on scene)
-  - [ ] Sprinkler activation logged (but not actually activated)
+  - [ ] Irrigation activation logged (but not actually activated)
 - [ ] Checked backend logs for event storage
 - [ ] Viewed detection in dashboard
 
@@ -291,12 +291,12 @@ Use this checklist to track your progress through the Dell deployment process.
 ## ✅ Production Readiness Checklist
 
 ### Final Configuration
-- [ ] `ENABLE_SPRINKLER=true` set in `.env.dell`
+- [ ] `ENABLE_IRRIGATION=true` set in `.env.dell`
 - [ ] Confidence threshold optimized: `CONFIDENCE_THRESHOLD=_____`
 - [ ] Cooldown period set appropriately: `COOLDOWN_SECONDS=_____`
 - [ ] Active hours configured: `ACTIVE_HOURS_START=_____ to ACTIVE_HOURS_END=_____`
 - [ ] Correct Rainbird zone: `RAINBIRD_ZONE=_____`
-- [ ] Sprinkler duration set: `RAINBIRD_DURATION_SECONDS=_____`
+- [ ] Irrigation duration set: `RAINBIRD_DURATION_SECONDS=_____`
 - [ ] Restarted all services: `./manage.sh restart`
 
 ### Live Testing
@@ -306,7 +306,7 @@ Use this checklist to track your progress through the Dell deployment process.
   - [ ] Motion detected
   - [ ] Snapshot processed
   - [ ] Deer detected
-  - [ ] **SPRINKLER ACTIVATED** ✓
+  - [ ] **IRRIGATION ACTIVATED** ✓
   - [ ] Event logged to database
   - [ ] Visible in dashboard
 - [ ] Verified cooldown working (second event within cooldown not activated)
@@ -326,7 +326,7 @@ Use this checklist to track your progress through the Dell deployment process.
 ### Week 1 Checklist
 - [ ] Day 1: Check logs daily for errors
 - [ ] Day 2: Verify detection accuracy
-- [ ] Day 3: Confirm sprinkler activations working
+- [ ] Day 3: Confirm irrigation activations working
 - [ ] Day 4: Check disk space: `df -h`
 - [ ] Day 5: Review false positive rate
 - [ ] Day 6: Adjust confidence threshold if needed
@@ -370,7 +370,7 @@ Use this checklist to track your progress through the Dell deployment process.
 ### Common Issues
 - **Ring not connecting**: Check `RING_REFRESH_TOKEN`, may need to re-authenticate
 - **ML detector slow**: Normal on CPU, 2-5 seconds expected
-- **Sprinkler not activating**: Check `ENABLE_SPRINKLER=true` and `RAINBIRD_IP`
+- **Irrigation not activating**: Check `ENABLE_IRRIGATION=true` and `RAINBIRD_IP`
 - **Dashboard not loading**: Check `DELL_SERVER_IP` in `.env.dell` matches actual IP
 - **Out of disk space**: Run `./manage.sh clean` to free up space
 
@@ -414,9 +414,9 @@ Your system is fully operational when:
 - ✅ Frontend dashboard accessible and loading
 - ✅ Ring cameras connected and sending events
 - ✅ ML detector successfully identifying deer
-- ✅ Sprinklers activating when deer detected
+- ✅ Irrigation activating when deer detected
 - ✅ Events logged to database and visible in dashboard
-- ✅ Cooldown period preventing sprinkler spam
+- ✅ Cooldown period preventing irrigation spam
 - ✅ System running stable for 7+ days
 - ✅ Backups completing successfully
 

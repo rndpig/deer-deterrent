@@ -297,12 +297,10 @@ sudo systemctl enable containerd
    RING_PASSWORD=your-ring-password
    RING_2FA_METHOD=email
    RAINBIRD_IP=192.168.1.XXX
-   CONFIDENCE_THRESHOLD=0.75
-   COOLDOWN_SECONDS=300
-   ENABLE_SPRINKLER=false
-   ```
-   
-   Save with: Ctrl+O, Enter, Ctrl+X
+CONFIDENCE_THRESHOLD=0.75
+COOLDOWN_SECONDS=300
+ENABLE_IRRIGATION=false
+```   Save with: Ctrl+O, Enter, Ctrl+X
 
 6. **Deploy all services:**
    ```bash
@@ -423,7 +421,8 @@ sudo systemctl enable containerd
      - "Motion detected on camera..."
      - "Downloaded snapshot"
      - "ML detection: X objects, deer=true/false"
-     - "Sprinkler activation attempted" (but won't actually activate yet)
+          - "Deer detected (or not detected - based on scene)"
+     - "Irrigation activation attempted" (but won't actually activate yet)
 
 5. **View dashboard:**
    - Open browser: `http://192.168.1.200:3000`
@@ -437,15 +436,15 @@ sudo systemctl enable containerd
 ### Step 9: Go Live
 
 1. **Monitor for a few days in dry-run mode:**
-   - Keep `ENABLE_SPRINKLER=false`
+   - Keep `ENABLE_IRRIGATION=false`
    - Check logs daily: `./manage.sh logs coordinator`
    - Review detection accuracy
    - Adjust `CONFIDENCE_THRESHOLD` if needed
 
-2. **When ready, enable sprinkler:**
+2. **When ready, enable irrigation:**
    ```bash
    nano .env.dell
-   # Change: ENABLE_SPRINKLER=true
+   # Change: ENABLE_IRRIGATION=true
    # Save and exit
    
    docker compose restart coordinator
@@ -453,7 +452,7 @@ sudo systemctl enable containerd
 
 3. **Test live activation:**
    - Trigger camera motion with a real deer (or simulate)
-   - Verify sprinkler activates
+   - Verify irrigation activates
    - Check cooldown works (second event doesn't activate immediately)
 
 4. **Set up automated backups:**
@@ -526,7 +525,7 @@ nano .env.dell
 docker compose restart coordinator
 ```
 
-### Sprinkler activating too often?
+### Irrigation activating too often?
 ```bash
 nano .env.dell
 # Increase: COOLDOWN_SECONDS=600  (10 minutes)
@@ -642,7 +641,7 @@ Your system is ready when:
 - [ ] Ring cameras connected and sending events
 - [ ] ML detector successfully processes images
 - [ ] Test detection works (deer identified correctly)
-- [ ] Sprinkler activates when deer detected (if enabled)
+- [ ] Irrigation activates when deer detected (if enabled)
 - [ ] Events appear in dashboard history
 - [ ] System stable for 24+ hours
 - [ ] Backups running successfully
@@ -673,4 +672,4 @@ Your Dell OptiPlex is now a powerful, always-on deer deterrent system!
 
 **Happy deer deterring!** 🦌💦
 
-*Remember: Start with `ENABLE_SPRINKLER=false` to test thoroughly before going live!*
+*Remember: Start with `ENABLE_IRRIGATION=false` to test thoroughly before going live!*

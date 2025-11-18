@@ -1,6 +1,6 @@
-# Camera-to-Sprinkler Zone Mapping Configuration
+# Camera-to-Irrigation Zone Mapping Configuration
 
-# Define detection zones in camera view and their corresponding sprinkler zones
+# Define detection zones in camera view and their corresponding irrigation zones
 zones:
   - name: "Front Garden - Left"
     camera_id: "front_camera"
@@ -11,7 +11,7 @@ zones:
       x_max: 0.5
       y_max: 1.0
     # Rainbird zones to activate
-    sprinkler_zones: [1, 2]
+    irrigation_zones: [1, 2]
     
   - name: "Front Garden - Right"
     camera_id: "front_camera"
@@ -20,7 +20,7 @@ zones:
       y_min: 0.0
       x_max: 1.0
       y_max: 1.0
-    sprinkler_zones: [3, 4]
+    irrigation_zones: [3, 4]
     
   - name: "Side Yard"
     camera_id: "side_camera"
@@ -29,7 +29,7 @@ zones:
       y_min: 0.0
       x_max: 1.0
       y_max: 1.0
-    sprinkler_zones: [5, 6]
+    irrigation_zones: [5, 6]
     
   - name: "Back Garden"
     camera_id: "back_camera"
@@ -38,7 +38,7 @@ zones:
       y_min: 0.0
       x_max: 1.0
       y_max: 1.0
-    sprinkler_zones: [7, 8, 9]
+    irrigation_zones: [7, 8, 9]
 
 # Camera configuration
 cameras:
@@ -65,8 +65,8 @@ settings:
   # Minimum time between activations of the same zone (seconds)
   zone_cooldown: 300  # 5 minutes
   
-  # Sprinkler activation duration (seconds)
-  sprinkler_duration: 30
+  # Irrigation activation duration (seconds)
+  irrigation_duration: 30
   
   # Active hours (24-hour format)
   active_hours:
@@ -80,5 +80,5 @@ settings:
     required_detections: 2
     within_seconds: 10
   
-  # Dry run mode (don't actually activate sprinklers)
+  # Dry run mode (don't actually activate irrigation)
   dry_run: false

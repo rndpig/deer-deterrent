@@ -1,6 +1,6 @@
 # Deer Deterrent System
 
-An AI-powered deer detection and deterrent system that monitors Ring camera feeds and automatically activates sprinklers to deter deer from your property.
+An AI-powered deer detection and deterrent system that monitors Ring camera feeds and automatically activates irrigation to deter deer from your property.
 
 ## Overview
 
@@ -29,7 +29,7 @@ The system consists of 7 Docker containers working together:
 
 1. **Ring-MQTT** - Bridges Ring cameras to MQTT broker
 2. **MQTT Broker (Mosquitto)** - Message bus for camera events
-3. **Coordinator** - Orchestrates detection workflow and sprinkler control
+3. **Coordinator** - Orchestrates detection workflow and irrigation control
 4. **ML Detector** - YOLOv8 model for deer detection
 5. **Backend API** - FastAPI service for data persistence
 6. **PostgreSQL Database** - Stores detection history
@@ -51,7 +51,7 @@ Ring Camera → Ring-MQTT → MQTT Broker → Coordinator → ML Detector
 - T+0s: Motion detected by Ring camera
 - T+1s: Snapshot cached via MQTT
 - T+1.2s: ML analysis completed
-- T+1.5s: Sprinkler activated (if deer detected)
+- T+1.5s: Irrigation activated (if deer detected)
 - T+2s: Event logged to database
 
 ## Project Structure
@@ -128,8 +128,8 @@ Edit `.env` with your specific settings:
 RING_REFRESH_TOKEN=your_token_here
 RING_TOKEN=your_token_here
 
-# Rainbird Controller (optional - for sprinkler activation)
-RAINBIRD_IP=192.168.1.100
+# Rainbird Controller (optional - for irrigation activation)
+RAAINBIRD_IP=192.168.1.100
 RAINBIRD_PASSWORD=your_password
 
 # ML Detection Settings
@@ -171,10 +171,10 @@ git pull && docker compose build && docker compose up -d
 
 ## Safety & Features
 
-- ✅ **Configurable cooldown periods** - Prevent excessive sprinkler activation
+- ✅ **Configurable cooldown periods** - Prevent excessive irrigation activation
 - ✅ **Time-based rules** - Only activate during specified hours
 - ✅ **Confidence thresholds** - Reduce false positives
-- ✅ **Dry-run mode** - Test without activating sprinklers (set `RAINBIRD_IP=""`)
+- ✅ **Dry-run mode** - Test without activating irrigation (set `RAINBIRD_IP=""`)
 - ✅ **Historical logging** - Track all detections with timestamps and images
 
 ## Performance
@@ -182,7 +182,7 @@ git pull && docker compose build && docker compose up -d
 **Tested on Dell OptiPlex 7050 (i7-6700, 16GB RAM):**
 - Motion detection: <1 second
 - ML inference: ~200ms
-- Total response time: ~1.5 seconds from motion to sprinkler activation
+- Total response time: ~1.5 seconds from motion to irrigation activation
 
 ## Troubleshooting
 
@@ -218,4 +218,4 @@ MIT License - See LICENSE file for details
 
 ## Project Status
 
-✅ **Production Ready** - System is deployed and actively logging deer detections. Sprinkler integration tested and functional.
+✅ **Production Ready** - System is deployed and actively logging deer detections. Irrigation integration tested and functional.

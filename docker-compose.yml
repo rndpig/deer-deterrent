@@ -9,7 +9,7 @@
 # Services:
 # - Backend: FastAPI server (port 8000)
 # - ML Detector: YOLOv8 inference service (port 8001)
-# - Coordinator: Ring webhook handler & sprinkler controller (port 5000)
+  # Coordinator - Orchestrates Ring camera events -> ML detection -> Irrigation activation
 # - Database: PostgreSQL (port 5432)
 # - MQTT Broker: Mosquitto (port 1883)
 # - Ring MQTT: Ring camera integration (port 55123)
@@ -208,7 +208,7 @@ services:
       - deer-network
 
   # ===========================================================================
-  # Coordinator - Ring Webhook Handler & Sprinkler Controller
+  # Coordinator - Ring Webhook Handler & Irrigation Controller
   # ===========================================================================
   coordinator:
     build:
@@ -238,7 +238,7 @@ services:
       - RAINBIRD_DURATION_SECONDS=${RAINBIRD_DURATION_SECONDS:-30}
       - CONFIDENCE_THRESHOLD=${CONFIDENCE_THRESHOLD:-0.75}
       - COOLDOWN_SECONDS=${COOLDOWN_SECONDS:-300}
-      - ENABLE_SPRINKLER=${ENABLE_SPRINKLER:-true}
+      - ENABLE_IRRIGATION=${ENABLE_IRRIGATION:-true}
       - ACTIVE_HOURS_START=${ACTIVE_HOURS_START:-0}
       - ACTIVE_HOURS_END=${ACTIVE_HOURS_END:-24}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}

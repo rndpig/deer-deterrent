@@ -37,8 +37,8 @@ function Dashboard({ stats, settings }) {
           <p className="stat-value">{stats?.total_deer || 0}</p>
         </div>
         <div className="stat-card">
-          <h3>Sprinklers Activated</h3>
-          <p className="stat-value">{stats?.sprinklers_activated || 0}</p>
+          <h3>Irrigation Activated</h3>
+          <p className="stat-value">{stats?.irrigation_activated || 0}</p>
         </div>
         <div className="stat-card">
           <h3>Season Status</h3>
@@ -108,7 +108,9 @@ function Dashboard({ stats, settings }) {
                       {(detection.max_confidence * 100).toFixed(1)}%
                     </td>
                     <td className="action">
-                      {detection.sprinklers_activated ? '💦 Activated' : '🧪 Demo'}
+                      <td>
+                      {detection.irrigation_activated ? '💦 Activated' : '🧪 Demo'}
+                    </td>
                     </td>
                     <td>
                       {detection.image_path ? (

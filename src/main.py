@@ -56,7 +56,7 @@ class DeerDeterrentSystem:
         # Dry run mode
         self.dry_run = self.settings.get('dry_run', False)
         if self.dry_run:
-            print("\n⚠ DRY RUN MODE - Sprinklers will NOT be activated")
+            print("\n⚠ DRY RUN MODE - Irrigation will NOT be activated")
         
         print("\n✓ System initialized successfully")
         self._print_season_status()
@@ -166,7 +166,7 @@ class DeerDeterrentSystem:
         print(f"   Count: {deer_count}")
         print(f"   Confidence: {max_conf:.2f}")
         
-        # Activate sprinklers
+        # Activate irrigation
         self.activate_deterrent(zone)
     
     def _confirm_detection(self, zone_name: str, detections: List[dict]) -> bool:
@@ -197,25 +197,25 @@ class DeerDeterrentSystem:
         return len(self.recent_detections[zone_name]) >= required
     
     def activate_deterrent(self, zone: dict) -> None:
-        """Activate sprinklers for a zone."""
+        """Activate irrigation for a zone."""
         zone_name = zone['name']
-        sprinkler_zones = zone['sprinkler_zones']
-        duration = self.settings['sprinkler_duration']
+        irrigation_zones = zone['irrigation_zones']
+        duration = self.settings['irrigation_duration']
         cooldown = self.settings['zone_cooldown']
         
         # Check if in season
         if not self.is_in_season():
-            print(f"   ⚠ OFF-SEASON: Sprinklers not activated (irrigation winterized)")
+            print(f"   ⚠ OFF-SEASON: Irrigation not activated (system winterized)")
             print(f"   ℹ Detection logged for analysis")
             return
         
         if self.dry_run:
-            print(f"   [DRY RUN] Would activate sprinklers: zones {sprinkler_zones}")
+            print(f"   [DRY RUN] Would activate irrigation: zones {irrigation_zones}")
             print(f"   [DRY RUN] Duration: {duration}s")
         else:
-            print(f"   💦 Activating sprinklers: zones {sprinkler_zones}")
+            print(f"   💦 Activating irrigation: zones {irrigation_zones}")
             success = self.rainbird.activate_multiple_zones(
-                sprinkler_zones,
+                irrigation_zones,
                 duration=duration,
                 cooldown=cooldown
             )

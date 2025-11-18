@@ -280,7 +280,7 @@ def main():
         print("\n⚠ Actual zone activation disabled in test mode")
         print("To test activation, uncomment the code below!")
         
-        # Uncomment to test (USE WITH CAUTION - will actually run sprinklers!)
+        # Uncomment to test (USE WITH CAUTION - will actually run irrigation!)
         # print("\nTesting zone 2 (Garage North) for 1 minute...")
         # controller.activate_zone(2, duration=60)
         
