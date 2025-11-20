@@ -149,12 +149,30 @@ function VideoLibrary({ onStartReview }) {
         filename: file.name
       })
       
-      // Set default date/time to now
-      const now = new Date()
-      const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-        .toISOString()
-        .slice(0, 16)
-      setCaptureDateTime(localDateTime)
+      // Try to use recording timestamp from metadata, otherwise default to now
+      let defaultDateTime
+      if (result.recording_timestamp) {
+        try {
+          // Parse the recording timestamp and convert to local datetime-local format
+          const recordingDate = new Date(result.recording_timestamp)
+          defaultDateTime = new Date(recordingDate.getTime() - recordingDate.getTimezoneOffset() * 60000)
+            .toISOString()
+            .slice(0, 16)
+        } catch (e) {
+          console.warn('Could not parse recording timestamp, using current time')
+          const now = new Date()
+          defaultDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+            .toISOString()
+            .slice(0, 16)
+        }
+      } else {
+        // Default to current time if no metadata found
+        const now = new Date()
+        defaultDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+          .toISOString()
+          .slice(0, 16)
+      }
+      setCaptureDateTime(defaultDateTime)
       
       // Set default camera to side (first in dropdown)
       setSelectedCamera('side')

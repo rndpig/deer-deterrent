@@ -176,6 +176,30 @@ async def activate_rainbird(zone: str, duration: int) -> bool:
         return False
 
 
+async def log_ring_event(camera_id: str, event_type: str, snapshot_available: bool = False,
+                        snapshot_size: int = None, recording_url: str = None) -> Optional[int]:
+    """Log Ring event to backend database for diagnostics"""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(
+                f"{CONFIG['BACKEND_API_URL']}/api/ring-events",
+                json={
+                    "camera_id": camera_id,
+                    "event_type": event_type,
+                    "timestamp": datetime.now().isoformat(),
+                    "snapshot_available": snapshot_available,
+                    "snapshot_size": snapshot_size,
+                    "recording_url": recording_url
+                }
+            )
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("event_id")
+    except Exception as e:
+        logger.error(f"Failed to log Ring event: {e}")
+    return None
+
+
 async def log_to_backend(event_data: Dict[str, Any]):
     """Log detection event to backend database"""
     try:
@@ -189,7 +213,7 @@ async def log_to_backend(event_data: Dict[str, Any]):
         logger.error(f"Failed to log to backend: {e}")
 
 
-async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: bytes = None, snapshot_url: str = None, source: str = "unknown"):
+async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: bytes = None, snapshot_url: str = None, source: str = "unknown", ring_event_id: int = None):
     """Process a camera motion event"""
     global last_activation_time
     
@@ -282,6 +306,21 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
             "irrigation_activated": False
         }
         
+        # Update Ring event with detection result
+        if ring_event_id:
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    await client.patch(
+                        f"{CONFIG['BACKEND_API_URL']}/api/ring-events/{ring_event_id}",
+                        json={
+                            "processed": True,
+                            "deer_detected": deer_detected,
+                            "confidence": confidence
+                        }
+                    )
+            except Exception as e:
+                logger.error(f"Failed to update Ring event: {e}")
+        
         # If deer detected, check cooldown and activate irrigation
         if deer_detected:
             now = datetime.now()
@@ -358,6 +397,19 @@ def on_mqtt_message(client, userdata, msg):
             if payload.upper() == "ON":
                 logger.info(f"⚡ INSTANT motion detected on camera {camera_id}")
                 
+                # Log Ring event if within active hours
+                ring_event_id = None
+                if is_active_hours():
+                    snapshot_available = camera_id in camera_snapshots
+                    snapshot_size = len(camera_snapshots[camera_id]) if snapshot_available else None
+                    ring_event_id = await log_ring_event(
+                        camera_id=camera_id,
+                        event_type="motion",
+                        snapshot_available=snapshot_available,
+                        snapshot_size=snapshot_size
+                    )
+                    logger.info(f"Logged Ring event ID: {ring_event_id}")
+                
                 # Check if we have a cached snapshot
                 if camera_id in camera_snapshots:
                     logger.info(f"✓ Using cached snapshot ({len(camera_snapshots[camera_id])} bytes)")
@@ -367,7 +419,8 @@ def on_mqtt_message(client, userdata, msg):
                         "camera_id": camera_id,
                         "snapshot_bytes": camera_snapshots[camera_id],
                         "timestamp": datetime.now().isoformat(),
-                        "source": "mqtt_snapshot"
+                        "source": "mqtt_snapshot",
+                        "ring_event_id": ring_event_id
                     })
                 else:
                     logger.warning(f"No cached snapshot for camera {camera_id}, will wait for recording URL")
@@ -386,6 +439,17 @@ def on_mqtt_message(client, userdata, msg):
                 if recording_url:
                     logger.info(f"Recording URL available for camera {camera_id}, eventId={event_id}")
                     
+                    # Log Ring event if within active hours
+                    ring_event_id = None
+                    if is_active_hours():
+                        ring_event_id = await log_ring_event(
+                            camera_id=camera_id,
+                            event_type="recording",
+                            snapshot_available=False,
+                            recording_url=recording_url
+                        )
+                        logger.info(f"Logged Ring recording event ID: {ring_event_id}")
+                    
                     # Only use recording URL as fallback if we don't have a snapshot
                     if camera_id not in camera_snapshots:
                         logger.info("No cached snapshot, using recording URL (slower)")
@@ -393,7 +457,8 @@ def on_mqtt_message(client, userdata, msg):
                             "camera_id": camera_id,
                             "snapshot_url": recording_url,
                             "timestamp": datetime.now().isoformat(),
-                            "source": "recording_url"
+                            "source": "recording_url",
+                            "ring_event_id": ring_event_id
                         })
                     else:
                         logger.info("Already processed with cached snapshot, skipping recording URL")
@@ -445,7 +510,8 @@ async def process_event_queue():
                     timestamp=event["timestamp"],
                     snapshot_bytes=event.get("snapshot_bytes"),
                     snapshot_url=event.get("snapshot_url"),
-                    source=event.get("source", "unknown")
+                    source=event.get("source", "unknown"),
+                    ring_event_id=event.get("ring_event_id")
                 )
                 
                 event_queue.task_done()

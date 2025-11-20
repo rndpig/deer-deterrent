@@ -98,11 +98,31 @@ def init_database():
         )
     """)
     
+    # Ring events log (for diagnostics)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ring_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            camera_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            snapshot_available BOOLEAN DEFAULT 0,
+            snapshot_size INTEGER,
+            recording_url TEXT,
+            processed BOOLEAN DEFAULT 0,
+            deer_detected BOOLEAN,
+            detection_confidence REAL,
+            error_message TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
     # Create indexes for common queries
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_frames_video ON frames(video_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_frames_training ON frames(selected_for_training)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_detections_frame ON detections(frame_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_annotations_frame ON annotations(frame_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_ring_events_camera ON ring_events(camera_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_ring_events_timestamp ON ring_events(timestamp)")
     
     # Migration: Add camera and captured_at columns if they don't exist
     cursor.execute("PRAGMA table_info(videos)")
@@ -503,3 +523,79 @@ def select_diverse_frames(target_count: int = 120) -> List[int]:
     
     conn.close()
     return selected_frame_ids
+
+
+# Ring event logging functions
+def log_ring_event(camera_id: str, event_type: str, timestamp: str, 
+                   snapshot_available: bool = False, snapshot_size: int = None,
+                   recording_url: str = None) -> int:
+    """Log a Ring camera event for diagnostics."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        INSERT INTO ring_events (camera_id, event_type, timestamp, snapshot_available,
+                                snapshot_size, recording_url, processed)
+        VALUES (?, ?, ?, ?, ?, ?, 0)
+    """, (camera_id, event_type, timestamp, snapshot_available, snapshot_size, recording_url))
+    
+    event_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    return event_id
+
+
+def update_ring_event_result(event_id: int, processed: bool = True, 
+                             deer_detected: bool = None, confidence: float = None,
+                             error_message: str = None):
+    """Update Ring event with detection results."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    updates = ["processed = ?"]
+    params = [processed]
+    
+    if deer_detected is not None:
+        updates.append("deer_detected = ?")
+        params.append(deer_detected)
+    
+    if confidence is not None:
+        updates.append("detection_confidence = ?")
+        params.append(confidence)
+    
+    if error_message is not None:
+        updates.append("error_message = ?")
+        params.append(error_message)
+    
+    params.append(event_id)
+    
+    query = f"UPDATE ring_events SET {', '.join(updates)} WHERE id = ?"
+    cursor.execute(query, params)
+    
+    conn.commit()
+    conn.close()
+
+
+def get_ring_events(hours: int = 24, camera_id: str = None) -> List[Dict]:
+    """Get Ring events from the last N hours."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    query = """
+        SELECT * FROM ring_events 
+        WHERE datetime(timestamp) >= datetime('now', '-{} hours')
+    """.format(hours)
+    
+    params = []
+    if camera_id:
+        query += " AND camera_id = ?"
+        params.append(camera_id)
+    
+    query += " ORDER BY timestamp DESC"
+    
+    cursor.execute(query, params)
+    events = [dict(row) for row in cursor.fetchall()]
+    
+    conn.close()
+    return events

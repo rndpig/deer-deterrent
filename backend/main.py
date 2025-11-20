@@ -190,6 +190,45 @@ async def get_stats():
     }
 
 
+@app.get("/api/ring-events")
+async def get_ring_events(hours: int = 24, camera_id: str = None):
+    """Get Ring MQTT events from the last N hours for diagnostics."""
+    events = db.get_ring_events(hours=hours, camera_id=camera_id)
+    return {
+        "events": events,
+        "total_count": len(events),
+        "hours": hours,
+        "camera_id": camera_id
+    }
+
+
+@app.post("/api/ring-events")
+async def create_ring_event(event: dict):
+    """Log a Ring MQTT event for diagnostics."""
+    event_id = db.log_ring_event(
+        camera_id=event.get("camera_id"),
+        event_type=event.get("event_type"),
+        timestamp=event.get("timestamp"),
+        snapshot_available=event.get("snapshot_available", False),
+        snapshot_size=event.get("snapshot_size"),
+        recording_url=event.get("recording_url")
+    )
+    return {"status": "success", "event_id": event_id}
+
+
+@app.patch("/api/ring-events/{event_id}")
+async def update_ring_event(event_id: int, update: dict):
+    """Update Ring event with detection results."""
+    db.update_ring_event_result(
+        event_id=event_id,
+        processed=update.get("processed", True),
+        deer_detected=update.get("deer_detected"),
+        confidence=update.get("confidence"),
+        error_message=update.get("error_message")
+    )
+    return {"status": "success"}
+
+
 @app.get("/api/detections", response_model=List[DetectionEvent])
 async def get_detections(limit: int = 50, offset: int = 0):
     """Get detection history (excludes manual video uploads)."""
@@ -563,6 +602,30 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
         import cv2
         import numpy as np
         
+        # Try to extract recording timestamp from video metadata
+        recording_timestamp = None
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', str(video_save_path)],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                import json
+                metadata = json.loads(result.stdout)
+                # Try to get creation time from metadata
+                format_tags = metadata.get('format', {}).get('tags', {})
+                # Check various possible metadata fields
+                for key in ['creation_time', 'date', 'datetime', 'com.apple.quicktime.creationdate']:
+                    if key in format_tags:
+                        recording_timestamp = format_tags[key]
+                        logger.info(f"Extracted recording timestamp from video metadata: {recording_timestamp}")
+                        break
+        except Exception as e:
+            logger.warning(f"Could not extract video metadata: {e}")
+        
         # Open video for frame extraction
         cap = cv2.VideoCapture(str(video_save_path))
         if not cap.isOpened():
@@ -669,6 +732,7 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
             "fps": fps,
             "total_frames": total_frames,
             "duration_seconds": duration_seconds,
+            "recording_timestamp": recording_timestamp,
             "message": f"Video processed: {frames_extracted} frames extracted (every {sample_rate} frame{'s' if sample_rate > 1 else ''}), {detections_found} with detections"
         }
     
