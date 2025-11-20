@@ -169,6 +169,12 @@ async def root():
     }
 
 
+@app.get("/health")
+async def health():
+    """Simple health check for Docker."""
+    return {"status": "healthy"}
+
+
 @app.get("/api/health")
 async def health_check():
     """Detailed health check."""
