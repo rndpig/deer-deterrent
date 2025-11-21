@@ -176,25 +176,25 @@ async def activate_rainbird(zone: str, duration: int) -> bool:
         return False
 
 
-async def log_ring_event(camera_id: str, event_type: str, snapshot_available: bool = False,
-                        snapshot_size: int = None, recording_url: str = None) -> Optional[int]:
-    """Log Ring event to backend database for diagnostics"""
+def log_ring_event(camera_id: str, event_type: str, snapshot_available: bool = False,
+                   snapshot_size: int = None, recording_url: str = None) -> Optional[int]:
+    """Log Ring event to backend database for diagnostics (synchronous for MQTT thread)"""
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(
-                f"{CONFIG['BACKEND_API_URL']}/api/ring-events",
-                json={
-                    "camera_id": camera_id,
-                    "event_type": event_type,
-                    "timestamp": datetime.now().isoformat(),
-                    "snapshot_available": snapshot_available,
-                    "snapshot_size": snapshot_size,
-                    "recording_url": recording_url
-                }
-            )
-            if response.status_code == 200:
-                result = response.json()
-                return result.get("event_id")
+        response = requests.post(
+            f"{CONFIG['BACKEND_API_URL']}/api/ring-events",
+            json={
+                "camera_id": camera_id,
+                "event_type": event_type,
+                "timestamp": datetime.now().isoformat(),
+                "snapshot_available": snapshot_available,
+                "snapshot_size": snapshot_size,
+                "recording_url": recording_url
+            },
+            timeout=5.0
+        )
+        if response.status_code == 200:
+            result = response.json()
+            return result.get("event_id")
     except Exception as e:
         logger.error(f"Failed to log Ring event: {e}")
     return None
@@ -397,19 +397,20 @@ def on_mqtt_message(client, userdata, msg):
             if payload.upper() == "ON":
                 logger.info(f"⚡ INSTANT motion detected on camera {camera_id}")
                 
-                # Log Ring event if within active hours (async task)
+                # Log Ring event if within active hours (synchronous call)
                 ring_event_id = None
                 if is_active_hours():
                     snapshot_available = camera_id in camera_snapshots
                     snapshot_size = len(camera_snapshots[camera_id]) if snapshot_available else None
-                    # Schedule async logging task
-                    asyncio.create_task(log_ring_event(
+                    # Call synchronous logging function (runs in MQTT thread)
+                    ring_event_id = log_ring_event(
                         camera_id=camera_id,
                         event_type="motion",
                         snapshot_available=snapshot_available,
                         snapshot_size=snapshot_size
-                    ))
-                    logger.info("Scheduled Ring event logging task")
+                    )
+                    if ring_event_id:
+                        logger.info(f"Logged Ring event #{ring_event_id}")
                 
                 # Check if we have a cached snapshot
                 if camera_id in camera_snapshots:
@@ -421,7 +422,7 @@ def on_mqtt_message(client, userdata, msg):
                         "snapshot_bytes": camera_snapshots[camera_id],
                         "timestamp": datetime.now().isoformat(),
                         "source": "mqtt_snapshot",
-                        "ring_event_id": None  # Will be set later
+                        "ring_event_id": ring_event_id
                     })
                 else:
                     logger.warning(f"No cached snapshot for camera {camera_id}, will wait for recording URL")
@@ -440,15 +441,17 @@ def on_mqtt_message(client, userdata, msg):
                 if recording_url:
                     logger.info(f"Recording URL available for camera {camera_id}, eventId={event_id}")
                     
-                    # Log Ring event if within active hours (async task)
+                    # Log Ring event if within active hours (synchronous call)
+                    ring_event_id = None
                     if is_active_hours():
-                        asyncio.create_task(log_ring_event(
+                        ring_event_id = log_ring_event(
                             camera_id=camera_id,
                             event_type="recording",
                             snapshot_available=False,
                             recording_url=recording_url
-                        ))
-                        logger.info("Scheduled Ring recording event logging task")
+                        )
+                        if ring_event_id:
+                            logger.info(f"Logged Ring recording event #{ring_event_id}")
                     
                     # Only use recording URL as fallback if we don't have a snapshot
                     if camera_id not in camera_snapshots:
@@ -458,7 +461,7 @@ def on_mqtt_message(client, userdata, msg):
                             "snapshot_url": recording_url,
                             "timestamp": datetime.now().isoformat(),
                             "source": "recording_url",
-                            "ring_event_id": None  # Will be set later
+                            "ring_event_id": ring_event_id
                         })
                     else:
                         logger.info("Already processed with cached snapshot, skipping recording URL")
