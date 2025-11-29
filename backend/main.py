@@ -654,10 +654,10 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
                 cap_temp.release()
                 
                 if ret:
-                    # Ring cameras typically put timestamp in top-left corner
-                    # Extract top-left region (adjust coordinates based on your video resolution)
+                    # Ring cameras put timestamp in bottom-right corner
+                    # Extract bottom-right region (adjust coordinates based on your video resolution)
                     h, w = first_frame.shape[:2]
-                    timestamp_region = first_frame[0:int(h*0.08), 0:int(w*0.35)]  # Top-left ~8% height, ~35% width
+                    timestamp_region = first_frame[int(h*0.92):h, int(w*0.65):w]  # Bottom-right ~8% height, ~35% width
                     
                     # Preprocess for better OCR: convert to grayscale, increase contrast
                     gray = cv2.cvtColor(timestamp_region, cv2.COLOR_BGR2GRAY)
