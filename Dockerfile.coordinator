@@ -110,6 +110,43 @@ def is_active_hours() -> bool:
         return current_hour >= start or current_hour < end
 
 
+async def request_high_res_snapshot(camera_id: str) -> Optional[bytes]:
+    """Request a fresh high-resolution snapshot from Ring via ring-mqtt"""
+    try:
+        # Ring-MQTT exposes an API to request fresh snapshots
+        # Publish a command to request snapshot refresh
+        if mqtt_client and mqtt_client.is_connected():
+            # Topic format: ring/{location_id}/camera/{camera_id}/snapshot/refresh
+            # The location_id is in the MQTT topic structure we've seen
+            location_id = "dp1hu9-2i94c-0"  # From the MQTT topics we observed
+            refresh_topic = f"ring/{location_id}/camera/{camera_id}/snapshot/refresh"
+            
+            logger.info(f"Requesting high-res snapshot for camera {camera_id}...")
+            mqtt_client.publish(refresh_topic, "ON")
+            
+            # Wait up to 3 seconds for the new snapshot to arrive
+            for i in range(30):  # 30 * 0.1s = 3 seconds
+                await asyncio.sleep(0.1)
+                if camera_id in camera_snapshots:
+                    snapshot_bytes = camera_snapshots[camera_id]
+                    # Check if it's reasonably sized (>50KB suggests high-res)
+                    if len(snapshot_bytes) > 50000:
+                        logger.info(f"✓ Received high-res snapshot: {len(snapshot_bytes)} bytes")
+                        return snapshot_bytes
+            
+            # If we got here, we either got a low-res or no snapshot
+            if camera_id in camera_snapshots:
+                snapshot_bytes = camera_snapshots[camera_id]
+                logger.warning(f"Snapshot may be low-res: {len(snapshot_bytes)} bytes")
+                return snapshot_bytes
+            else:
+                logger.warning(f"No snapshot received after refresh request")
+                return None
+    except Exception as e:
+        logger.error(f"Failed to request high-res snapshot: {e}")
+        return None
+
+
 async def download_snapshot(url: str) -> bytes:
     """Download image from URL"""
     try:
@@ -215,7 +252,7 @@ async def log_to_backend(event_data: Dict[str, Any]):
         logger.error(f"Failed to log to backend: {e}")
 
 
-async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: bytes = None, snapshot_url: str = None, source: str = "unknown", ring_event_id: int = None):
+async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: bytes = None, snapshot_url: str = None, request_snapshot: bool = False, source: str = "unknown", ring_event_id: int = None):
     """Process a camera motion event"""
     global last_activation_time
     
@@ -227,8 +264,24 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
             logger.info(f"Outside active hours ({CONFIG['ACTIVE_HOURS_START']}-{CONFIG['ACTIVE_HOURS_END']}), skipping")
             return
         
-        # Get image bytes - either from cache or download
-        if snapshot_bytes:
+        # Get image bytes - prioritize high-res snapshot request
+        if request_snapshot:
+            # Request a fresh high-resolution snapshot
+            logger.info(f"Requesting fresh high-resolution snapshot from Ring...")
+            image_bytes = await request_high_res_snapshot(camera_id)
+            
+            if not image_bytes:
+                logger.error(f"Failed to get high-res snapshot for camera {camera_id}")
+                return
+            
+            # Save for debugging
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            snapshot_path = Path(f"/app/snapshots/{ts}_{camera_id}_highres.jpg")
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_path.write_bytes(image_bytes)
+            logger.info(f"Saved high-res snapshot: {snapshot_path} ({len(image_bytes)} bytes)")
+            
+        elif snapshot_bytes:
             # FAST PATH: Use cached snapshot from MQTT
             logger.info(f"✓ Using cached snapshot: {len(snapshot_bytes)} bytes")
             image_bytes = snapshot_bytes
@@ -414,20 +467,17 @@ def on_mqtt_message(client, userdata, msg):
                     if ring_event_id:
                         logger.info(f"Logged Ring event #{ring_event_id}")
                 
-                # Check if we have a cached snapshot
-                if camera_id in camera_snapshots:
-                    logger.info(f"✓ Using cached snapshot ({len(camera_snapshots[camera_id])} bytes)")
-                    
-                    # Put event in queue with cached snapshot
-                    event_queue.put({
-                        "camera_id": camera_id,
-                        "snapshot_bytes": camera_snapshots[camera_id],
-                        "timestamp": datetime.now().isoformat(),
-                        "source": "mqtt_snapshot",
-                        "ring_event_id": ring_event_id
-                    })
-                else:
-                    logger.warning(f"No cached snapshot for camera {camera_id}, will wait for recording URL")
+                # Request fresh high-res snapshot instead of using cached low-res
+                logger.info(f"Requesting high-resolution snapshot for detection...")
+                
+                # Put event in queue to request high-res snapshot
+                event_queue.put({
+                    "camera_id": camera_id,
+                    "request_snapshot": True,  # Signal to request fresh snapshot
+                    "timestamp": datetime.now().isoformat(),
+                    "source": "motion_triggered",
+                    "ring_event_id": ring_event_id
+                })
             return
         
         # Handle event_select messages (SLOW - 30-60 seconds, used as fallback)
@@ -515,6 +565,7 @@ async def process_event_queue():
                     timestamp=event["timestamp"],
                     snapshot_bytes=event.get("snapshot_bytes"),
                     snapshot_url=event.get("snapshot_url"),
+                    request_snapshot=event.get("request_snapshot", False),
                     source=event.get("source", "unknown"),
                     ring_event_id=event.get("ring_event_id")
                 )
