@@ -153,8 +153,10 @@ function VideoLibrary({ onStartReview }) {
       let defaultDateTime
       if (result.recording_timestamp) {
         try {
-          // Parse the recording timestamp and convert to local datetime-local format
-          const recordingDate = new Date(result.recording_timestamp)
+          // Parse the recording timestamp (format: "YYYY-MM-DD HH:MM:SS")
+          // Replace space with 'T' to make it ISO 8601 compatible
+          const isoTimestamp = result.recording_timestamp.replace(' ', 'T')
+          const recordingDate = new Date(isoTimestamp)
           defaultDateTime = new Date(recordingDate.getTime() - recordingDate.getTimezoneOffset() * 60000)
             .toISOString()
             .slice(0, 16)
@@ -174,8 +176,12 @@ function VideoLibrary({ onStartReview }) {
       }
       setCaptureDateTime(defaultDateTime)
       
-      // Set default camera to side (first in dropdown)
-      setSelectedCamera('side')
+      // Set default camera from detected_camera, or default to 'side'
+      if (result.detected_camera) {
+        setSelectedCamera(result.detected_camera.toLowerCase())
+      } else {
+        setSelectedCamera('side')
+      }
       
       setShowConfirmDialog(true)
     } catch (error) {
