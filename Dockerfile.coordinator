@@ -84,7 +84,7 @@ CONFIG = {
     "RAINBIRD_PASSWORD": os.getenv("RAINBIRD_PASSWORD", ""),
     "RAINBIRD_ZONE": os.getenv("RAINBIRD_ZONE", "1"),
     "RAINBIRD_DURATION_SECONDS": int(os.getenv("RAINBIRD_DURATION_SECONDS", "30")),
-    "CONFIDENCE_THRESHOLD": float(os.getenv("CONFIDENCE_THRESHOLD", "0.75")),
+    "CONFIDENCE_THRESHOLD": float(os.getenv("CONFIDENCE_THRESHOLD", "0.30")),
     "COOLDOWN_SECONDS": int(os.getenv("COOLDOWN_SECONDS", "300")),
     "ENABLE_IRRIGATION": os.getenv("ENABLE_IRRIGATION", "true").lower() == "true",
     "ACTIVE_HOURS_START": int(os.getenv("ACTIVE_HOURS_START", "0")),
@@ -467,47 +467,24 @@ def on_mqtt_message(client, userdata, msg):
                     if ring_event_id:
                         logger.info(f"Logged Ring event #{ring_event_id}")
                 
-                # Motion detected - recording URL will arrive in ~30 seconds with high-res video
-                logger.info(f"Motion detected - waiting for recording URL with high-res video")
-            return
-        
-        # Handle event_select messages (SLOW - 30-60 seconds, used as fallback)
-        if "event_select" in topic and len(parts) >= 6 and parts[4] == "event_select":
-            logger.info(f"MQTT message: {topic} = {payload[:200]}")
-            
-            try:
-                data = json.loads(payload)
-                camera_id = parts[3]
-                recording_url = data.get("recordingUrl")
-                event_id = data.get("eventId")
-                
-                if recording_url:
-                    logger.info(f"Recording URL available for camera {camera_id}, eventId={event_id}")
-                    
-                    # Log Ring event if within active hours (synchronous call)
-                    ring_event_id = None
-                    if is_active_hours():
-                        ring_event_id = log_ring_event(
-                            camera_id=camera_id,
-                            event_type="recording",
-                            snapshot_available=False,
-                            recording_url=recording_url
-                        )
-                        if ring_event_id:
-                            logger.info(f"Logged Ring recording event #{ring_event_id}")
-                    
-                    # Always use recording URL for high-resolution frame extraction
-                    logger.info("Processing recording URL for high-res frame extraction")
+                # Use instant snapshot for real-time detection (low-res but fast)
+                if camera_id in camera_snapshots:
+                    logger.info(f"✓ Using instant snapshot for real-time detection")
                     event_queue.put({
                         "camera_id": camera_id,
-                        "snapshot_url": recording_url,
+                        "snapshot_bytes": camera_snapshots[camera_id],
                         "timestamp": datetime.now().isoformat(),
-                        "source": "recording_url_highres",
+                        "source": "instant_snapshot",
                         "ring_event_id": ring_event_id
                     })
-                    
-            except json.JSONDecodeError:
-                logger.warning(f"Failed to parse event_select JSON: {payload[:100]}")
+                else:
+                    logger.warning(f"No cached snapshot available for {camera_id}")
+            return
+        
+        # Handle event_select messages (SLOW - 30-60 seconds, skip for now since we use instant snapshots)
+        if "event_select" in topic and len(parts) >= 6 and parts[4] == "event_select":
+            # Skip processing recording URLs - we already processed instant snapshot
+            logger.debug(f"Skipping event_select (already processed instant snapshot): {topic}")
             return
         
     except Exception as e:
