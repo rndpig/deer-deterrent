@@ -674,9 +674,10 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
                     logger.info(f"OCR extracted text from video overlay: {ocr_text.strip()}")
                     
                     # Parse timestamp from OCR text
-                    # Ring format is typically: "MM/DD/YYYY HH:MM:SS AM/PM TIMEZONE"
-                    # Example: "11/23/2025 01:22:36 AM CST"
+                    # Ring format can be: "MM/DD/YYYY HH:MM:SS AM/PM TIMEZONE" or "MM/DD/YYYY HH:MM:SS TIMEZONE"
+                    # Example: "11/23/2025 01:22:36 AM CST" or "11/23/2025 01:22:36 CST"
                     import re
+                    # Try pattern with AM/PM first
                     timestamp_pattern = r'(\d{1,2}/\d{1,2}/\d{4})\s+(\d{1,2}:\d{2}:\d{2})\s+(AM|PM)'
                     match = re.search(timestamp_pattern, ocr_text)
                     if match:
@@ -690,6 +691,20 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
                         ocr_timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
                         logger.info(f"Successfully extracted timestamp from video overlay: {ocr_timestamp}")
                         recording_timestamp = ocr_timestamp  # Override filename timestamp
+                    else:
+                        # Try pattern without AM/PM (already in 24-hour format)
+                        timestamp_pattern = r'(\d{1,2}/\d{1,2}/\d{4})\s+(\d{1,2}:\d{2}:\d{2})'
+                        match = re.search(timestamp_pattern, ocr_text)
+                        if match:
+                            date_part = match.group(1)  # MM/DD/YYYY
+                            time_part = match.group(2)  # HH:MM:SS
+                            
+                            # Parse as 24-hour format
+                            dt_str = f"{date_part} {time_part}"
+                            dt = datetime.strptime(dt_str, "%m/%d/%Y %H:%M:%S")
+                            ocr_timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
+                            logger.info(f"Successfully extracted timestamp from video overlay: {ocr_timestamp}")
+                            recording_timestamp = ocr_timestamp  # Override filename timestamp
         except Exception as e:
             logger.warning(f"Could not extract timestamp from video overlay using OCR: {e}")
         
