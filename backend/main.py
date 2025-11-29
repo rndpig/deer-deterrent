@@ -686,7 +686,6 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
                     logger.info(f"Found creation_time in metadata: {metadata_time}")
                     # Parse the ISO timestamp and convert to local time if needed
                     try:
-                        from datetime import datetime
                         # Parse ISO format: 2025-11-23T07:22:36.000000Z
                         dt = datetime.fromisoformat(metadata_time.replace('Z', '+00:00'))
                         # Convert to local time string
