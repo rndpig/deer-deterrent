@@ -641,6 +641,59 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
         except Exception as e:
             logger.warning(f"Could not parse Ring filename for timestamp: {e}")
         
+        # Try to extract timestamp from video overlay using OCR
+        ocr_timestamp = None
+        try:
+            import pytesseract
+            from PIL import Image
+            
+            # Open video and extract first frame
+            cap_temp = cv2.VideoCapture(str(video_save_path))
+            if cap_temp.isOpened():
+                ret, first_frame = cap_temp.read()
+                cap_temp.release()
+                
+                if ret:
+                    # Ring cameras typically put timestamp in top-left corner
+                    # Extract top-left region (adjust coordinates based on your video resolution)
+                    h, w = first_frame.shape[:2]
+                    timestamp_region = first_frame[0:int(h*0.08), 0:int(w*0.35)]  # Top-left ~8% height, ~35% width
+                    
+                    # Preprocess for better OCR: convert to grayscale, increase contrast
+                    gray = cv2.cvtColor(timestamp_region, cv2.COLOR_BGR2GRAY)
+                    # Increase contrast
+                    gray = cv2.convertScaleAbs(gray, alpha=2.0, beta=0)
+                    # Apply threshold to get white text on black background
+                    _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+                    
+                    # Convert to PIL Image for tesseract
+                    pil_img = Image.fromarray(thresh)
+                    
+                    # Extract text using OCR
+                    ocr_text = pytesseract.image_to_string(pil_img, config='--psm 6')
+                    logger.info(f"OCR extracted text from video overlay: {ocr_text.strip()}")
+                    
+                    # Parse timestamp from OCR text
+                    # Ring format is typically: "MM/DD/YYYY HH:MM:SS AM/PM TIMEZONE"
+                    # Example: "11/23/2025 01:22:36 AM CST"
+                    import re
+                    timestamp_pattern = r'(\d{1,2}/\d{1,2}/\d{4})\s+(\d{1,2}:\d{2}:\d{2})\s+(AM|PM)'
+                    match = re.search(timestamp_pattern, ocr_text)
+                    if match:
+                        date_part = match.group(1)  # MM/DD/YYYY
+                        time_part = match.group(2)  # HH:MM:SS
+                        am_pm = match.group(3)       # AM or PM
+                        
+                        # Parse and convert to 24-hour format
+                        from datetime import datetime
+                        dt_str = f"{date_part} {time_part} {am_pm}"
+                        dt = datetime.strptime(dt_str, "%m/%d/%Y %I:%M:%S %p")
+                        ocr_timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
+                        logger.info(f"Successfully extracted timestamp from video overlay: {ocr_timestamp}")
+                        recording_timestamp = ocr_timestamp  # Override filename timestamp
+        except Exception as e:
+            logger.warning(f"Could not extract timestamp from video overlay using OCR: {e}")
+        
         # Try to extract metadata from video file (timestamp and camera info)
         video_metadata = {}
         try:
