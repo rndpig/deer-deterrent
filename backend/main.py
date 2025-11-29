@@ -13,10 +13,15 @@ from pathlib import Path
 import sys
 import json
 import asyncio
+import logging
 from collections import defaultdict
 import tempfile
 import shutil
 import base64
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path
 project_root = str(Path(__file__).parent.parent)
