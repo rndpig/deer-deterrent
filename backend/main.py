@@ -685,7 +685,6 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
                         am_pm = match.group(3)       # AM or PM
                         
                         # Parse and convert to 24-hour format
-                        from datetime import datetime
                         dt_str = f"{date_part} {time_part} {am_pm}"
                         dt = datetime.strptime(dt_str, "%m/%d/%Y %I:%M:%S %p")
                         ocr_timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
