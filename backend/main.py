@@ -145,6 +145,12 @@ class ZoneConfig(BaseModel):
     detection_area: Dict[str, float]
     irrigation_zones: List[int]
 
+# Ring camera device ID mapping (comment field from video metadata)
+RING_DEVICE_ID_MAP = {
+    "gml.27c3cea0rmpl.26a30e7a": "Side",  # Add more as you discover them
+    # Format: "device_id": "Camera Name"
+}
+
 # In-memory storage (will move to SQLite later)
 settings = SystemSettings()
 zones = []
@@ -654,22 +660,48 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
                 # Log all metadata tags to see what's available
                 logger.info(f"Video metadata tags: {json.dumps(format_tags, indent=2)}")
                 
-                # Try to get camera name from metadata
-                # Common fields: title, comment, description, artist, album, device_name, camera_name
-                camera_fields = ['title', 'comment', 'description', 'device_name', 'camera_name', 
-                                'com.ring.device_name', 'com.ring.camera_name', 'artist', 'album']
-                for key in camera_fields:
-                    if key in format_tags and format_tags[key]:
-                        detected_camera = format_tags[key]
-                        logger.info(f"Extracted camera name from metadata field '{key}': {detected_camera}")
-                        break
+                # Try to get camera name from Ring device ID in comment field
+                if 'comment' in format_tags:
+                    device_id = format_tags['comment']
+                    if device_id in RING_DEVICE_ID_MAP:
+                        detected_camera = RING_DEVICE_ID_MAP[device_id]
+                        logger.info(f"Mapped Ring device ID '{device_id}' to camera: {detected_camera}")
+                    else:
+                        detected_camera = device_id
+                        logger.warning(f"Unknown Ring device ID '{device_id}' - add to RING_DEVICE_ID_MAP")
                 
-                # If timestamp not found in filename, try metadata
+                # If no camera detected yet, try other fields
+                if not detected_camera:
+                    camera_fields = ['title', 'description', 'device_name', 'camera_name', 
+                                    'com.ring.device_name', 'com.ring.camera_name', 'artist', 'album']
+                    for key in camera_fields:
+                        if key in format_tags and format_tags[key]:
+                            detected_camera = format_tags[key]
+                            logger.info(f"Extracted camera name from metadata field '{key}': {detected_camera}")
+                            break
+                
+                # Try to get creation_time from metadata (this should be the actual recording time)
+                if 'creation_time' in format_tags:
+                    metadata_time = format_tags['creation_time']
+                    logger.info(f"Found creation_time in metadata: {metadata_time}")
+                    # Parse the ISO timestamp and convert to local time if needed
+                    try:
+                        from datetime import datetime
+                        # Parse ISO format: 2025-11-23T07:22:36.000000Z
+                        dt = datetime.fromisoformat(metadata_time.replace('Z', '+00:00'))
+                        # Convert to local time string
+                        recording_timestamp = dt.strftime('%Y-%m-%d %H:%M:%S')
+                        logger.info(f"Converted metadata timestamp to: {recording_timestamp}")
+                    except Exception as e:
+                        logger.warning(f"Could not parse metadata timestamp: {e}")
+                        # Keep the filename timestamp as fallback
+                
+                # If still no timestamp, try other metadata fields
                 if not recording_timestamp:
-                    for key in ['creation_time', 'date', 'datetime', 'com.apple.quicktime.creationdate']:
+                    for key in ['date', 'datetime', 'com.apple.quicktime.creationdate']:
                         if key in format_tags:
                             recording_timestamp = format_tags[key]
-                            logger.info(f"Extracted recording timestamp from video metadata: {recording_timestamp}")
+                            logger.info(f"Extracted recording timestamp from video metadata field '{key}': {recording_timestamp}")
                             break
         except Exception as e:
             logger.warning(f"Could not extract video metadata: {e}")
