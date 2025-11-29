@@ -612,30 +612,51 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
         
         import cv2
         import numpy as np
+        import re
         
-        # Try to extract recording timestamp from video metadata
+        # Try to extract recording timestamp from filename first (Ring videos: RingVideo_YYYYMMDD_HHMMSS.mp4)
         recording_timestamp = None
         try:
-            import subprocess
-            result = subprocess.run(
-                ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', str(video_save_path)],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            if result.returncode == 0:
-                import json
-                metadata = json.loads(result.stdout)
-                # Try to get creation time from metadata
-                format_tags = metadata.get('format', {}).get('tags', {})
-                # Check various possible metadata fields
-                for key in ['creation_time', 'date', 'datetime', 'com.apple.quicktime.creationdate']:
-                    if key in format_tags:
-                        recording_timestamp = format_tags[key]
-                        logger.info(f"Extracted recording timestamp from video metadata: {recording_timestamp}")
-                        break
+            # Match pattern: RingVideo_YYYYMMDD_HHMMSS
+            match = re.search(r'RingVideo_(\d{8})_(\d{6})', video.filename)
+            if match:
+                date_str = match.group(1)  # YYYYMMDD
+                time_str = match.group(2)  # HHMMSS
+                # Parse into datetime: YYYYMMDD_HHMMSS -> YYYY-MM-DD HH:MM:SS
+                year = date_str[0:4]
+                month = date_str[4:6]
+                day = date_str[6:8]
+                hour = time_str[0:2]
+                minute = time_str[2:4]
+                second = time_str[4:6]
+                recording_timestamp = f"{year}-{month}-{day} {hour}:{minute}:{second}"
+                logger.info(f"Extracted recording timestamp from Ring filename: {recording_timestamp}")
         except Exception as e:
-            logger.warning(f"Could not extract video metadata: {e}")
+            logger.warning(f"Could not parse Ring filename for timestamp: {e}")
+        
+        # If filename parsing failed, try to extract from video metadata
+        if not recording_timestamp:
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', str(video_save_path)],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    import json
+                    metadata = json.loads(result.stdout)
+                    # Try to get creation time from metadata
+                    format_tags = metadata.get('format', {}).get('tags', {})
+                    # Check various possible metadata fields
+                    for key in ['creation_time', 'date', 'datetime', 'com.apple.quicktime.creationdate']:
+                        if key in format_tags:
+                            recording_timestamp = format_tags[key]
+                            logger.info(f"Extracted recording timestamp from video metadata: {recording_timestamp}")
+                            break
+            except Exception as e:
+                logger.warning(f"Could not extract video metadata: {e}")
         
         # Open video for frame extraction
         cap = cv2.VideoCapture(str(video_save_path))
