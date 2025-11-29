@@ -614,8 +614,9 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
         import numpy as np
         import re
         
-        # Try to extract recording timestamp from filename first (Ring videos: RingVideo_YYYYMMDD_HHMMSS.mp4)
+        # Try to extract recording timestamp and camera name from filename first (Ring videos: RingVideo_YYYYMMDD_HHMMSS.mp4)
         recording_timestamp = None
+        detected_camera = None
         try:
             # Match pattern: RingVideo_YYYYMMDD_HHMMSS
             match = re.search(r'RingVideo_(\d{8})_(\d{6})', video.filename)
@@ -634,29 +635,44 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
         except Exception as e:
             logger.warning(f"Could not parse Ring filename for timestamp: {e}")
         
-        # If filename parsing failed, try to extract from video metadata
-        if not recording_timestamp:
-            try:
-                import subprocess
-                result = subprocess.run(
-                    ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', str(video_save_path)],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                if result.returncode == 0:
-                    import json
-                    metadata = json.loads(result.stdout)
-                    # Try to get creation time from metadata
-                    format_tags = metadata.get('format', {}).get('tags', {})
-                    # Check various possible metadata fields
+        # Try to extract metadata from video file (timestamp and camera info)
+        video_metadata = {}
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', str(video_save_path)],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                import json
+                metadata = json.loads(result.stdout)
+                format_tags = metadata.get('format', {}).get('tags', {})
+                video_metadata = format_tags  # Store all tags for debugging
+                
+                # Log all metadata tags to see what's available
+                logger.info(f"Video metadata tags: {json.dumps(format_tags, indent=2)}")
+                
+                # Try to get camera name from metadata
+                # Common fields: title, comment, description, artist, album, device_name, camera_name
+                camera_fields = ['title', 'comment', 'description', 'device_name', 'camera_name', 
+                                'com.ring.device_name', 'com.ring.camera_name', 'artist', 'album']
+                for key in camera_fields:
+                    if key in format_tags and format_tags[key]:
+                        detected_camera = format_tags[key]
+                        logger.info(f"Extracted camera name from metadata field '{key}': {detected_camera}")
+                        break
+                
+                # If timestamp not found in filename, try metadata
+                if not recording_timestamp:
                     for key in ['creation_time', 'date', 'datetime', 'com.apple.quicktime.creationdate']:
                         if key in format_tags:
                             recording_timestamp = format_tags[key]
                             logger.info(f"Extracted recording timestamp from video metadata: {recording_timestamp}")
                             break
-            except Exception as e:
-                logger.warning(f"Could not extract video metadata: {e}")
+        except Exception as e:
+            logger.warning(f"Could not extract video metadata: {e}")
         
         # Open video for frame extraction
         cap = cv2.VideoCapture(str(video_save_path))
@@ -765,6 +781,8 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
             "total_frames": total_frames,
             "duration_seconds": duration_seconds,
             "recording_timestamp": recording_timestamp,
+            "detected_camera": detected_camera,
+            "video_metadata": video_metadata,
             "message": f"Video processed: {frames_extracted} frames extracted (every {sample_rate} frame{'s' if sample_rate > 1 else ''}), {detections_found} with detections"
         }
     
