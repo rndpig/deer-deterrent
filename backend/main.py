@@ -157,6 +157,7 @@ RING_DEVICE_ID_MAP = {
 # Format: {filename: "CameraName"}
 VIDEO_CAMERA_OVERRIDES = {
     "RingVideo_20251205_075319.mp4": "Side",  # Actually shows green/side area
+    "RingVideo_20251205_075329.mp4": "Side",  # Actually shows green/side area
 }
 
 # In-memory storage (will move to SQLite later)
