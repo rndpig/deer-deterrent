@@ -158,6 +158,7 @@ RING_DEVICE_ID_MAP = {
 VIDEO_CAMERA_OVERRIDES = {
     "RingVideo_20251205_075319.mp4": "Side",  # Actually shows green/side area
     "RingVideo_20251205_075329.mp4": "Side",  # Actually shows green/side area
+    "RingVideo_20251115_064703.MP4": "Driveway",  # Device ID says Side but shows driveway
 }
 
 # In-memory storage (will move to SQLite later)
