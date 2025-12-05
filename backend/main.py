@@ -146,22 +146,17 @@ class ZoneConfig(BaseModel):
     irrigation_zones: List[int]
 
 # Ring camera device ID mapping (comment field from video metadata)
-# Note: Same physical camera can have multiple device IDs
+# Device ID format: gml.{camera_id}.{session_id}
+# We only use the camera_id part (middle section between periods)
 RING_DEVICE_ID_MAP = {
-    "gml.27c3cea0rmpl.26a30e7a": "Driveway",  # Mostly Driveway
-    "gml.27c3cea0rmpl.ab1ef9f8": "Driveway",  # Mostly Driveway
-    "gml.768534ffrmpl.946e582e": "Side",       # Side camera
-    # Format: "device_id": "Camera Name"
-    # Add more device IDs as they are discovered from video uploads
+    "27c3cea0rmpl": "Driveway",  # Main camera ID for Driveway
+    "768534ffrmpl": "Side",      # Main camera ID for Side
 }
 
 # Manual overrides for specific videos where device ID mapping is wrong
-# Format: {video_id: "CameraName"} or {filename_pattern: "CameraName"}
+# Format: {filename: "CameraName"}
 VIDEO_CAMERA_OVERRIDES = {
-    "RingVideo_20251205_075329.mp4": "Side",      # Green area with grass
-    "RingVideo_20251205_075319.mp4": "Driveway",  # Driveway with car
-    "RingVideo_20251120_064019.mp4": "Side",      # Green/pool area with grass
-    "RingVideo_20251115_064703.MP4": "Driveway",  # Driveway with car
+    "RingVideo_20251205_075319.mp4": "Side",  # Actually shows green/side area
 }
 
 # In-memory storage (will move to SQLite later)
@@ -742,13 +737,20 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
                 
                 # Try to get camera name from Ring device ID in comment field
                 if 'comment' in format_tags:
-                    device_id = format_tags['comment']
-                    if device_id in RING_DEVICE_ID_MAP:
-                        detected_camera = RING_DEVICE_ID_MAP[device_id]
-                        logger.info(f"Mapped Ring device ID '{device_id}' to camera: {detected_camera}")
+                    device_id_full = format_tags['comment']
+                    # Parse device ID: gml.{camera_id}.{session_id} -> extract camera_id
+                    parts = device_id_full.split('.')
+                    if len(parts) >= 2:
+                        camera_id = parts[1]  # Get the middle part
+                        if camera_id in RING_DEVICE_ID_MAP:
+                            detected_camera = RING_DEVICE_ID_MAP[camera_id]
+                            logger.info(f"Mapped camera ID '{camera_id}' (from '{device_id_full}') to camera: {detected_camera}")
+                        else:
+                            detected_camera = device_id_full
+                            logger.warning(f"Unknown camera ID '{camera_id}' from full ID '{device_id_full}' - add to RING_DEVICE_ID_MAP")
                     else:
-                        detected_camera = device_id
-                        logger.warning(f"Unknown Ring device ID '{device_id}' - add to RING_DEVICE_ID_MAP")
+                        detected_camera = device_id_full
+                        logger.warning(f"Could not parse device ID '{device_id_full}'")
                 
                 # If no camera detected yet, try other fields
                 if not detected_camera:
@@ -1623,13 +1625,20 @@ async def fix_camera_names():
                     logger.info(f"Video {video['id']}: Using manual override for '{video['filename']}' -> {detected_camera}")
                 # Try to get camera name from Ring device ID in comment field
                 elif 'comment' in format_tags:
-                    device_id = format_tags['comment']
-                    if device_id in RING_DEVICE_ID_MAP:
-                        detected_camera = RING_DEVICE_ID_MAP[device_id]
-                        logger.info(f"Video {video['id']}: Mapped Ring device ID '{device_id}' to camera: {detected_camera}")
+                    device_id_full = format_tags['comment']
+                    # Parse device ID: gml.{camera_id}.{session_id} -> extract camera_id
+                    parts = device_id_full.split('.')
+                    if len(parts) >= 2:
+                        camera_id = parts[1]  # Get the middle part
+                        if camera_id in RING_DEVICE_ID_MAP:
+                            detected_camera = RING_DEVICE_ID_MAP[camera_id]
+                            logger.info(f"Video {video['id']}: Mapped camera ID '{camera_id}' (from '{device_id_full}') to camera: {detected_camera}")
+                        else:
+                            detected_camera = device_id_full
+                            logger.warning(f"Video {video['id']}: Unknown camera ID '{camera_id}' from full ID '{device_id_full}'")
                     else:
-                        detected_camera = device_id
-                        logger.warning(f"Video {video['id']}: Unknown Ring device ID '{device_id}'")
+                        detected_camera = device_id_full
+                        logger.warning(f"Video {video['id']}: Could not parse device ID '{device_id_full}'")
                 
                 # If we found a camera name, update the database
                 if detected_camera and detected_camera != video.get('camera_name'):
