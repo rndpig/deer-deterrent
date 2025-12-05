@@ -356,7 +356,11 @@ function VideoLibrary({ onStartReview }) {
   }
 
   const formatCameraName = (video) => {
-    // Use camera field if available, otherwise fall back to camera_name
+    // Use camera_name from database (updated by backend)
+    if (video.camera_name && video.camera_name !== 'Manual Upload' && video.camera_name !== 'Unknown Camera') {
+      return video.camera_name
+    }
+    // Use camera field if available (for edit dialog)
     if (video.camera) {
       const names = {
         'side': 'Side',
@@ -366,8 +370,7 @@ function VideoLibrary({ onStartReview }) {
       }
       return names[video.camera] || video.camera
     }
-    // Skip "Manual Upload" text
-    return video.camera_name === 'Manual Upload' ? '—' : video.camera_name
+    return '—'
   }
 
   if (loading) {
