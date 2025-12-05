@@ -208,6 +208,23 @@ def get_video(video_id: int) -> Optional[Dict]:
     conn.close()
     return None
 
+def update_video_camera_name(video_id: int, camera_name: str) -> bool:
+    """Update the camera name for a video."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        UPDATE videos 
+        SET camera_name = ? 
+        WHERE id = ?
+    """, (camera_name, video_id))
+    
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    
+    return updated
+
 def delete_video(video_id: int) -> bool:
     """Delete a video and all associated frames/detections/annotations."""
     conn = get_connection()

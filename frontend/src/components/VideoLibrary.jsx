@@ -403,32 +403,29 @@ function VideoLibrary({ onStartReview }) {
             {uploading ? '⏳ Uploading...' : '📤 Upload Video'}
           </button>
           
-          {trainingStatus && (
-            <div className="training-status-card">
-              <div className="status-row">
-                <span className="status-label">Videos Collected:</span>
-                <span className={`status-value ${trainingStatus.video_count >= 10 ? 'ready' : ''}`}>
-                  {trainingStatus.video_count} / 10
-                </span>
-              </div>
-              
-              {trainingStatus.ready_for_review && !trainingStatus.reviewed_frames && (
-                <button 
-                  className="btn-start-review"
-                  onClick={handleStartReview}
-                >
-                  ✅ Start Review Process
-                </button>
-              )}
-              
-              {trainingStatus.reviewed_frames > 0 && (
-                <div className="status-row">
-                  <span className="status-label">Reviewed:</span>
-                  <span className="status-value">{trainingStatus.reviewed_frames} frames</span>
-                </div>
-              )}
+          <div className="training-status-card">
+            <div className="status-row">
+              <span className="status-label">Videos Collected:</span>
+              <span className="status-value">
+                {trainingStatus?.video_count || 0} / 10
+              </span>
             </div>
-          )}
+            
+            <button 
+              className="btn-start-review"
+              onClick={handleStartReview}
+              disabled={!trainingStatus || trainingStatus.video_count === 0}
+            >
+              ✅ Start Annotation
+            </button>
+            
+            {trainingStatus?.reviewed_frames > 0 && (
+              <div className="status-info">
+                <span className="status-label">Reviewed:</span>
+                <span className="status-value-small">{trainingStatus.reviewed_frames} frames</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

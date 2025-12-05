@@ -147,8 +147,10 @@ class ZoneConfig(BaseModel):
 
 # Ring camera device ID mapping (comment field from video metadata)
 RING_DEVICE_ID_MAP = {
-    "gml.27c3cea0rmpl.26a30e7a": "Driveway",  # Add more as you discover them
+    "gml.27c3cea0rmpl.26a30e7a": "Driveway",
+    "gml.27c3cea0rmpl.ab1ef9f8": "Driveway",  # Also appears as Driveway
     # Format: "device_id": "Camera Name"
+    # Add more device IDs as they are discovered from video uploads
 }
 
 # In-memory storage (will move to SQLite later)
@@ -784,7 +786,7 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
         # Add video to database
         video_id = db.add_video(
             filename=video.filename,
-            camera_name="Manual Upload",
+            camera_name=detected_camera or "Unknown Camera",
             duration=duration_seconds,
             fps=fps,
             total_frames=total_frames,
@@ -1521,6 +1523,68 @@ async def get_video_thumbnail(video_id: int):
     cv2.imwrite(str(thumbnail_path), frame)
     
     return FileResponse(thumbnail_path, media_type="image/jpeg")
+
+
+@app.post("/api/videos/fix-camera-names")
+async def fix_camera_names():
+    """
+    Re-extract camera names from video metadata for all existing videos.
+    This will update videos that were uploaded before the camera detection was working.
+    """
+    videos = db.get_all_videos()
+    fixed_count = 0
+    errors = []
+    
+    for video in videos:
+        try:
+            video_path = Path(video.get('video_path', ''))
+            if not video_path.exists():
+                errors.append(f"Video {video['id']}: file not found")
+                continue
+            
+            # Extract metadata using ffprobe
+            import subprocess
+            import json
+            
+            result = subprocess.run(
+                ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', str(video_path)],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode == 0:
+                metadata = json.loads(result.stdout)
+                format_tags = metadata.get('format', {}).get('tags', {})
+                
+                detected_camera = None
+                
+                # Try to get camera name from Ring device ID in comment field
+                if 'comment' in format_tags:
+                    device_id = format_tags['comment']
+                    if device_id in RING_DEVICE_ID_MAP:
+                        detected_camera = RING_DEVICE_ID_MAP[device_id]
+                        logger.info(f"Video {video['id']}: Mapped Ring device ID '{device_id}' to camera: {detected_camera}")
+                    else:
+                        detected_camera = device_id
+                        logger.warning(f"Video {video['id']}: Unknown Ring device ID '{device_id}'")
+                
+                # If we found a camera name, update the database
+                if detected_camera and detected_camera != video.get('camera_name'):
+                    db.update_video_camera_name(video['id'], detected_camera)
+                    fixed_count += 1
+                    logger.info(f"Updated video {video['id']} camera from '{video.get('camera_name')}' to '{detected_camera}'")
+        
+        except Exception as e:
+            errors.append(f"Video {video['id']}: {str(e)}")
+            logger.error(f"Error fixing camera name for video {video['id']}: {e}")
+    
+    return {
+        "status": "success",
+        "total_videos": len(videos),
+        "fixed_count": fixed_count,
+        "errors": errors if errors else None
+    }
 
 
 @app.post("/api/videos/sample-for-review")
