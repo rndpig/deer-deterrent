@@ -158,8 +158,10 @@ RING_DEVICE_ID_MAP = {
 # Manual overrides for specific videos where device ID mapping is wrong
 # Format: {video_id: "CameraName"} or {filename_pattern: "CameraName"}
 VIDEO_CAMERA_OVERRIDES = {
-    "RingVideo_20251205_075329.mp4": "Side",  # Green area, not driveway
-    "RingVideo_20251120_064019.mp4": "Side",  # Green/pool area
+    "RingVideo_20251205_075329.mp4": "Side",      # Green area with grass
+    "RingVideo_20251205_075319.mp4": "Driveway",  # Driveway with car
+    "RingVideo_20251120_064019.mp4": "Side",      # Green/pool area with grass
+    "RingVideo_20251115_064703.MP4": "Driveway",  # Driveway with car
 }
 
 # In-memory storage (will move to SQLite later)
