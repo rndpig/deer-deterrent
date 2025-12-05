@@ -159,6 +159,7 @@ VIDEO_CAMERA_OVERRIDES = {
     "RingVideo_20251205_075319.mp4": "Side",  # Actually shows green/side area
     "RingVideo_20251205_075329.mp4": "Side",  # Actually shows green/side area
     "RingVideo_20251115_064703.MP4": "Driveway",  # Device ID says Side but shows driveway
+    "RingVideo_20251120_064019.mp4": "Side",  # Device ID says Driveway but shows side
 }
 
 # In-memory storage (will move to SQLite later)
