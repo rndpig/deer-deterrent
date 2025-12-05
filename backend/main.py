@@ -1526,6 +1526,53 @@ async def get_video_thumbnail(video_id: int):
     return FileResponse(thumbnail_path, media_type="image/jpeg")
 
 
+@app.get("/api/videos/device-ids")
+async def get_video_device_ids():
+    """
+    Diagnostic endpoint: Show which device ID is in each video file.
+    """
+    videos = db.get_all_videos()
+    results = []
+    
+    for video in videos:
+        try:
+            video_path = Path(video.get('video_path', ''))
+            if not video_path.exists():
+                continue
+            
+            import subprocess
+            import json
+            
+            result = subprocess.run(
+                ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', str(video_path)],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode == 0:
+                metadata = json.loads(result.stdout)
+                format_tags = metadata.get('format', {}).get('tags', {})
+                device_id = format_tags.get('comment', 'NO_DEVICE_ID')
+                
+                results.append({
+                    "id": video['id'],
+                    "filename": video['filename'],
+                    "device_id": device_id,
+                    "current_camera_name": video.get('camera_name'),
+                    "mapped_name": RING_DEVICE_ID_MAP.get(device_id, "UNKNOWN")
+                })
+        
+        except Exception as e:
+            results.append({
+                "id": video['id'],
+                "filename": video['filename'],
+                "error": str(e)
+            })
+    
+    return results
+
+
 @app.post("/api/videos/fix-camera-names")
 async def fix_camera_names():
     """
