@@ -148,7 +148,8 @@ class ZoneConfig(BaseModel):
 # Ring camera device ID mapping (comment field from video metadata)
 RING_DEVICE_ID_MAP = {
     "gml.27c3cea0rmpl.26a30e7a": "Driveway",
-    "gml.27c3cea0rmpl.ab1ef9f8": "Driveway",  # Also appears as Driveway
+    "gml.27c3cea0rmpl.ab1ef9f8": "Driveway",
+    "gml.768534ffrmpl.946e582e": "Side",
     # Format: "device_id": "Camera Name"
     # Add more device IDs as they are discovered from video uploads
 }
