@@ -1,100 +1,223 @@
 import { useState, useEffect, useRef } from 'react'
 import './EarlyReview.css'
-import AnnotationTool from './AnnotationTool'
 
 function EarlyReview({ onBack }) {
   const [frames, setFrames] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [trainingStats, setTrainingStats] = useState(null)
   
-  // Annotation tool state
-  const [showAnnotationTool, setShowAnnotationTool] = useState(false)
-  const [annotating, setAnnotating] = useState(false)
+  // Drawing state
+  const [drawing, setDrawing] = useState(false)
+  const [currentBox, setCurrentBox] = useState(null)
+  const [drawnBoxes, setDrawnBoxes] = useState([])
   
-  // Canvas ref for drawing bounding boxes
   const canvasRef = useRef(null)
   const imageRef = useRef(null)
 
-  // Current frame
   const currentFrame = frames[currentIndex]
 
-  // Draw bounding boxes on canvas when frame changes
+  // Load manual boxes when frame changes
   useEffect(() => {
+    if (currentFrame) {
+      // Convert existing annotations to drawn boxes format
+      const existing = (currentFrame.annotations || []).map(ann => ({
+        x: ann.x,
+        y: ann.y,
+        width: ann.width,
+        height: ann.height
+      }))
+      setDrawnBoxes(existing)
+    }
+  }, [currentFrame])
+
+  // Redraw canvas when anything changes
+  useEffect(() => {
+    redrawCanvas()
+  }, [currentFrame, drawnBoxes, currentBox, drawing])
+
+  const redrawCanvas = () => {
     if (!currentFrame || !imageRef.current || !canvasRef.current) return
     
     const img = imageRef.current
     const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
     
-    // Wait for image to load
-    const drawBoxes = () => {
-      try {
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return
+    if (!ctx || !img.complete || img.naturalWidth === 0) return
+    
+    // Set canvas size to match image
+    canvas.width = img.naturalWidth
+    canvas.height = img.naturalHeight
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    
+    // Draw model detections (green)
+    if (currentFrame.detections && currentFrame.detections.length > 0) {
+      currentFrame.detections.forEach((det) => {
+        ctx.strokeStyle = '#10b981'
+        ctx.lineWidth = 3
+        ctx.strokeRect(
+          det.bbox_x * canvas.width,
+          det.bbox_y * canvas.height,
+          det.bbox_width * canvas.width,
+          det.bbox_height * canvas.height
+        )
         
-        // Set canvas dimensions to match image
-        canvas.width = img.naturalWidth
-        canvas.height = img.naturalHeight
-        
-        // Clear canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        
-        // Draw detections (model predictions)
-        if (currentFrame.detections && currentFrame.detections.length > 0) {
-          currentFrame.detections.forEach((det, idx) => {
-            // Draw bounding box
-            ctx.strokeStyle = '#10b981' // Green for model predictions
-            ctx.lineWidth = 3
-            ctx.strokeRect(
-              det.bbox_x * canvas.width,
-              det.bbox_y * canvas.height,
-              det.bbox_width * canvas.width,
-              det.bbox_height * canvas.height
-            )
-            
-            // Draw label
-            ctx.fillStyle = '#10b981'
-            ctx.font = '14px Arial'
-            ctx.fillText(
-              `${det.class_name} ${(det.confidence * 100).toFixed(0)}%`,
-              det.bbox_x * canvas.width + 5,
-              det.bbox_y * canvas.height - 5
-            )
-          })
-        }
-        
-        // Draw manual annotations
-        if (currentFrame.annotations && currentFrame.annotations.length > 0) {
-          currentFrame.annotations.forEach((box, idx) => {
-            ctx.strokeStyle = '#3b82f6' // Blue for manual annotations
-            ctx.lineWidth = 3
-            ctx.strokeRect(
-              box.x * canvas.width,
-              box.y * canvas.height,
-              box.width * canvas.width,
-              box.height * canvas.height
-            )
-            
-            ctx.fillStyle = '#3b82f6'
-            ctx.font = '14px Arial'
-            ctx.fillText(`Manual ${idx + 1}`, box.x * canvas.width + 5, box.y * canvas.height - 5)
-          })
-        }
-      } catch (error) {
-        console.error('Error drawing boxes:', error)
+        ctx.fillStyle = '#10b981'
+        ctx.font = '14px Arial'
+        ctx.fillText(
+          `${det.class_name} ${(det.confidence * 100).toFixed(0)}%`,
+          det.bbox_x * canvas.width + 5,
+          det.bbox_y * canvas.height - 5
+        )
+      })
+    }
+    
+    // Draw manual boxes (blue)
+    drawnBoxes.forEach((box, idx) => {
+      ctx.strokeStyle = '#3b82f6'
+      ctx.lineWidth = 3
+      ctx.strokeRect(
+        box.x * canvas.width,
+        box.y * canvas.height,
+        box.width * canvas.width,
+        box.height * canvas.height
+      )
+      
+      ctx.fillStyle = '#3b82f6'
+      ctx.font = '14px Arial'
+      ctx.fillText(`Deer ${idx + 1}`, box.x * canvas.width + 5, box.y * canvas.height - 5)
+    })
+    
+    // Draw current box being drawn (dashed blue)
+    if (currentBox && drawing) {
+      ctx.strokeStyle = '#2563eb'
+      ctx.lineWidth = 2
+      ctx.setLineDash([5, 5])
+      ctx.strokeRect(currentBox.x, currentBox.y, currentBox.width, currentBox.height)
+      ctx.setLineDash([])
+    }
+  }
+
+  const handleMouseDown = (e) => {
+    const canvas = canvasRef.current
+    const rect = canvas.getBoundingClientRect()
+    
+    const mouseX = e.clientX - rect.left
+    const mouseY = e.clientY - rect.top
+    
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    
+    const x = mouseX * scaleX
+    const y = mouseY * scaleY
+    
+    setDrawing(true)
+    setCurrentBox({ x, y, width: 0, height: 0 })
+  }
+
+  const handleMouseMove = (e) => {
+    if (!drawing || !currentBox) return
+    
+    const canvas = canvasRef.current
+    const rect = canvas.getBoundingClientRect()
+    
+    const mouseX = e.clientX - rect.left
+    const mouseY = e.clientY - rect.top
+    
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    
+    const x = mouseX * scaleX
+    const y = mouseY * scaleY
+    
+    const width = x - currentBox.x
+    const height = y - currentBox.y
+    
+    setCurrentBox({ ...currentBox, width, height })
+  }
+
+  const handleMouseUp = () => {
+    if (!drawing || !currentBox) return
+    
+    // Only add box if it has meaningful size
+    if (Math.abs(currentBox.width) > 10 && Math.abs(currentBox.height) > 10) {
+      let { x, y, width, height } = currentBox
+      
+      // Normalize negative dimensions
+      if (width < 0) {
+        x += width
+        width = Math.abs(width)
       }
+      if (height < 0) {
+        y += height
+        height = Math.abs(height)
+      }
+      
+      // Convert to normalized coordinates (0-1)
+      const canvas = canvasRef.current
+      const normalizedBox = {
+        x: x / canvas.width,
+        y: y / canvas.height,
+        width: width / canvas.width,
+        height: height / canvas.height
+      }
+      
+      setDrawnBoxes([...drawnBoxes, normalizedBox])
     }
     
-    if (img.complete && img.naturalWidth > 0) {
-      drawBoxes()
-    } else {
-      img.onload = drawBoxes
+    setDrawing(false)
+    setCurrentBox(null)
+  }
+
+  const handleRemoveBox = (index) => {
+    setDrawnBoxes(drawnBoxes.filter((_, i) => i !== index))
+  }
+
+  const handleSaveBoxes = async () => {
+    if (drawnBoxes.length === 0) return
+    
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/frames/${currentFrame.id}/annotations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          boxes: drawnBoxes,
+          annotator: 'user'
+        })
+      })
+      
+      if (response.ok) {
+        // Update frame with new annotations
+        const updated = [...frames]
+        updated[currentIndex] = {
+          ...currentFrame,
+          annotations: drawnBoxes,
+          annotation_count: drawnBoxes.length
+        }
+        setFrames(updated)
+        
+        // Move to next frame
+        if (currentIndex < frames.length - 1) {
+          setCurrentIndex(currentIndex + 1)
+        }
+      } else {
+        alert('❌ Error saving annotations')
+      }
+    } catch (error) {
+      console.error('Error saving annotations:', error)
+      alert('❌ Error saving annotations')
     }
-  }, [currentFrame])
+  }
+
+  const handleClearBoxes = () => {
+    setDrawnBoxes([])
+  }
 
   useEffect(() => {
     loadFrames()
-    loadTrainingStats()
   }, [])
 
   const loadFrames = async () => {
@@ -109,12 +232,7 @@ function EarlyReview({ onBack }) {
       }
       
       const data = await response.json()
-      console.log('Loaded training frames:', data.length, 'items')
-      
-      // Filter only unreviewed frames
       const unreviewed = data.filter(f => !f.reviewed)
-      console.log('Unreviewed frames:', unreviewed.length)
-      
       setFrames(unreviewed)
       setCurrentIndex(0)
     } catch (error) {
@@ -125,28 +243,13 @@ function EarlyReview({ onBack }) {
     }
   }
 
-  const loadTrainingStats = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/training/stats`)
-      if (response.ok) {
-        const data = await response.json()
-        setTrainingStats(data)
-      }
-    } catch (error) {
-      console.error('Error loading training stats:', error)
-    }
-  }
-
   const reviewFrame = async (reviewType) => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-    const frame = frames[currentIndex]
     
-    if (!frame) return
+    if (!currentFrame) return
 
     try {
-      const response = await fetch(`${apiUrl}/api/frames/${frame.id}/review`, {
+      const response = await fetch(`${apiUrl}/api/frames/${currentFrame.id}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -156,42 +259,19 @@ function EarlyReview({ onBack }) {
       })
       
       if (response.ok) {
-        // Mark as reviewed in local state
         const updated = [...frames]
-        updated[currentIndex] = { ...frame, reviewed: true, review_type: reviewType }
+        updated[currentIndex] = { ...currentFrame, reviewed: true, review_type: reviewType }
         setFrames(updated)
         
-        // Auto-advance to next unreviewed
         if (currentIndex < frames.length - 1) {
           setCurrentIndex(currentIndex + 1)
         }
-        
-        // Reload stats
-        loadTrainingStats()
       }
     } catch (error) {
       console.error('Error reviewing frame:', error)
       alert('❌ Error submitting review')
     }
   }
-
-  const handleKeyPress = (e) => {
-    // Don't trigger if user is typing in an input field
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
-    
-    if (e.key === 'ArrowRight') nextFrame()
-    if (e.key === 'ArrowLeft') previousFrame()
-    if (e.key === ' ' || e.key === 'Spacebar') {
-      e.preventDefault()
-      setShowAnnotationTool(true)
-    }
-    if (e.key === 'c' || e.key === 'C') reviewFrame('correct')
-  }
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyPress)
-    return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [currentIndex, frames])
 
   const nextFrame = () => {
     if (currentIndex < frames.length - 1) {
@@ -205,40 +285,19 @@ function EarlyReview({ onBack }) {
     }
   }
 
-  const handleAnnotationSave = async (annotations) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-    const frame = frames[currentIndex]
+  const handleKeyPress = (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
     
-    try {
-      const response = await fetch(`${apiUrl}/api/frames/${frame.id}/annotate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ annotations })
-      })
-      
-      if (response.ok) {
-        // Update frame with new annotations
-        const updated = [...frames]
-        updated[currentIndex] = {
-          ...frame,
-          annotations: annotations.map(ann => ({
-            x: ann.x,
-            y: ann.y,
-            width: ann.width,
-            height: ann.height
-          }))
-        }
-        setFrames(updated)
-        setShowAnnotationTool(false)
-        
-        // Auto-mark as reviewed after annotation
-        await reviewFrame('corrected')
-      }
-    } catch (error) {
-      console.error('Error saving annotations:', error)
-      alert('Failed to save annotations')
-    }
+    if (e.key === 'ArrowRight') nextFrame()
+    if (e.key === 'ArrowLeft') previousFrame()
+    if (e.key === 'c' || e.key === 'C') reviewFrame('correct')
+    if (e.key === 's' || e.key === 'S') handleSaveBoxes()
   }
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [currentIndex, frames, drawnBoxes])
 
   if (loading) {
     return (
@@ -266,80 +325,102 @@ function EarlyReview({ onBack }) {
     : `${apiUrl}${currentFrame.image_url}`
 
   return (
-    <div className="early-review-container">
-      {/* Compact header with all info in one line */}
-      <div className="review-header">
-        <button className="btn-back-to-library" onClick={onBack}>
-          ← Back
-        </button>
+    <div className="review-container-with-sidebar">
+      {/* Header */}
+      <div className="review-header-compact">
+        <button className="btn-back" onClick={onBack}>← Back</button>
+        <span className="frame-counter"><strong>{currentIndex + 1}</strong> / {frames.length}</span>
+        <span>Video: {currentFrame.video_filename}</span>
+        <span>Frame: {currentFrame.frame_number}</span>
+        <span>Detections: {currentFrame.detection_count || 0}</span>
         
-        <div className="header-info">
-          <span className="frame-counter"><strong>{currentIndex + 1}</strong> / {frames.length}</span>
-          <span className="divider">|</span>
-          <span>Video: {currentFrame.video_filename}</span>
-          <span className="divider">|</span>
-          <span>Frame: {currentFrame.frame_number}</span>
-          <span className="divider">|</span>
-          <span>Time: {currentFrame.timestamp_in_video?.toFixed(2)}s</span>
-          <span className="divider">|</span>
-          <span>Detections: {currentFrame.detection_count || 0}</span>
-          <span className="divider">|</span>
-          <span>Manual: {currentFrame.annotation_count || 0}</span>
-        </div>
-
         <div className="header-actions">
-          <button className="btn-header btn-prev" onClick={previousFrame} disabled={currentIndex === 0}>
-            ←
-          </button>
-          <button className="btn-header btn-next" onClick={nextFrame} disabled={currentIndex === frames.length - 1}>
-            →
-          </button>
-          <button className="btn-header btn-correct" onClick={() => reviewFrame('correct')}>
-            ✓ Correct
-          </button>
-          <button className="btn-header btn-annotate" onClick={() => setShowAnnotationTool(true)}>
-            ✏️ Add Box
-          </button>
-          <button className="btn-header btn-skip" onClick={nextFrame}>
-            Skip
-          </button>
+          <button className="btn-nav" onClick={previousFrame} disabled={currentIndex === 0}>←</button>
+          <button className="btn-nav" onClick={nextFrame} disabled={currentIndex === frames.length - 1}>→</button>
+          <button className="btn-correct" onClick={() => reviewFrame('correct')}>✓ Correct</button>
+          <button className="btn-skip" onClick={nextFrame}>Skip</button>
         </div>
       </div>
 
-      {/* Fullscreen image viewer */}
-      <div className="review-content">
-        <div className="image-container">
-          <img 
-            ref={imageRef}
-            src={imageUrl}
-            alt="Frame"
-            className="frame-image"
-          />
-          <canvas 
-            ref={canvasRef}
-            className="frame-canvas"
-          />
+      <div className="review-main-area">
+        {/* Canvas area */}
+        <div className="canvas-area">
+          <div className="image-wrapper">
+            <img 
+              ref={imageRef}
+              src={imageUrl}
+              alt="Frame"
+              className="review-image"
+              onLoad={() => redrawCanvas()}
+            />
+            <canvas 
+              ref={canvasRef}
+              className="drawing-canvas"
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              style={{ cursor: 'crosshair' }}
+            />
+          </div>
+        </div>
+
+        {/* Sidebar */}
+        <div className="annotation-sidebar">
+          <h3>🎯 Add Bounding Boxes</h3>
+          <p className="instructions">Click and drag on the image to draw a box around each deer</p>
+          
+          <div className="box-list">
+            <h4>Boxes ({drawnBoxes.length})</h4>
+            {drawnBoxes.length === 0 ? (
+              <p className="no-boxes">No boxes drawn yet</p>
+            ) : (
+              <ul>
+                {drawnBoxes.map((box, index) => (
+                  <li key={index}>
+                    <span>Deer {index + 1}</span>
+                    <button 
+                      className="btn-remove"
+                      onClick={() => handleRemoveBox(index)}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="sidebar-actions">
+            <button 
+              className="btn-clear"
+              onClick={handleClearBoxes}
+              disabled={drawnBoxes.length === 0}
+            >
+              Clear All
+            </button>
+            <button 
+              className="btn-save-primary"
+              onClick={handleSaveBoxes}
+              disabled={drawnBoxes.length === 0}
+            >
+              Save {drawnBoxes.length} Box{drawnBoxes.length !== 1 ? 'es' : ''}
+            </button>
+          </div>
+
+          <div className="sidebar-legend">
+            <p><span style={{color: '#10b981'}}>■ Green</span> = Model Detections</p>
+            <p><span style={{color: '#3b82f6'}}>■ Blue</span> = Manual Boxes</p>
+          </div>
+
+          <div className="sidebar-shortcuts">
+            <strong>Shortcuts:</strong>
+            <p>← → Arrow Keys</p>
+            <p>C = Mark Correct</p>
+            <p>S = Save Boxes</p>
+          </div>
         </div>
       </div>
-
-      {/* Footer with shortcuts */}
-      <div className="review-footer">
-        <span><strong>Shortcuts:</strong> Arrow Keys • C (correct) • Space (add box)</span>
-        <span className="divider">|</span>
-        <span><strong>Colors:</strong> <span style={{color: '#10b981'}}>Green = Model</span> • <span style={{color: '#3b82f6'}}>Blue = Manual</span></span>
-      </div>
-
-      {showAnnotationTool && (
-        <AnnotationTool
-          imageSrc={imageUrl}
-          existingAnnotations={currentFrame.annotations || []}
-          existingDetections={currentFrame.detections || []}
-          onSave={handleAnnotationSave}
-          onCancel={() => setShowAnnotationTool(false)}
-          isOpen={showAnnotationTool}
-          setIsOpen={setShowAnnotationTool}
-        />
-      )}
     </div>
   )
 }
