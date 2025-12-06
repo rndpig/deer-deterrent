@@ -192,6 +192,23 @@ def get_all_videos() -> List[Dict]:
     
     return videos
 
+def video_has_annotations(video_id: int) -> bool:
+    """Check if a video has any manual annotations on its frames."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT COUNT(*) as count
+        FROM annotations a
+        JOIN frames f ON a.frame_id = f.id
+        WHERE f.video_id = ?
+    """, (video_id,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result['count'] > 0 if result else False
+
 def get_video(video_id: int) -> Optional[Dict]:
     """Get a specific video with details."""
     conn = get_connection()

@@ -1425,6 +1425,14 @@ async def get_training_stats():
 async def get_videos():
     """Get all uploaded videos with metadata."""
     videos = db.get_all_videos()
+    
+    # Check if each video has annotations
+    for video in videos:
+        video_id = video['id']
+        # Check if any frames from this video have annotations
+        has_annotations = db.video_has_annotations(video_id)
+        video['has_annotations'] = has_annotations
+    
     return videos
 
 

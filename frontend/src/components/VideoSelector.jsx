@@ -30,14 +30,15 @@ function VideoSelector({ onBack, onVideoSelected }) {
     }
   }
 
-  const handleExtractFrames = async () => {
-    if (!selectedVideo) return
+  const handleExtractFrames = async (video) => {
+    const videoToExtract = video || selectedVideo
+    if (!videoToExtract) return
     
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
     setProcessing(true)
 
     try {
-      const response = await fetch(`${apiUrl}/api/videos/${selectedVideo.id}/extract-frames`, {
+      const response = await fetch(`${apiUrl}/api/videos/${videoToExtract.id}/extract-frames`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -54,11 +55,10 @@ function VideoSelector({ onBack, onVideoSelected }) {
       console.log('Extracted frames:', result)
       
       // Navigate to annotation view
-      onVideoSelected(selectedVideo)
+      onVideoSelected(videoToExtract)
     } catch (error) {
       console.error('Error extracting frames:', error)
       alert('❌ Failed to extract frames: ' + error.message)
-    } finally {
       setProcessing(false)
     }
   }
@@ -91,23 +91,53 @@ function VideoSelector({ onBack, onVideoSelected }) {
           ← Back to Library
         </button>
         <h1>🎬 Select Video for Annotation</h1>
+        
+        <div className="sampling-rate-control">
+          <label htmlFor="sampling-rate">Frame Sampling:</label>
+          <select 
+            id="sampling-rate"
+            value={samplingRate} 
+            onChange={(e) => setSamplingRate(e.target.value)}
+            disabled={processing}
+          >
+            <option value="all">All Frames (~30 fps)</option>
+            <option value="high">High (~6/sec)</option>
+            <option value="balanced">Balanced (~2/sec)</option>
+            <option value="low">Low (~1/sec)</option>
+            <option value="sparse">Sparse (~0.5/sec)</option>
+          </select>
+        </div>
       </div>
 
-      {!selectedVideo ? (
+      {processing ? (
+        <div className="processing-overlay">
+          <div className="processing-message">
+            <h2>⏳ Extracting Frames...</h2>
+            <p>Please wait while frames are being extracted from the video.</p>
+          </div>
+        </div>
+      ) : (
         <div className="selector-content">
           <div className="video-grid">
             {videos.map(video => {
               const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
               const thumbnailUrl = `${apiUrl}/api/videos/${video.id}/thumbnail`
+              const hasAnnotations = video.has_annotations || false
 
               return (
                 <div 
                   key={video.id}
-                  className="video-card"
-                  onClick={() => setSelectedVideo(video)}
+                  className={`video-card ${hasAnnotations ? 'annotated' : ''}`}
+                  onClick={() => {
+                    setSelectedVideo(video)
+                    handleExtractFrames(video)
+                  }}
                 >
                   <div className="video-thumbnail">
                     <img src={thumbnailUrl} alt={video.filename} />
+                    {hasAnnotations && (
+                      <div className="annotation-badge">✓ Annotated</div>
+                    )}
                   </div>
                   <div className="video-info">
                     <div className="video-camera">{formatCameraName(video)}</div>
@@ -124,37 +154,6 @@ function VideoSelector({ onBack, onVideoSelected }) {
               <p>No videos uploaded yet. Go back to upload videos first.</p>
             </div>
           )}
-        </div>
-      ) : (
-        <div className="extraction-panel-compact">
-          <div className="extraction-controls">
-            <label htmlFor="sampling-rate">Frame Sampling Rate:</label>
-            <select 
-              id="sampling-rate"
-              value={samplingRate} 
-              onChange={(e) => setSamplingRate(e.target.value)}
-              disabled={processing}
-            >
-              <option value="all">All Frames (~30 fps)</option>
-              <option value="high">High (~6/sec)</option>
-              <option value="balanced">Balanced (~2/sec)</option>
-              <option value="low">Low (~1/sec)</option>
-              <option value="sparse">Sparse (~0.5/sec)</option>
-            </select>
-            
-            <button 
-              className="btn-extract-compact"
-              onClick={handleExtractFrames}
-              disabled={processing}
-            >
-              {processing ? '⏳ Extracting...' : '✅ Extract & Annotate'}
-            </button>
-          </div>
-          
-          <div className="selected-video-info">
-            <span className="info-label">Camera:</span>
-            <span className="info-value">{formatCameraName(selectedVideo)}</span>
-          </div>
         </div>
       )}
     </div>
