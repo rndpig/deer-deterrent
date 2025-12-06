@@ -1649,8 +1649,8 @@ async def extract_frames_from_video(video_id: int, request: dict):
                 video_id=video_id,
                 frame_number=frame_number,
                 timestamp_in_video=timestamp_sec,
-                frame_path=str(frame_path),
-                image_url=f"/api/frames/image/{frame_filename}"
+                image_path=str(frame_path),
+                has_detections=False
             )
             extracted_count += 1
         
