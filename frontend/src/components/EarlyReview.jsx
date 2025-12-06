@@ -202,9 +202,6 @@ function EarlyReview({ onBack }) {
         const result = await response.json()
         console.log('Annotations saved successfully:', result)
         
-        // Mark frame as reviewed
-        await reviewFrame('correct')
-        
         // Update local frame data with saved annotations
         const updated = [...frames]
         updated[currentIndex] = {
@@ -215,7 +212,13 @@ function EarlyReview({ onBack }) {
         }
         setFrames(updated)
         
-        alert('✅ Annotations saved!')
+        // Mark frame as reviewed
+        await reviewFrame('correct')
+        
+        // Move to next frame
+        if (currentIndex < frames.length - 1) {
+          setCurrentIndex(currentIndex + 1)
+        }
       } else {
         const errorText = await response.text()
         console.error('Server error:', response.status, errorText)
