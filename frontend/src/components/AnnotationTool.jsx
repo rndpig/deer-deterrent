@@ -78,8 +78,17 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
   const handleMouseDown = (e) => {
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    
+    // Get mouse position relative to canvas display
+    const mouseX = e.clientX - rect.left
+    const mouseY = e.clientY - rect.top
+    
+    // Scale from display size to canvas internal size
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    
+    const x = mouseX * scaleX
+    const y = mouseY * scaleY
     
     setDrawing(true)
     setCurrentBox({ x, y, width: 0, height: 0 })
@@ -90,8 +99,17 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
     
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    
+    // Get mouse position relative to canvas display
+    const mouseX = e.clientX - rect.left
+    const mouseY = e.clientY - rect.top
+    
+    // Scale from display size to canvas internal size
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    
+    const x = mouseX * scaleX
+    const y = mouseY * scaleY
     
     const width = x - currentBox.x
     const height = y - currentBox.y
