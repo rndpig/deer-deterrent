@@ -1616,14 +1616,14 @@ async def extract_frames_from_video(video_id: int, request: dict):
     sampling_rate = request.get('sampling_rate', 'medium')
     
     # Map sampling rate to frame interval (in frames)
-    # At 30fps: 1s=30, 2s=60, 5s=150, 10s=300
+    # At 30fps: 0.5s=15, 1s=30, 2s=60, 5s=150
     rate_map = {
-        'dense': 30,      # 1 frame per second
-        'medium': 60,     # 1 frame per 2 seconds
-        'sparse': 150,    # 1 frame per 5 seconds
-        'minimal': 300    # 1 frame per 10 seconds
+        'high': 15,       # ~2 frames per second
+        'medium': 30,     # 1 frame per second  
+        'low': 60,        # 1 frame per 2 seconds
+        'sparse': 150     # 1 frame per 5 seconds
     }
-    frame_interval = rate_map.get(sampling_rate, 60)
+    frame_interval = rate_map.get(sampling_rate, 30)
     
     # Extract frames
     import cv2

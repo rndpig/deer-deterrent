@@ -100,10 +100,10 @@ function VideoSelector({ onBack, onVideoSelected }) {
             onChange={(e) => setSamplingRate(e.target.value)}
             disabled={processing}
           >
-            <option value="dense">Dense (1/sec)</option>
-            <option value="medium">Medium (1/2sec)</option>
+            <option value="high">High (~2/sec)</option>
+            <option value="medium">Medium (1/sec)</option>
+            <option value="low">Low (1/2sec)</option>
             <option value="sparse">Sparse (1/5sec)</option>
-            <option value="minimal">Minimal (1/10sec)</option>
           </select>
         </div>
       </div>

@@ -7,6 +7,7 @@ import EarlyReview from './EarlyReview'
 
 function Training() {
   const [viewMode, setViewMode] = useState('library') // 'library', 'selector', or 'review'
+  const [selectedVideo, setSelectedVideo] = useState(null)
   const [detections, setDetections] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -474,6 +475,7 @@ function Training() {
 
   const handleVideoSelected = (video) => {
     // Frames have been extracted, load them into review view
+    setSelectedVideo(video)
     setViewMode('review')
     setFilter('unreviewed')
     loadDetections()
@@ -513,6 +515,7 @@ function Training() {
     return (
       <EarlyReview 
         onBack={handleBackToLibrary}
+        selectedVideo={selectedVideo}
       />
     )
   }

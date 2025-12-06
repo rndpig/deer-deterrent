@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import './EarlyReview.css'
 
-function EarlyReview({ onBack }) {
+function EarlyReview({ onBack, selectedVideo }) {
   const [frames, setFrames] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -247,7 +247,15 @@ function EarlyReview({ onBack }) {
       }
       
       const data = await response.json()
-      const unreviewed = data.filter(f => !f.reviewed)
+      
+      // Filter by selected video if provided
+      let filteredFrames = data
+      if (selectedVideo) {
+        filteredFrames = data.filter(f => f.video_id === selectedVideo.id)
+        console.log(`Filtered to ${filteredFrames.length} frames from video ${selectedVideo.id}`)
+      }
+      
+      const unreviewed = filteredFrames.filter(f => !f.reviewed)
       setFrames(unreviewed)
       setCurrentIndex(0)
     } catch (error) {
