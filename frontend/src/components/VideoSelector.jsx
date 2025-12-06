@@ -93,45 +93,41 @@ function VideoSelector({ onBack, onVideoSelected }) {
         <h1>🎬 Select Video for Annotation</h1>
       </div>
 
-      <div className="selector-content">
-        <div className="video-grid">
-          {videos.map(video => {
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-            const thumbnailUrl = `${apiUrl}/api/videos/${video.id}/thumbnail`
-            const isSelected = selectedVideo?.id === video.id
+      {!selectedVideo ? (
+        <div className="selector-content">
+          <div className="video-grid">
+            {videos.map(video => {
+              const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+              const thumbnailUrl = `${apiUrl}/api/videos/${video.id}/thumbnail`
 
-            return (
-              <div 
-                key={video.id}
-                className={`video-card ${isSelected ? 'selected' : ''}`}
-                onClick={() => setSelectedVideo(video)}
-              >
-                <div className="video-thumbnail">
-                  <img src={thumbnailUrl} alt={video.filename} />
-                  {isSelected && <div className="selected-badge">✓</div>}
+              return (
+                <div 
+                  key={video.id}
+                  className="video-card"
+                  onClick={() => setSelectedVideo(video)}
+                >
+                  <div className="video-thumbnail">
+                    <img src={thumbnailUrl} alt={video.filename} />
+                  </div>
+                  <div className="video-info">
+                    <div className="video-camera">{formatCameraName(video)}</div>
+                    <div className="video-filename">{video.filename}</div>
+                    <div className="video-date">{formatDate(video.upload_date)}</div>
+                  </div>
                 </div>
-                <div className="video-info">
-                  <div className="video-camera">{formatCameraName(video)}</div>
-                  <div className="video-filename">{video.filename}</div>
-                  <div className="video-date">{formatDate(video.upload_date)}</div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        {videos.length === 0 && (
-          <div className="empty-state">
-            <p>No videos uploaded yet. Go back to upload videos first.</p>
+              )
+            })}
           </div>
-        )}
-      </div>
 
-      {selectedVideo && (
-        <div className="extraction-panel">
-          <h2>Frame Extraction Settings</h2>
-          
-          <div className="settings-row">
+          {videos.length === 0 && (
+            <div className="empty-state">
+              <p>No videos uploaded yet. Go back to upload videos first.</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="extraction-panel-compact">
+          <div className="extraction-controls">
             <label htmlFor="sampling-rate">Frame Sampling Rate:</label>
             <select 
               id="sampling-rate"
@@ -140,25 +136,25 @@ function VideoSelector({ onBack, onVideoSelected }) {
               disabled={processing}
             >
               <option value="all">All Frames (~30 fps)</option>
-              <option value="high">High (every 5th frame, ~6/sec)</option>
-              <option value="balanced">Balanced (every 15th frame, ~2/sec) - Recommended</option>
-              <option value="low">Low (every 30th frame, ~1/sec)</option>
-              <option value="sparse">Sparse (every 60th frame, ~0.5/sec)</option>
+              <option value="high">High (~6/sec)</option>
+              <option value="balanced">Balanced (~2/sec)</option>
+              <option value="low">Low (~1/sec)</option>
+              <option value="sparse">Sparse (~0.5/sec)</option>
             </select>
+            
+            <button 
+              className="btn-extract-compact"
+              onClick={handleExtractFrames}
+              disabled={processing}
+            >
+              {processing ? '⏳ Extracting...' : '✅ Extract & Annotate'}
+            </button>
           </div>
-
-          <div className="extraction-info">
-            <p>Selected video: <strong>{selectedVideo.filename}</strong></p>
-            <p>Camera: <strong>{formatCameraName(selectedVideo)}</strong></p>
+          
+          <div className="selected-video-info">
+            <span className="info-label">Camera:</span>
+            <span className="info-value">{formatCameraName(selectedVideo)}</span>
           </div>
-
-          <button 
-            className="btn-extract"
-            onClick={handleExtractFrames}
-            disabled={processing}
-          >
-            {processing ? '⏳ Extracting Frames...' : '✅ Extract Frames & Start Annotation'}
-          </button>
         </div>
       )}
     </div>

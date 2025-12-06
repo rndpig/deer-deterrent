@@ -220,3 +220,79 @@
   font-size: 1.2rem;
   color: rgba(255, 255, 255, 0.8);
 }
+
+.extraction-panel-compact {
+  padding: 2rem;
+  background: rgba(15, 23, 42, 0.95);
+  border-radius: 12px;
+  margin: 2rem;
+}
+
+.extraction-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.extraction-controls label {
+  font-weight: 500;
+  white-space: nowrap;
+  color: #3b82f6;
+}
+
+.extraction-controls select {
+  width: 200px;
+  padding: 0.75rem;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.extraction-controls select:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.btn-extract-compact {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.btn-extract-compact:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+}
+
+.btn-extract-compact:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.selected-video-info {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.info-label {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.info-value {
+  color: #3b82f6;
+  font-weight: 600;
+}
