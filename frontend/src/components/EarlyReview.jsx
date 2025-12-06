@@ -19,6 +19,9 @@ function EarlyReview({ onBack }) {
   // Load manual boxes when frame changes
   useEffect(() => {
     if (currentFrame) {
+      console.log('Loading frame:', currentFrame.id, 'with', currentFrame.detection_count, 'detections')
+      console.log('Frame data:', currentFrame)
+      
       // Convert existing annotations to drawn boxes format
       const existing = (currentFrame.annotations || []).map(ann => ({
         x: ann.x,
@@ -199,19 +202,20 @@ function EarlyReview({ onBack }) {
         const result = await response.json()
         console.log('Annotations saved successfully:', result)
         
-        // Update frame with new annotations
+        // Mark frame as reviewed
+        await reviewFrame('correct')
+        
+        // Update local frame data with saved annotations
         const updated = [...frames]
         updated[currentIndex] = {
           ...currentFrame,
           annotations: drawnBoxes,
-          annotation_count: drawnBoxes.length
+          annotation_count: drawnBoxes.length,
+          reviewed: true
         }
         setFrames(updated)
         
-        // Move to next frame
-        if (currentIndex < frames.length - 1) {
-          setCurrentIndex(currentIndex + 1)
-        }
+        alert('✅ Annotations saved!')
       } else {
         const errorText = await response.text()
         console.error('Server error:', response.status, errorText)
@@ -343,7 +347,8 @@ function EarlyReview({ onBack }) {
         <span className="frame-counter"><strong>{currentIndex + 1}</strong> / {frames.length}</span>
         <span>Video: {currentFrame.video_filename}</span>
         <span>Frame: {currentFrame.frame_number}</span>
-        <span>Detections: {currentFrame.detection_count || 0}</span>
+        <span style={{color: '#10b981'}}>🟢 Auto: {currentFrame.detection_count || 0}</span>
+        <span style={{color: '#3b82f6'}}>🔵 Manual: {currentFrame.annotation_count || 0}</span>
         
         <div className="header-actions">
           <button className="btn-nav" onClick={previousFrame} disabled={currentIndex === 0}>←</button>
