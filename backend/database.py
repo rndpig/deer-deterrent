@@ -446,6 +446,20 @@ def mark_frame_for_training(frame_id: int):
     conn.commit()
     conn.close()
 
+def unmark_frame_for_training(frame_id: int):
+    """Remove training selection flag from a frame."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        UPDATE frames 
+        SET selected_for_training = 0
+        WHERE id = ?
+    """, (frame_id,))
+    
+    conn.commit()
+    conn.close()
+
 def get_training_frames() -> List[Dict]:
     """Get all frames selected for training."""
     conn = get_connection()
