@@ -1615,14 +1615,16 @@ async def extract_frames_from_video(video_id: int, request: dict):
     
     sampling_rate = request.get('sampling_rate', 'medium')
     
-    # Clear selected_for_training flag on all existing frames for this video
-    # This prevents accumulation of frames from multiple extraction runs
+    # Delete all existing frames marked for training from this specific video
+    # This prevents accumulation when re-extracting
     existing_frames = db.get_frames_for_video(video_id)
+    deleted_count = 0
     for frame in existing_frames:
-        if frame.get('selected_for_training'):
-            db.unmark_frame_for_training(frame['id'])
+        if frame.get('selected_for_training', 0) == 1:
+            db.delete_frame(frame['id'])
+            deleted_count += 1
     
-    logger.info(f"Cleared training flags for {len(existing_frames)} existing frames from video {video_id}")
+    logger.info(f"Deleted {deleted_count} existing training frames before extracting new ones from video {video_id}")
     
     # Map sampling rate to frame interval (in frames)
     # At 30fps: 0.5s=15, 1s=30, 2s=60, 5s=150
