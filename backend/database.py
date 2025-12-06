@@ -351,6 +351,26 @@ def add_frame(video_id: int, frame_number: int, timestamp_in_video: float,
     
     return frame_id
 
+def delete_frame(frame_id: int) -> bool:
+    """Delete a frame and its associated detections and annotations."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Delete associated detections
+    cursor.execute("DELETE FROM detections WHERE frame_id = ?", (frame_id,))
+    
+    # Delete associated annotations  
+    cursor.execute("DELETE FROM annotations WHERE frame_id = ?", (frame_id,))
+    
+    # Delete the frame
+    cursor.execute("DELETE FROM frames WHERE id = ?", (frame_id,))
+    
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    
+    return deleted
+
 def get_frames_for_video(video_id: int) -> List[Dict]:
     """Get all frames for a specific video."""
     conn = get_connection()

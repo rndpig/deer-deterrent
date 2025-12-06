@@ -61,21 +61,25 @@ function EarlyReview({ onBack, selectedVideo }) {
     // Draw model detections (green)
     if (currentFrame.detections && currentFrame.detections.length > 0) {
       currentFrame.detections.forEach((det) => {
+        // Detections might be in normalized (0-1) or pixel coordinates
+        // If values are > 1, they're likely pixel coordinates
+        const isNormalized = det.bbox_x <= 1 && det.bbox_y <= 1
+        
+        const x = isNormalized ? det.bbox_x * canvas.width : det.bbox_x
+        const y = isNormalized ? det.bbox_y * canvas.height : det.bbox_y
+        const w = isNormalized ? det.bbox_width * canvas.width : det.bbox_width
+        const h = isNormalized ? det.bbox_height * canvas.height : det.bbox_height
+        
         ctx.strokeStyle = '#10b981'
         ctx.lineWidth = 3
-        ctx.strokeRect(
-          det.bbox_x * canvas.width,
-          det.bbox_y * canvas.height,
-          det.bbox_width * canvas.width,
-          det.bbox_height * canvas.height
-        )
+        ctx.strokeRect(x, y, w, h)
         
         ctx.fillStyle = '#10b981'
         ctx.font = '14px Arial'
         ctx.fillText(
           `${det.class_name} ${(det.confidence * 100).toFixed(0)}%`,
-          det.bbox_x * canvas.width + 5,
-          det.bbox_y * canvas.height - 5
+          x + 5,
+          y - 5
         )
       })
     }

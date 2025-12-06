@@ -1955,7 +1955,8 @@ async def get_selected_training_frames():
                     'bbox_width': d['bbox_x2'] - d['bbox_x1'],
                     'bbox_height': d['bbox_y2'] - d['bbox_y1'],
                     'confidence': d['confidence'],
-                    'class_name': d['class_name']
+                    'class_name': d['class_name'],
+                    'is_normalized': d.get('is_normalized', True)  # Flag to indicate if coords are 0-1 or pixels
                 }
                 for d in frame['detections']
             ],
