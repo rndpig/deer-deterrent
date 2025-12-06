@@ -1,9 +1,17 @@
 .review-container-with-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
   height: 100vh;
+  width: 100vw;
   background: #0f172a;
   color: white;
+  z-index: 1000;
+  overflow: hidden;
 }
 
 .review-header-compact {

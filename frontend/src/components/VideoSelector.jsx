@@ -5,7 +5,7 @@ function VideoSelector({ onBack, onVideoSelected }) {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedVideo, setSelectedVideo] = useState(null)
-  const [samplingRate, setSamplingRate] = useState('balanced')
+  const [samplingRate, setSamplingRate] = useState('low')
   const [processing, setProcessing] = useState(false)
 
   useEffect(() => {

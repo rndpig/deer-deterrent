@@ -51,6 +51,10 @@ function EarlyReview({ onBack }) {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     
+    // Debug logging
+    console.log('Frame detections:', currentFrame.detections)
+    console.log('Manual boxes:', drawnBoxes)
+    
     // Draw model detections (green)
     if (currentFrame.detections && currentFrame.detections.length > 0) {
       currentFrame.detections.forEach((det) => {
@@ -179,17 +183,22 @@ function EarlyReview({ onBack }) {
     
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
     
+    console.log('Saving annotations for frame:', currentFrame.id)
+    console.log('Boxes to save:', drawnBoxes)
+    
     try {
-      const response = await fetch(`${apiUrl}/api/frames/${currentFrame.id}/annotations`, {
+      const response = await fetch(`${apiUrl}/api/frames/${currentFrame.id}/annotate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          boxes: drawnBoxes,
-          annotator: 'user'
+          annotations: drawnBoxes
         })
       })
       
       if (response.ok) {
+        const result = await response.json()
+        console.log('Annotations saved successfully:', result)
+        
         // Update frame with new annotations
         const updated = [...frames]
         updated[currentIndex] = {
@@ -204,11 +213,13 @@ function EarlyReview({ onBack }) {
           setCurrentIndex(currentIndex + 1)
         }
       } else {
-        alert('❌ Error saving annotations')
+        const errorText = await response.text()
+        console.error('Server error:', response.status, errorText)
+        alert(`❌ Error saving annotations: ${response.status} - ${errorText}`)
       }
     } catch (error) {
       console.error('Error saving annotations:', error)
-      alert('❌ Error saving annotations')
+      alert(`❌ Error saving annotations: ${error.message}`)
     }
   }
 
