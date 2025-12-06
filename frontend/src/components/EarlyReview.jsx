@@ -331,7 +331,7 @@ function EarlyReview({ onBack }) {
 
       {showAnnotationTool && (
         <AnnotationTool
-          imageUrl={imageUrl}
+          imageSrc={imageUrl}
           existingAnnotations={currentFrame.annotations || []}
           existingDetections={currentFrame.detections || []}
           onSave={handleAnnotationSave}

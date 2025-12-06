@@ -1623,7 +1623,7 @@ async def extract_frames_from_video(video_id: int, request: dict):
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
-    frames_dir = Path("data/frames")
+    frames_dir = Path("data/training_frames")
     frames_dir.mkdir(parents=True, exist_ok=True)
     
     extracted_count = 0
@@ -1645,13 +1645,15 @@ async def extract_frames_from_video(video_id: int, request: dict):
             timestamp_sec = frame_number / fps
             
             # Store in database
-            db.add_frame(
+            frame_id = db.add_frame(
                 video_id=video_id,
                 frame_number=frame_number,
                 timestamp_in_video=timestamp_sec,
                 image_path=str(frame_path),
                 has_detections=False
             )
+            # Mark as selected for training so it appears in review
+            db.mark_frame_for_training(frame_id)
             extracted_count += 1
         
         frame_number += 1
