@@ -43,16 +43,17 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
     const scaleX = canvas.width / imageDimensions.width
     const scaleY = canvas.height / imageDimensions.height
     
-    // Draw existing boxes
+    // Draw existing boxes (stored in normalized 0-1 coordinates)
     ctx.strokeStyle = '#10b981'
     ctx.lineWidth = 3
     ctx.fillStyle = 'rgba(16, 185, 129, 0.1)'
     
     boxes.forEach((box, index) => {
-      const x = box.x * scaleX
-      const y = box.y * scaleY
-      const w = box.width * scaleX
-      const h = box.height * scaleY
+      // Convert normalized coordinates to canvas coordinates
+      const x = box.x * canvas.width
+      const y = box.y * canvas.height
+      const w = box.width * canvas.width
+      const h = box.height * canvas.height
       
       ctx.fillRect(x, y, w, h)
       ctx.strokeRect(x, y, w, h)
@@ -115,16 +116,14 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
         height = Math.abs(height)
       }
       
-      // Convert canvas coordinates to image coordinates
+      // Convert canvas coordinates to normalized coordinates (0-1 range)
       const canvas = canvasRef.current
-      const scaleX = imageDimensions.width / canvas.width
-      const scaleY = imageDimensions.height / canvas.height
       
       const normalizedBox = {
-        x: x * scaleX,
-        y: y * scaleY,
-        width: width * scaleX,
-        height: height * scaleY
+        x: x / canvas.width,
+        y: y / canvas.height,
+        width: width / canvas.width,
+        height: height / canvas.height
       }
       
       setBoxes([...boxes, normalizedBox])
