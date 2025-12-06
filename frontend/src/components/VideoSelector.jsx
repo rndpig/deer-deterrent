@@ -5,7 +5,7 @@ function VideoSelector({ onBack, onVideoSelected }) {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedVideo, setSelectedVideo] = useState(null)
-  const [samplingRate, setSamplingRate] = useState('low')
+  const [samplingRate, setSamplingRate] = useState('medium')
   const [processing, setProcessing] = useState(false)
 
   useEffect(() => {
@@ -100,11 +100,10 @@ function VideoSelector({ onBack, onVideoSelected }) {
             onChange={(e) => setSamplingRate(e.target.value)}
             disabled={processing}
           >
-            <option value="all">All Frames (~30 fps)</option>
-            <option value="high">High (~6/sec)</option>
-            <option value="balanced">Balanced (~2/sec)</option>
-            <option value="low">Low (~1/sec)</option>
-            <option value="sparse">Sparse (~0.5/sec)</option>
+            <option value="dense">Dense (1/sec)</option>
+            <option value="medium">Medium (1/2sec)</option>
+            <option value="sparse">Sparse (1/5sec)</option>
+            <option value="minimal">Minimal (1/10sec)</option>
           </select>
         </div>
       </div>
@@ -122,12 +121,13 @@ function VideoSelector({ onBack, onVideoSelected }) {
             {videos.map(video => {
               const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
               const thumbnailUrl = `${apiUrl}/api/videos/${video.id}/thumbnail`
+              const fullyAnnotated = video.fully_annotated || false
               const hasAnnotations = video.has_annotations || false
 
               return (
                 <div 
                   key={video.id}
-                  className={`video-card ${hasAnnotations ? 'annotated' : ''}`}
+                  className={`video-card ${fullyAnnotated ? 'fully-annotated' : hasAnnotations ? 'partial-annotated' : ''}`}
                   onClick={() => {
                     setSelectedVideo(video)
                     handleExtractFrames(video)
@@ -135,8 +135,11 @@ function VideoSelector({ onBack, onVideoSelected }) {
                 >
                   <div className="video-thumbnail">
                     <img src={thumbnailUrl} alt={video.filename} />
-                    {hasAnnotations && (
-                      <div className="annotation-badge">✓ Annotated</div>
+                    {fullyAnnotated && (
+                      <div className="annotation-badge complete">✓ Complete</div>
+                    )}
+                    {!fullyAnnotated && hasAnnotations && (
+                      <div className="annotation-badge partial">⚠ In Progress</div>
                     )}
                   </div>
                   <div className="video-info">

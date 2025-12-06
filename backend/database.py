@@ -209,6 +209,42 @@ def video_has_annotations(video_id: int) -> bool:
     
     return result['count'] > 0 if result else False
 
+def video_fully_annotated(video_id: int) -> bool:
+    """Check if ALL frames from a video have been annotated or reviewed."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Get count of frames selected for training
+    cursor.execute("""
+        SELECT COUNT(*) as total
+        FROM frames
+        WHERE video_id = ? AND selected_for_training = 1
+    """, (video_id,))
+    
+    total_result = cursor.fetchone()
+    total_frames = total_result['total'] if total_result else 0
+    
+    if total_frames == 0:
+        conn.close()
+        return False
+    
+    # Get count of frames that have annotations OR are reviewed
+    cursor.execute("""
+        SELECT COUNT(DISTINCT f.id) as annotated
+        FROM frames f
+        LEFT JOIN annotations a ON f.id = a.frame_id
+        WHERE f.video_id = ? 
+          AND f.selected_for_training = 1
+          AND (a.id IS NOT NULL OR f.reviewed = 1)
+    """, (video_id,))
+    
+    annotated_result = cursor.fetchone()
+    annotated_frames = annotated_result['annotated'] if annotated_result else 0
+    
+    conn.close()
+    
+    return annotated_frames >= total_frames
+
 def get_video(video_id: int) -> Optional[Dict]:
     """Get a specific video with details."""
     conn = get_connection()

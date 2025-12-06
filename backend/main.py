@@ -1426,12 +1426,15 @@ async def get_videos():
     """Get all uploaded videos with metadata."""
     videos = db.get_all_videos()
     
-    # Check if each video has annotations
+    # Check annotation status for each video
     for video in videos:
         video_id = video['id']
-        # Check if any frames from this video have annotations
+        # Check if any frames have annotations (partial)
         has_annotations = db.video_has_annotations(video_id)
         video['has_annotations'] = has_annotations
+        # Check if ALL frames are annotated/reviewed (complete)
+        fully_annotated = db.video_fully_annotated(video_id)
+        video['fully_annotated'] = fully_annotated
     
     return videos
 
@@ -1610,17 +1613,17 @@ async def extract_frames_from_video(video_id: int, request: dict):
     if not video_path.exists():
         raise HTTPException(status_code=404, detail="Video file not found")
     
-    sampling_rate = request.get('sampling_rate', 'balanced')
+    sampling_rate = request.get('sampling_rate', 'medium')
     
-    # Map sampling rate to frame interval
+    # Map sampling rate to frame interval (in frames)
+    # At 30fps: 1s=30, 2s=60, 5s=150, 10s=300
     rate_map = {
-        'all': 1,
-        'high': 5,
-        'balanced': 15,
-        'low': 30,
-        'sparse': 60
+        'dense': 30,      # 1 frame per second
+        'medium': 60,     # 1 frame per 2 seconds
+        'sparse': 150,    # 1 frame per 5 seconds
+        'minimal': 300    # 1 frame per 10 seconds
     }
-    frame_interval = rate_map.get(sampling_rate, 15)
+    frame_interval = rate_map.get(sampling_rate, 60)
     
     # Extract frames
     import cv2
