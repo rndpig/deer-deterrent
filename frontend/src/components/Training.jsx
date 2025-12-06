@@ -2,9 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import './Training.css'
 import AnnotationTool from './AnnotationTool'
 import VideoLibrary from './VideoLibrary'
+import VideoSelector from './VideoSelector'
+import EarlyReview from './EarlyReview'
 
 function Training() {
-  const [viewMode, setViewMode] = useState('library') // 'library' or 'review'
+  const [viewMode, setViewMode] = useState('library') // 'library', 'selector', or 'review'
   const [detections, setDetections] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -467,12 +469,21 @@ function Training() {
   }
 
   const handleStartReview = () => {
+    setViewMode('selector')
+  }
+
+  const handleVideoSelected = (video) => {
+    // Frames have been extracted, load them into review view
     setViewMode('review')
     setFilter('unreviewed')
     loadDetections()
   }
 
   const handleBackToLibrary = () => {
+    setViewMode('library')
+  }
+
+  const handleBackFromSelector = () => {
     setViewMode('library')
   }
 
@@ -484,6 +495,25 @@ function Training() {
           onStartReview={handleStartReview}
         />
       </div>
+    )
+  }
+
+  // Show video selector view
+  if (viewMode === 'selector') {
+    return (
+      <VideoSelector 
+        onBack={handleBackFromSelector}
+        onVideoSelected={handleVideoSelected}
+      />
+    )
+  }
+
+  // Show review view
+  if (viewMode === 'review') {
+    return (
+      <EarlyReview 
+        onBack={handleBackToLibrary}
+      />
     )
   }
 

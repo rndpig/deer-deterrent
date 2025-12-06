@@ -1588,6 +1588,88 @@ async def get_video_thumbnail(video_id: int):
     return FileResponse(thumbnail_path, media_type="image/jpeg")
 
 
+@app.post("/api/videos/{video_id}/extract-frames")
+async def extract_frames_from_video(video_id: int, request: dict):
+    """Extract frames from a specific video for annotation."""
+    if not CV2_AVAILABLE:
+        raise HTTPException(status_code=503, detail="OpenCV not available")
+    
+    video = db.get_video(video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    video_path = Path(video.get('video_path', ''))
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Video file not found")
+    
+    sampling_rate = request.get('sampling_rate', 'balanced')
+    
+    # Map sampling rate to frame interval
+    rate_map = {
+        'all': 1,
+        'high': 5,
+        'balanced': 15,
+        'low': 30,
+        'sparse': 60
+    }
+    frame_interval = rate_map.get(sampling_rate, 15)
+    
+    # Extract frames
+    import cv2
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise HTTPException(status_code=500, detail="Could not open video file")
+    
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    frames_dir = Path("data/frames")
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    
+    extracted_count = 0
+    frame_number = 0
+    
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        # Extract every Nth frame
+        if frame_number % frame_interval == 0:
+            # Save frame
+            frame_filename = f"video_{video_id}_frame_{frame_number}.jpg"
+            frame_path = frames_dir / frame_filename
+            cv2.imwrite(str(frame_path), frame)
+            
+            # Calculate timestamp
+            timestamp_sec = frame_number / fps
+            
+            # Store in database
+            db.add_frame(
+                video_id=video_id,
+                frame_number=frame_number,
+                timestamp_in_video=timestamp_sec,
+                frame_path=str(frame_path),
+                image_url=f"/api/frames/image/{frame_filename}"
+            )
+            extracted_count += 1
+        
+        frame_number += 1
+    
+    cap.release()
+    
+    logger.info(f"Extracted {extracted_count} frames from video {video_id} (every {frame_interval} frames)")
+    
+    return {
+        "status": "success",
+        "video_id": video_id,
+        "frames_extracted": extracted_count,
+        "total_frames": frame_count,
+        "sampling_rate": sampling_rate,
+        "frame_interval": frame_interval
+    }
+
+
 @app.post("/api/videos/fix-camera-names")
 async def fix_camera_names():
     """
