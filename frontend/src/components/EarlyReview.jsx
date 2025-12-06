@@ -212,9 +212,6 @@ function EarlyReview({ onBack }) {
         }
         setFrames(updated)
         
-        // Mark frame as reviewed
-        await reviewFrame('correct')
-        
         // Move to next frame
         if (currentIndex < frames.length - 1) {
           setCurrentIndex(currentIndex + 1)
