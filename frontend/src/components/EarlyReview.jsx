@@ -407,18 +407,24 @@ function EarlyReview({ onBack }) {
               Save {drawnBoxes.length} Box{drawnBoxes.length !== 1 ? 'es' : ''}
             </button>
           </div>
+        </div>
+      </div>
 
-          <div className="sidebar-legend">
-            <p><span style={{color: '#10b981'}}>■ Green</span> = Model Detections</p>
-            <p><span style={{color: '#3b82f6'}}>■ Blue</span> = Manual Boxes</p>
-          </div>
-
-          <div className="sidebar-shortcuts">
-            <strong>Shortcuts:</strong>
-            <p>← → Arrow Keys</p>
-            <p>C = Mark Correct</p>
-            <p>S = Save Boxes</p>
-          </div>
+      {/* Footer with legend and shortcuts */}
+      <div className="review-footer">
+        <div className="footer-legend">
+          <span><strong>Colors:</strong></span>
+          <span style={{color: '#10b981'}}>■ Green</span> = Model Detections
+          <span className="divider">•</span>
+          <span style={{color: '#3b82f6'}}>■ Blue</span> = Manual Boxes
+        </div>
+        <div className="footer-shortcuts">
+          <span><strong>Shortcuts:</strong></span>
+          <span>← → Arrow Keys</span>
+          <span className="divider">•</span>
+          <span>C = Mark Correct</span>
+          <span className="divider">•</span>
+          <span>S = Save Boxes</span>
         </div>
       </div>
     </div>
