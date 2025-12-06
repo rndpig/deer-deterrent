@@ -1615,6 +1615,17 @@ async def extract_frames_from_video(video_id: int, request: dict):
     
     sampling_rate = request.get('sampling_rate', 'medium')
     
+    # Delete any existing training frames for this video to avoid duplicates
+    existing_frames = db.get_frames_for_video(video_id)
+    deleted_count = 0
+    for frame in existing_frames:
+        if frame.get('selected_for_training'):
+            db.delete_frame(frame['id'])
+            deleted_count += 1
+    
+    if deleted_count > 0:
+        logger.info(f"Deleted {deleted_count} existing training frames for video {video_id}")
+    
     # Map sampling rate to frame interval (in frames)
     # At 30fps: 0.5s=15, 1s=30, 2s=60, 5s=150
     rate_map = {
