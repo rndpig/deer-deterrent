@@ -1807,12 +1807,6 @@ async def select_training_frames(target_count: int = 120):
     """
     stats = db.get_training_statistics()
     
-    if stats['video_count'] < 10:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Need at least 10 videos. Currently have {stats['video_count']}"
-        )
-    
     # Run frame selection algorithm
     selected_frame_ids = db.select_diverse_frames(target_count)
     
