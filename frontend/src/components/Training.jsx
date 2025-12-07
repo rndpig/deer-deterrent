@@ -496,13 +496,33 @@ function Training() {
           }
         }
         
-        // No frames exist, need to extract them first - go to selector
-        alert('This video needs frames extracted first. Please select a sampling rate.')
-        setViewMode('selector')
+        // No frames exist, extract them with default sampling rate from settings
+        const settings = JSON.parse(localStorage.getItem('deer-deterrent-settings') || '{}')
+        const framesPerSec = settings.default_sampling_rate || 2.0
+        const fps = video.fps || 30
+        const frameInterval = Math.round(fps / framesPerSec)
+        
+        setLoading(true)
+        const extractResponse = await fetch(`${apiUrl}/api/videos/${videoId}/extract-frames`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sampling_rate: frameInterval })
+        })
+        
+        if (!extractResponse.ok) {
+          throw new Error('Failed to extract frames')
+        }
+        
+        // Frames extracted, go to review
+        setSelectedVideo(video)
+        setViewMode('review')
+        setFilter('unreviewed')
+        setLoading(false)
         
       } catch (err) {
         console.error('Error loading video:', err)
-        alert('Failed to load video for annotation')
+        alert('Failed to load video for annotation: ' + err.message)
+        setLoading(false)
       }
     } else {
       // Go to selector view (old behavior)

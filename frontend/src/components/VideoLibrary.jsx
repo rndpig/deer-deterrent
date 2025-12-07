@@ -484,6 +484,11 @@ function VideoLibrary({ onStartReview }) {
                 <div className="video-stats">
                   <span className="stat-badge">{video.frame_count} frames</span>
                   <span className="stat-badge">{video.detection_count} detections</span>
+                  {video.fully_annotated && (
+                    <span className="stat-badge stat-badge-success" title="Annotations complete">
+                      ✓
+                    </span>
+                  )}
                 </div>
                 
                 {/* Hamburger Menu Button */}

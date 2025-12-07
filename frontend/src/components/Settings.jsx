@@ -12,7 +12,8 @@ function Settings({ settings, setSettings }) {
     active_hours_end: 6,
     irrigation_duration: 30,
     zone_cooldown: 300,
-    dry_run: true
+    dry_run: true,
+    default_sampling_rate: 2.0  // frames per second
   }
 
   // Initialize from localStorage or defaults
@@ -220,6 +221,27 @@ function Settings({ settings, setSettings }) {
                   className="value-input"
                 />
               </div>
+            </div>
+          </div>
+          
+          <div className="settings-card">
+            <h3>Training</h3>
+            <div className="card-content">
+              <label htmlFor="sampling-rate">Default Frame Sampling Rate</label>
+              <div className="input-with-unit">
+                <input
+                  id="sampling-rate"
+                  type="number"
+                  min="0.1"
+                  max="10"
+                  step="0.1"
+                  value={localSettings.default_sampling_rate || 2.0}
+                  onChange={(e) => handleChange('default_sampling_rate', parseFloat(e.target.value))}
+                  className="value-input"
+                />
+                <span className="unit-label">frames/sec</span>
+              </div>
+              <p className="setting-hint">Number of frames to extract per second for annotation (default: 2.0)</p>
             </div>
           </div>
 
