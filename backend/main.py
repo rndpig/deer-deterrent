@@ -1602,19 +1602,30 @@ async def get_video_thumbnail(video_id: int):
 @app.get("/api/videos/{video_id}/has-frames")
 async def check_video_has_frames(video_id: int):
     """Check if a video already has extracted frames for training."""
+    logger.info(f"=== CHECKING FRAMES FOR VIDEO {video_id} ===")
+    
     video = db.get_video(video_id)
     if not video:
+        logger.error(f"Video {video_id} NOT FOUND in database!")
         raise HTTPException(status_code=404, detail="Video not found")
+    
+    logger.info(f"Video found: {video.get('filename')}")
     
     # Get frames for this video that are marked for training
     frames = db.get_frames_for_video(video_id)
     training_frames = [f for f in frames if f.get('selected_for_training', 0) == 1]
     
-    return {
+    logger.info(f"Total frames for video: {len(frames)}, Training frames: {len(training_frames)}")
+    
+    result = {
         "has_frames": len(training_frames) > 0,
         "frame_count": len(training_frames),
         "video_id": video_id
     }
+    
+    logger.info(f"Returning: {result}")
+    
+    return result
 
 
 @app.delete("/api/training/frames/clear-all")
