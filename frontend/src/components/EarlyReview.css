@@ -119,6 +119,23 @@
   border-color: rgba(255, 255, 255, 0.25);
 }
 
+.btn-no-deer {
+  padding: 0.4rem 0.75rem;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 4px;
+  color: #fbbf24;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.15s;
+  font-weight: 500;
+}
+
+.btn-no-deer:hover {
+  background: rgba(251, 191, 36, 0.25);
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
 .btn-clear-frames {
   padding: 0.4rem 0.75rem;
   background: rgba(220, 38, 38, 0.15);

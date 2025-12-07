@@ -289,8 +289,9 @@ function EarlyReview({ onBack, selectedVideo }) {
         console.log(`Filtered to ${filteredFrames.length} frames from video ${selectedVideo.id}`)
       }
       
-      const unreviewed = filteredFrames.filter(f => !f.reviewed)
-      setFrames(unreviewed)
+      // Show ALL frames for the video (don't filter out reviewed ones)
+      // User needs to see all frames to review/annotate them
+      setFrames(filteredFrames)
       setCurrentIndex(0)
     } catch (error) {
       console.error('Error loading frames:', error)
@@ -418,6 +419,7 @@ function EarlyReview({ onBack, selectedVideo }) {
           <button className="btn-nav" onClick={previousFrame} disabled={currentIndex === 0}>←</button>
           <button className="btn-nav" onClick={nextFrame} disabled={currentIndex === frames.length - 1}>→</button>
           <button className="btn-correct" onClick={() => reviewFrame('correct')}>✓ Correct</button>
+          <button className="btn-no-deer" onClick={() => reviewFrame('no_deer')}>∅ No Deer</button>
           <button className="btn-skip" onClick={nextFrame}>Skip</button>
           <button 
             className="btn-clear-frames" 
