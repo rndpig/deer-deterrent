@@ -420,7 +420,6 @@ function EarlyReview({ onBack, selectedVideo }) {
           <button className="btn-nav" onClick={nextFrame} disabled={currentIndex === frames.length - 1}>→</button>
           <button className="btn-correct" onClick={() => reviewFrame('correct')}>✓ Correct</button>
           <button className="btn-no-deer" onClick={() => reviewFrame('no_deer')}>∅ No Deer</button>
-          <button className="btn-skip" onClick={nextFrame}>Skip</button>
           <button 
             className="btn-clear-frames" 
             onClick={handleClearFrames}
