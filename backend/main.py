@@ -1448,16 +1448,17 @@ async def get_debug_status():
     """Diagnostic endpoint: Show current system state."""
     videos = db.get_all_videos()
     
-    # Get frame counts
-    all_frames = db.execute("SELECT COUNT(*) FROM frames").fetchone()[0]
-    training_frames = db.execute("SELECT COUNT(*) FROM frames WHERE selected_for_training = 1").fetchone()[0]
+    # Get frame counts using database connection
+    conn = db.get_connection()
+    all_frames = conn.execute("SELECT COUNT(*) FROM frames").fetchone()[0]
+    training_frames = conn.execute("SELECT COUNT(*) FROM frames WHERE selected_for_training = 1").fetchone()[0]
     
     # Get per-video frame counts
     video_frames = []
     for video in videos:
         vid = video['id']
-        total = db.execute("SELECT COUNT(*) FROM frames WHERE video_id = ?", (vid,)).fetchone()[0]
-        training = db.execute("SELECT COUNT(*) FROM frames WHERE video_id = ? AND selected_for_training = 1", (vid,)).fetchone()[0]
+        total = conn.execute("SELECT COUNT(*) FROM frames WHERE video_id = ?", (vid,)).fetchone()[0]
+        training = conn.execute("SELECT COUNT(*) FROM frames WHERE video_id = ? AND selected_for_training = 1", (vid,)).fetchone()[0]
         video_frames.append({
             "video_id": vid,
             "filename": video['filename'],
