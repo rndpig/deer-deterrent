@@ -994,7 +994,7 @@ async def review_frame(frame_id: int, request: dict):
     
     # If marked as correct or corrected, mark it for training
     if review_type in ['correct', 'corrected']:
-        db.mark_frame_for_training(frame_id, selected=True)
+        db.mark_frame_for_training(frame_id)
     
     return {"success": True, "frame_id": frame_id, "review_type": review_type}
 

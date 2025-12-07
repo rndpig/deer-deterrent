@@ -316,17 +316,23 @@ function EarlyReview({ onBack, selectedVideo }) {
       })
       
       if (response.ok) {
+        // Mark frame as reviewed locally
         const updated = [...frames]
         updated[currentIndex] = { ...currentFrame, reviewed: true, review_type: reviewType }
         setFrames(updated)
         
+        // Move to next frame automatically
         if (currentIndex < frames.length - 1) {
           setCurrentIndex(currentIndex + 1)
         }
+      } else {
+        const errorText = await response.text()
+        console.error('Review error:', response.status, errorText)
+        alert(`❌ Error marking frame as ${reviewType}: ${response.status} - ${errorText}`)
       }
     } catch (error) {
       console.error('Error reviewing frame:', error)
-      alert('❌ Error submitting review')
+      alert(`❌ Error submitting review: ${error.message}`)
     }
   }
 
