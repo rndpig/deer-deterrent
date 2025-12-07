@@ -235,6 +235,33 @@ function EarlyReview({ onBack, selectedVideo }) {
     setDrawnBoxes([])
   }
 
+  const handleClearFrames = async () => {
+    if (!selectedVideo) return
+    
+    if (!confirm(`Delete all extracted frames for video "${currentFrame.video_filename}"? You will need to re-extract frames to annotate again.`)) {
+      return
+    }
+    
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/videos/${selectedVideo.id}/clear-frames`, {
+        method: 'DELETE'
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        alert(`✓ Deleted ${result.frames_deleted} frames. Returning to video selection.`)
+        onBack()
+      } else {
+        alert('❌ Failed to clear frames')
+      }
+    } catch (error) {
+      console.error('Error clearing frames:', error)
+      alert('❌ Error: ' + error.message)
+    }
+  }
+
   useEffect(() => {
     loadFrames()
   }, [])
@@ -367,6 +394,13 @@ function EarlyReview({ onBack, selectedVideo }) {
           <button className="btn-nav" onClick={nextFrame} disabled={currentIndex === frames.length - 1}>→</button>
           <button className="btn-correct" onClick={() => reviewFrame('correct')}>✓ Correct</button>
           <button className="btn-skip" onClick={nextFrame}>Skip</button>
+          <button 
+            className="btn-skip" 
+            onClick={handleClearFrames}
+            style={{background: 'rgba(220, 38, 38, 0.2)', borderColor: 'rgba(220, 38, 38, 0.4)'}}
+          >
+            🗑️ Clear Frames
+          </button>
         </div>
       </div>
 

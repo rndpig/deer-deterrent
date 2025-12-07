@@ -59,31 +59,6 @@ function VideoSelector({ onBack, onVideoSelected }) {
     }
   }
 
-  const handleClearAllFrames = async () => {
-    if (!confirm('This will delete ALL extracted frames from ALL videos. Continue?')) {
-      return
-    }
-    
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/training/frames/clear-all`, {
-        method: 'DELETE'
-      })
-      
-      if (response.ok) {
-        const result = await response.json()
-        alert(`✓ Cleared ${result.frames_deleted} training frames`)
-        loadVideos() // Reload to update status
-      } else {
-        alert('Failed to clear frames')
-      }
-    } catch (error) {
-      console.error('Error clearing frames:', error)
-      alert('Error: ' + error.message)
-    }
-  }
-
   const handleExtractFrames = async (video) => {
     const videoToExtract = video || selectedVideo
     if (!videoToExtract) return
@@ -159,24 +134,6 @@ function VideoSelector({ onBack, onVideoSelected }) {
             <option value="low">Low (1/2sec)</option>
             <option value="sparse">Sparse (1/5sec)</option>
           </select>
-          <span style={{marginLeft: '1rem', fontSize: '0.9rem', opacity: 0.7}}>
-            Note: Frames extracted once and reused
-          </span>
-          <button 
-            onClick={handleClearAllFrames}
-            style={{
-              marginLeft: '1rem',
-              padding: '0.5rem 1rem',
-              background: '#dc2626',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.9rem'
-            }}
-          >
-            🗑️ Clear All Frames
-          </button>
         </div>
       </div>
 

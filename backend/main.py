@@ -1637,6 +1637,32 @@ async def clear_all_training_frames():
     }
 
 
+@app.delete("/api/videos/{video_id}/clear-frames")
+async def clear_video_training_frames(video_id: int):
+    """Delete training frames for a specific video."""
+    video = db.get_video(video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    # Get frames for this video
+    frames = db.get_frames_for_video(video_id)
+    deleted_count = 0
+    
+    for frame in frames:
+        if frame.get('selected_for_training', 0) == 1:
+            db.delete_frame(frame['id'])
+            deleted_count += 1
+    
+    logger.info(f"Cleared {deleted_count} training frames for video {video_id}")
+    
+    return {
+        "status": "success",
+        "video_id": video_id,
+        "frames_deleted": deleted_count,
+        "message": f"Deleted {deleted_count} training frames from video"
+    }
+
+
 @app.post("/api/videos/{video_id}/extract-frames")
 async def extract_frames_from_video(video_id: int, request: dict):
     """Extract frames from a specific video for annotation."""
