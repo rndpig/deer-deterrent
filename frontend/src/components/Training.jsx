@@ -474,19 +474,25 @@ function Training() {
   }
 
   const handleVideoSelected = (video) => {
-    // Frames have been extracted, load them into review view
+    // Frames have been extracted or will be extracted, go to review view
     setSelectedVideo(video)
     setViewMode('review')
     setFilter('unreviewed')
     loadDetections()
   }
 
-  const handleBackToLibrary = () => {
-    setViewMode('selector') // Go back to video selector, not all the way to library
+  const handleBackToSelector = () => {
+    setViewMode('selector') // Go back to video selector
+    setSelectedVideo(null)
   }
 
   const handleBackFromSelector = () => {
     setViewMode('library')
+  }
+
+  const handleTrainModel = async () => {
+    // Placeholder for model training
+    alert('Model training feature coming soon!\n\nThis will:\n1. Export all annotations to YOLO format\n2. Upload to training environment\n3. Start model training\n4. Download improved model')
   }
 
   // Show library view
@@ -495,6 +501,7 @@ function Training() {
       <div className="training-container">
         <VideoLibrary 
           onStartReview={handleStartReview}
+          onTrainModel={handleTrainModel}
         />
       </div>
     )
@@ -506,6 +513,7 @@ function Training() {
       <VideoSelector 
         onBack={handleBackFromSelector}
         onVideoSelected={handleVideoSelected}
+        onTrainModel={handleTrainModel}
       />
     )
   }
@@ -514,7 +522,7 @@ function Training() {
   if (viewMode === 'review') {
     return (
       <EarlyReview 
-        onBack={handleBackToLibrary}
+        onBack={handleBackToSelector}
         selectedVideo={selectedVideo}
       />
     )

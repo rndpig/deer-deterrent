@@ -76,6 +76,25 @@
   border-color: rgba(255, 255, 255, 0.25);
 }
 
+.btn-train-model {
+  padding: 0.4rem 0.9rem;
+  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.15s;
+  margin-left: auto;
+}
+
+.btn-train-model:hover {
+  background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
 .selector-content {
   flex: 1;
   padding: 1.5rem;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './VideoSelector.css'
 
-function VideoSelector({ onBack, onVideoSelected }) {
+function VideoSelector({ onBack, onVideoSelected, onTrainModel }) {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedVideo, setSelectedVideo] = useState(null)
@@ -139,6 +139,14 @@ function VideoSelector({ onBack, onVideoSelected }) {
           ← Back to Library
         </button>
         <h1>🎬 Select Video for Annotation</h1>
+        
+        <button 
+          className="btn-train-model"
+          onClick={onTrainModel}
+          title="Train model with collected annotations"
+        >
+          🚀 Train Model
+        </button>
         
         <div className="sampling-rate-control">
           <label htmlFor="sampling-rate">Frame Sampling:</label>
