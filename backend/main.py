@@ -1426,6 +1426,10 @@ async def get_videos():
     """Get all uploaded videos with metadata."""
     videos = db.get_all_videos()
     
+    logger.info(f"=== GET VIDEOS - Returning {len(videos)} videos ===")
+    for video in videos:
+        logger.info(f"Video ID: {video.get('id')}, Filename: {video.get('filename')}")
+    
     # Check annotation status for each video
     for video in videos:
         video_id = video['id']

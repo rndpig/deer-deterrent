@@ -35,10 +35,28 @@ function VideoSelector({ onBack, onVideoSelected }) {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
     setProcessing(true)
 
+    console.log('=== VIDEO CLICK ===')
+    console.log('Video object:', video)
+    console.log('Video ID:', video.id)
+    console.log('Video filename:', video.filename)
+
     try {
       // Check if this video already has extracted frames
       console.log(`Checking if video ${video.id} has frames...`)
       const checkResponse = await fetch(`${apiUrl}/api/videos/${video.id}/has-frames`)
+      
+      console.log('Check response status:', checkResponse.status)
+      
+      if (!checkResponse.ok) {
+        console.error('Check failed with status:', checkResponse.status)
+        const errorText = await checkResponse.text()
+        console.error('Error response:', errorText)
+        // Fall through to extraction
+        console.log('Proceeding with extraction despite check failure')
+        await handleExtractFrames(video)
+        return
+      }
+      
       const checkData = await checkResponse.json()
       
       console.log('Frame check result:', checkData)
@@ -46,6 +64,7 @@ function VideoSelector({ onBack, onVideoSelected }) {
       if (checkData.has_frames && checkData.frame_count > 0) {
         // Frames already exist, go directly to annotation
         console.log(`✓ Using ${checkData.frame_count} existing frames for video ${video.id}`)
+        setProcessing(false)
         onVideoSelected(video)
       } else {
         // No frames exist, extract them first
