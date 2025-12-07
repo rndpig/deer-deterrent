@@ -114,9 +114,6 @@ function VideoLibrary({ onStartReview }) {
     setOpenMenuId(null)
     
     switch(action) {
-      case 'play':
-        handlePlayVideo(video)
-        break
       case 'frames':
         handleViewFrames(video)
         break
@@ -501,13 +498,6 @@ function VideoLibrary({ onStartReview }) {
                 {/* Dropdown Menu */}
                 {openMenuId === video.id && (
                   <div className="video-menu">
-                    <button 
-                      className="menu-item"
-                      onClick={(e) => handleMenuAction('play', video, e)}
-                    >
-                      <span className="menu-icon">▶</span>
-                      <span>Play</span>
-                    </button>
                     <button 
                       className="menu-item"
                       onClick={(e) => handleMenuAction('frames', video, e)}

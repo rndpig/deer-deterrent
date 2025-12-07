@@ -469,8 +469,45 @@ function Training() {
     }
   }
 
-  const handleStartReview = () => {
-    setViewMode('selector')
+  const handleStartReview = async (videoId = null) => {
+    if (videoId) {
+      // Direct annotation: find the video and go straight to review
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      
+      try {
+        // First, get the video details
+        const videoResponse = await fetch(`${apiUrl}/api/videos/${videoId}`)
+        if (!videoResponse.ok) {
+          throw new Error('Failed to load video')
+        }
+        const video = await videoResponse.json()
+        
+        // Check if frames are already extracted
+        const checkResponse = await fetch(`${apiUrl}/api/videos/${videoId}/has-frames`)
+        if (checkResponse.ok) {
+          const checkData = await checkResponse.json()
+          
+          if (checkData.has_frames && checkData.frame_count > 0) {
+            // Frames exist, go directly to review
+            setSelectedVideo(video)
+            setViewMode('review')
+            setFilter('unreviewed')
+            return
+          }
+        }
+        
+        // No frames exist, need to extract them first - go to selector
+        alert('This video needs frames extracted first. Please select a sampling rate.')
+        setViewMode('selector')
+        
+      } catch (err) {
+        console.error('Error loading video:', err)
+        alert('Failed to load video for annotation')
+      }
+    } else {
+      // Go to selector view (old behavior)
+      setViewMode('selector')
+    }
   }
 
   const handleVideoSelected = (video) => {
