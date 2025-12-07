@@ -22,11 +22,25 @@ function VideoLibrary({ onStartReview }) {
   const [videoFrames, setVideoFrames] = useState([])
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
   const thumbnailRefs = useRef([])
+  
+  // Hamburger menu state
+  const [openMenuId, setOpenMenuId] = useState(null)
 
   useEffect(() => {
     loadVideos()
     loadTrainingStatus()
   }, [])
+  
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (openMenuId && !event.target.closest('.video-menu')) {
+        setOpenMenuId(null)
+      }
+    }
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [openMenuId])
 
   const loadVideos = async () => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -87,6 +101,34 @@ function VideoLibrary({ onStartReview }) {
       alert('Failed to delete video')
     } finally {
       setDeleting(null)
+    }
+  }
+
+  const toggleMenu = (videoId, event) => {
+    event.stopPropagation()
+    setOpenMenuId(openMenuId === videoId ? null : videoId)
+  }
+  
+  const handleMenuAction = (action, video, event) => {
+    event.stopPropagation()
+    setOpenMenuId(null)
+    
+    switch(action) {
+      case 'play':
+        handlePlayVideo(video)
+        break
+      case 'frames':
+        handleViewFrames(video)
+        break
+      case 'annotate':
+        onStartReview(video.id)
+        break
+      case 'edit':
+        handleEditVideo(video)
+        break
+      case 'delete':
+        deleteVideo(video.id, video.filename)
+        break
     }
   }
 
@@ -405,23 +447,6 @@ function VideoLibrary({ onStartReview }) {
           >
             {uploading ? '⏳ Uploading...' : '📤 Upload Video'}
           </button>
-          
-          <div className="training-status-card">
-            <div className="status-row">
-              <span className="status-label">Videos Collected:</span>
-              <span className="status-value">
-                {trainingStatus?.video_count || 0} / 10
-              </span>
-            </div>
-            
-            <button 
-              className="btn-start-review"
-              onClick={handleStartReview}
-              disabled={!trainingStatus || trainingStatus.video_count === 0}
-            >
-              ✅ Start Annotation
-            </button>
-          </div>
         </div>
       </div>
 
@@ -466,6 +491,57 @@ function VideoLibrary({ onStartReview }) {
                     {formatDuration(video.duration_seconds)} @ {Math.round(video.fps)}fps
                   </span>
                 </div>
+                
+                {/* Hamburger Menu Button */}
+                <button 
+                  className="video-menu-btn"
+                  onClick={(e) => toggleMenu(video.id, e)}
+                  title="Video actions"
+                >
+                  ⋮
+                </button>
+                
+                {/* Dropdown Menu */}
+                {openMenuId === video.id && (
+                  <div className="video-menu">
+                    <button 
+                      className="menu-item"
+                      onClick={(e) => handleMenuAction('play', video, e)}
+                    >
+                      <span className="menu-icon">▶</span>
+                      <span>Play</span>
+                    </button>
+                    <button 
+                      className="menu-item"
+                      onClick={(e) => handleMenuAction('frames', video, e)}
+                    >
+                      <span className="menu-icon">📊</span>
+                      <span>Frames</span>
+                    </button>
+                    <button 
+                      className="menu-item"
+                      onClick={(e) => handleMenuAction('annotate', video, e)}
+                    >
+                      <span className="menu-icon">✏️</span>
+                      <span>Annotate</span>
+                    </button>
+                    <button 
+                      className="menu-item"
+                      onClick={(e) => handleMenuAction('edit', video, e)}
+                    >
+                      <span className="menu-icon">📝</span>
+                      <span>Edit</span>
+                    </button>
+                    <button 
+                      className="menu-item menu-item-delete"
+                      onClick={(e) => handleMenuAction('delete', video, e)}
+                      disabled={deleting === video.id}
+                    >
+                      <span className="menu-icon">🗑️</span>
+                      <span>{deleting === video.id ? 'Wait...' : 'Delete'}</span>
+                    </button>
+                  </div>
+                )}
               </div>
               
               <div className="video-info">
@@ -475,31 +551,6 @@ function VideoLibrary({ onStartReview }) {
                   <span className="metadata-left">{formatDate(video.captured_at || video.upload_date)}</span>
                   <span className="metadata-right">{formatCameraName(video)}</span>
                 </div>
-              </div>
-              
-              <div className="video-actions">
-                <button 
-                  className="btn-view-frames"
-                  onClick={() => handleViewFrames(video)}
-                  title="View all frames with detections"
-                >
-                  Frames
-                </button>
-                <button 
-                  className="btn-edit"
-                  onClick={() => handleEditVideo(video)}
-                  title="Edit camera and date/time"
-                >
-                  Edit
-                </button>
-                <button 
-                  className="btn-delete"
-                  onClick={() => deleteVideo(video.id, video.filename)}
-                  disabled={deleting === video.id}
-                  title="Delete video and frames"
-                >
-                  {deleting === video.id ? 'Wait...' : 'Delete'}
-                </button>
               </div>
             </div>
           ))}
