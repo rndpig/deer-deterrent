@@ -17,82 +17,122 @@
 .review-header-compact {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1.5rem;
-  background: rgba(15, 23, 42, 0.95);
-  border-bottom: 2px solid rgba(59, 130, 246, 0.3);
-  font-size: 0.9rem;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: rgba(15, 23, 42, 0.98);
+  border-bottom: 1px solid rgba(59, 130, 246, 0.3);
+  font-size: 0.85rem;
 }
 
 .review-header-compact .btn-back {
-  padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
+  padding: 0.4rem 0.75rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
   color: white;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  transition: all 0.15s;
 }
 
 .review-header-compact .btn-back:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .review-header-compact .frame-counter {
-  font-size: 1rem;
+  font-size: 0.95rem;
   margin-left: auto;
+  padding: 0.3rem 0.6rem;
+  background: rgba(59, 130, 246, 0.15);
+  border-radius: 4px;
+}
+
+.review-header-compact .completion-badge {
+  padding: 0.3rem 0.6rem;
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-radius: 4px;
+  color: #10b981;
+  font-weight: 600;
+  font-size: 0.85rem;
 }
 
 .review-header-compact .header-actions {
   display: flex;
-  gap: 0.5rem;
-  margin-left: 1rem;
+  gap: 0.4rem;
+  margin-left: 0.5rem;
 }
 
 .btn-nav {
-  padding: 0.5rem 0.75rem;
-  background: rgba(59, 130, 246, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.4);
-  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 4px;
   color: white;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.9rem;
+  transition: all 0.15s;
+  min-width: 32px;
 }
 
 .btn-nav:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(59, 130, 246, 0.5);
 }
 
 .btn-nav:disabled {
-  opacity: 0.3;
+  opacity: 0.25;
   cursor: not-allowed;
 }
 
 .btn-correct {
-  padding: 0.5rem 1rem;
-  background: rgba(16, 185, 129, 0.2);
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  border-radius: 6px;
-  color: white;
+  padding: 0.4rem 0.75rem;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 4px;
+  color: #10b981;
   cursor: pointer;
   font-weight: 500;
+  font-size: 0.85rem;
+  transition: all 0.15s;
 }
 
 .btn-correct:hover {
-  background: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.5);
 }
 
 .btn-skip {
-  padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  color: white;
+  padding: 0.4rem 0.75rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.15s;
 }
 
 .btn-skip:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.btn-clear-frames {
+  padding: 0.4rem 0.75rem;
+  background: rgba(220, 38, 38, 0.15);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  border-radius: 4px;
+  color: #dc2626;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.15s;
+}
+
+.btn-clear-frames:hover {
+  background: rgba(220, 38, 38, 0.25);
+  border-color: rgba(220, 38, 38, 0.5);
 }
 
 .review-main-area {

@@ -381,16 +381,28 @@ function EarlyReview({ onBack, selectedVideo }) {
     ? currentFrame.image_url 
     : `${apiUrl}${currentFrame.image_url}`
 
+  // Check if all frames are annotated
+  const allAnnotated = frames.every(f => f.annotation_count > 0 || f.reviewed)
+  const annotatedCount = frames.filter(f => f.annotation_count > 0 || f.reviewed).length
+
   return (
     <div className="review-container-with-sidebar">
       {/* Header */}
       <div className="review-header-compact">
         <button className="btn-back" onClick={onBack}>← Back</button>
         <span className="frame-counter"><strong>{currentIndex + 1}</strong> / {frames.length}</span>
-        <span>Video: {currentFrame.video_filename}</span>
-        <span>Frame: {currentFrame.frame_number}</span>
-        <span style={{color: '#10b981'}}>🟢 Auto: {currentFrame.detection_count || 0}</span>
-        <span style={{color: '#3b82f6'}}>🔵 Manual: {currentFrame.annotation_count || 0}</span>
+        {allAnnotated && (
+          <span className="completion-badge">✓ All Frames Annotated</span>
+        )}
+        {!allAnnotated && annotatedCount > 0 && (
+          <span style={{fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)'}}>
+            {annotatedCount} / {frames.length} annotated
+          </span>
+        )}
+        <span style={{fontSize: '0.85rem'}}>Video: {currentFrame.video_filename}</span>
+        <span style={{fontSize: '0.85rem'}}>Frame: {currentFrame.frame_number}</span>
+        <span style={{fontSize: '0.85rem', color: '#10b981'}}>Auto: {currentFrame.detection_count || 0}</span>
+        <span style={{fontSize: '0.85rem', color: '#3b82f6'}}>Manual: {currentFrame.annotation_count || 0}</span>
         
         <div className="header-actions">
           <button className="btn-nav" onClick={previousFrame} disabled={currentIndex === 0}>←</button>
@@ -398,11 +410,10 @@ function EarlyReview({ onBack, selectedVideo }) {
           <button className="btn-correct" onClick={() => reviewFrame('correct')}>✓ Correct</button>
           <button className="btn-skip" onClick={nextFrame}>Skip</button>
           <button 
-            className="btn-skip" 
+            className="btn-clear-frames" 
             onClick={handleClearFrames}
-            style={{background: 'rgba(220, 38, 38, 0.2)', borderColor: 'rgba(220, 38, 38, 0.4)'}}
           >
-            🗑️ Clear Frames
+            🗑️ Clear All
           </button>
         </div>
       </div>
