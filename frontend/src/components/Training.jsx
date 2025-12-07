@@ -482,7 +482,7 @@ function Training() {
   }
 
   const handleBackToLibrary = () => {
-    setViewMode('library')
+    setViewMode('selector') // Go back to video selector, not all the way to library
   }
 
   const handleBackFromSelector = () => {
