@@ -487,9 +487,6 @@ function VideoLibrary({ onStartReview }) {
                 <div className="video-stats">
                   <span className="stat-badge">{video.frame_count} frames</span>
                   <span className="stat-badge">{video.detection_count} detections</span>
-                  <span className="stat-badge stat-badge-dark">
-                    {formatDuration(video.duration_seconds)} @ {Math.round(video.fps)}fps
-                  </span>
                 </div>
                 
                 {/* Hamburger Menu Button */}
@@ -601,6 +598,19 @@ function VideoLibrary({ onStartReview }) {
                   value={captureDateTime}
                   onChange={(e) => setCaptureDateTime(e.target.value)}
                   className="form-input"
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>Duration & Frame Rate</label>
+                <input
+                  type="text"
+                  value={uploadedVideo.video_id ? 
+                    `${formatDuration(videos.find(v => v.id === uploadedVideo.video_id)?.duration_seconds || 0)} @ ${Math.round(videos.find(v => v.id === uploadedVideo.video_id)?.fps || 0)}fps` : 
+                    'N/A'
+                  }
+                  disabled
+                  className="form-input-disabled"
                 />
               </div>
             </div>
