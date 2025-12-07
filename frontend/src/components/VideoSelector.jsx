@@ -30,6 +30,32 @@ function VideoSelector({ onBack, onVideoSelected }) {
     }
   }
 
+  const handleVideoClick = async (video) => {
+    setSelectedVideo(video)
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    setProcessing(true)
+
+    try {
+      // Check if this video already has extracted frames
+      const checkResponse = await fetch(`${apiUrl}/api/videos/${video.id}/has-frames`)
+      const checkData = await checkResponse.json()
+      
+      if (checkData.has_frames && checkData.frame_count > 0) {
+        // Frames already exist, go directly to annotation
+        console.log(`Using ${checkData.frame_count} existing frames for video ${video.id}`)
+        onVideoSelected(video)
+      } else {
+        // No frames exist, extract them first
+        console.log(`Extracting frames for video ${video.id} at ${samplingRate} rate`)
+        await handleExtractFrames(video)
+      }
+    } catch (error) {
+      console.error('Error checking frames:', error)
+      // If check fails, try extracting anyway
+      await handleExtractFrames(video)
+    }
+  }
+
   const handleExtractFrames = async (video) => {
     const videoToExtract = video || selectedVideo
     if (!videoToExtract) return
@@ -105,6 +131,9 @@ function VideoSelector({ onBack, onVideoSelected }) {
             <option value="low">Low (1/2sec)</option>
             <option value="sparse">Sparse (1/5sec)</option>
           </select>
+          <span style={{marginLeft: '1rem', fontSize: '0.9rem', opacity: 0.7}}>
+            Note: Frames extracted once and reused
+          </span>
         </div>
       </div>
 
@@ -128,10 +157,7 @@ function VideoSelector({ onBack, onVideoSelected }) {
                 <div 
                   key={video.id}
                   className={`video-card ${fullyAnnotated ? 'fully-annotated' : hasAnnotations ? 'partial-annotated' : ''}`}
-                  onClick={() => {
-                    setSelectedVideo(video)
-                    handleExtractFrames(video)
-                  }}
+                  onClick={() => handleVideoClick(video)}
                 >
                   <div className="video-thumbnail">
                     <img src={thumbnailUrl} alt={video.filename} />
