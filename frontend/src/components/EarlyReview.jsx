@@ -398,17 +398,21 @@ function EarlyReview({ onBack, selectedVideo }) {
         <button className="btn-back" onClick={onBack}>← Back</button>
         <span className="frame-counter"><strong>{currentIndex + 1}</strong> / {frames.length}</span>
         {allAnnotated && (
-          <span className="completion-badge">✓ All Frames Annotated</span>
+          <span className="completion-badge">✓ Complete</span>
         )}
         {!allAnnotated && annotatedCount > 0 && (
-          <span style={{fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)'}}>
+          <span style={{fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginLeft: 'auto'}}>
             {annotatedCount} / {frames.length} annotated
           </span>
         )}
-        <span style={{fontSize: '0.85rem'}}>Video: {currentFrame.video_filename}</span>
-        <span style={{fontSize: '0.85rem'}}>Frame: {currentFrame.frame_number}</span>
-        <span style={{fontSize: '0.85rem', color: '#10b981'}}>Auto: {currentFrame.detection_count || 0}</span>
-        <span style={{fontSize: '0.85rem', color: '#3b82f6'}}>Manual: {currentFrame.annotation_count || 0}</span>
+        <span style={{fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', marginLeft: allAnnotated || annotatedCount === 0 ? 'auto' : '0.5rem'}}>
+          {currentFrame.video_filename}
+        </span>
+        <span style={{fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)'}}>
+          F:{currentFrame.frame_number}
+        </span>
+        <span style={{fontSize: '0.8rem', color: '#10b981'}}>A:{currentFrame.detection_count || 0}</span>
+        <span style={{fontSize: '0.8rem', color: '#3b82f6'}}>M:{currentFrame.annotation_count || 0}</span>
         
         <div className="header-actions">
           <button className="btn-nav" onClick={previousFrame} disabled={currentIndex === 0}>←</button>
