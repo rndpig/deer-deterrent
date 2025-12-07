@@ -542,6 +542,11 @@ function Training() {
     setViewMode('selector') // Go back to video selector
     setSelectedVideo(null)
   }
+  
+  const handleBackToLibrary = () => {
+    setViewMode('library') // Go back to library from review
+    setSelectedVideo(null)
+  }
 
   const handleBackFromSelector = () => {
     setViewMode('library')
@@ -579,7 +584,7 @@ function Training() {
   if (viewMode === 'review') {
     return (
       <EarlyReview 
-        onBack={handleBackToSelector}
+        onBack={handleBackToLibrary}
         selectedVideo={selectedVideo}
       />
     )
