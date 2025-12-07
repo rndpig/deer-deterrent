@@ -138,36 +138,39 @@
   width: 320px;
   background: rgba(30, 41, 59, 0.95);
   border-left: 2px solid rgba(59, 130, 246, 0.3);
-  padding: 1.5rem;
+  padding: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 0.75rem;
+  overflow-y: auto;
 }
 
 .annotation-sidebar h3 {
   margin: 0;
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   color: #3b82f6;
 }
 
 .annotation-sidebar h4 {
-  margin: 0 0 0.75rem 0;
-  font-size: 1.1rem;
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
   color: rgba(255, 255, 255, 0.9);
 }
 
 .instructions {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.7);
   margin: 0;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 .box-list {
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid rgba(59, 130, 246, 0.2);
   border-radius: 8px;
-  padding: 1rem;
+  padding: 0.75rem;
+  max-height: 240px;
+  overflow-y: auto;
 }
 
 .no-boxes {
@@ -183,14 +186,14 @@
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .box-list li {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6rem;
+  padding: 0.5rem;
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.2);
   border-radius: 6px;
@@ -218,7 +221,8 @@
 
 .sidebar-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.5rem;
+  margin-top: auto;
 }
 
 .btn-clear {
