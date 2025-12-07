@@ -1617,6 +1617,26 @@ async def check_video_has_frames(video_id: int):
     }
 
 
+@app.delete("/api/training/frames/clear-all")
+async def clear_all_training_frames():
+    """Delete ALL training frames from all videos - fresh start."""
+    # Get all frames marked for training
+    all_frames = db.get_training_frames()
+    deleted_count = 0
+    
+    for frame in all_frames:
+        db.delete_frame(frame['id'])
+        deleted_count += 1
+    
+    logger.info(f"Cleared all training frames: {deleted_count} frames deleted")
+    
+    return {
+        "status": "success",
+        "frames_deleted": deleted_count,
+        "message": f"Deleted {deleted_count} training frames"
+    }
+
+
 @app.post("/api/videos/{video_id}/extract-frames")
 async def extract_frames_from_video(video_id: int, request: dict):
     """Extract frames from a specific video for annotation."""

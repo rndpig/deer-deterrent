@@ -37,22 +37,50 @@ function VideoSelector({ onBack, onVideoSelected }) {
 
     try {
       // Check if this video already has extracted frames
+      console.log(`Checking if video ${video.id} has frames...`)
       const checkResponse = await fetch(`${apiUrl}/api/videos/${video.id}/has-frames`)
       const checkData = await checkResponse.json()
       
+      console.log('Frame check result:', checkData)
+      
       if (checkData.has_frames && checkData.frame_count > 0) {
         // Frames already exist, go directly to annotation
-        console.log(`Using ${checkData.frame_count} existing frames for video ${video.id}`)
+        console.log(`✓ Using ${checkData.frame_count} existing frames for video ${video.id}`)
         onVideoSelected(video)
       } else {
         // No frames exist, extract them first
-        console.log(`Extracting frames for video ${video.id} at ${samplingRate} rate`)
+        console.log(`✗ No frames found, extracting for video ${video.id} at ${samplingRate} rate`)
         await handleExtractFrames(video)
       }
     } catch (error) {
       console.error('Error checking frames:', error)
-      // If check fails, try extracting anyway
-      await handleExtractFrames(video)
+      alert('Error checking frames: ' + error.message)
+      setProcessing(false)
+    }
+  }
+
+  const handleClearAllFrames = async () => {
+    if (!confirm('This will delete ALL extracted frames from ALL videos. Continue?')) {
+      return
+    }
+    
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/training/frames/clear-all`, {
+        method: 'DELETE'
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        alert(`✓ Cleared ${result.frames_deleted} training frames`)
+        loadVideos() // Reload to update status
+      } else {
+        alert('Failed to clear frames')
+      }
+    } catch (error) {
+      console.error('Error clearing frames:', error)
+      alert('Error: ' + error.message)
     }
   }
 
@@ -134,6 +162,21 @@ function VideoSelector({ onBack, onVideoSelected }) {
           <span style={{marginLeft: '1rem', fontSize: '0.9rem', opacity: 0.7}}>
             Note: Frames extracted once and reused
           </span>
+          <button 
+            onClick={handleClearAllFrames}
+            style={{
+              marginLeft: '1rem',
+              padding: '0.5rem 1rem',
+              background: '#dc2626',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.9rem'
+            }}
+          >
+            🗑️ Clear All Frames
+          </button>
         </div>
       </div>
 
