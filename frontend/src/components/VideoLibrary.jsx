@@ -421,13 +421,6 @@ function VideoLibrary({ onStartReview }) {
             >
               ✅ Start Annotation
             </button>
-            
-            {trainingStatus?.reviewed_frames > 0 && (
-              <div className="status-info">
-                <span className="status-label">Reviewed:</span>
-                <span className="status-value-small">{trainingStatus.reviewed_frames} frames</span>
-              </div>
-            )}
           </div>
         </div>
       </div>
