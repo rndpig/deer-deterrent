@@ -1556,6 +1556,50 @@ async def delete_video_endpoint(video_id: int):
     return {"status": "success", "message": "Video deleted"}
 
 
+@app.post("/api/videos/{video_id}/archive")
+async def archive_video_endpoint(video_id: int):
+    """Archive a video (hides from main gallery but preserves all data)."""
+    video = db.get_video(video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    success = db.archive_video(video_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to archive video")
+    
+    return {"status": "success", "message": "Video archived"}
+
+
+@app.post("/api/videos/{video_id}/unarchive")
+async def unarchive_video_endpoint(video_id: int):
+    """Unarchive a video (restore to main gallery)."""
+    video = db.get_video(video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    success = db.unarchive_video(video_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to unarchive video")
+    
+    return {"status": "success", "message": "Video unarchived"}
+
+
+@app.get("/api/videos/archived")
+async def get_archived_videos_endpoint():
+    """Get all archived videos with annotation status."""
+    videos = db.get_archived_videos()
+    
+    # Add annotation status for each video
+    for video in videos:
+        video_id = video['id']
+        fully_annotated = db.video_fully_annotated(video_id)
+        has_annotations = db.video_has_annotations(video_id)
+        video['fully_annotated'] = fully_annotated
+        video['has_annotations'] = has_annotations
+    
+    return videos
+
+
 @app.patch("/api/videos/{video_id}")
 async def update_video_metadata(video_id: int, request: dict):
     """Update video metadata (camera and/or capture timestamp)."""

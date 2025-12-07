@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard'
 import Training from './components/Training'
 import Settings from './components/Settings'
 import AuthButton from './components/AuthButton'
+import ArchivedVideos from './components/ArchivedVideos'
 import { useAuth } from './hooks/useAuth'
 
 function App() {
@@ -12,6 +13,7 @@ function App() {
   const [stats, setStats] = useState(null)
   const [settings, setSettings] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [showArchive, setShowArchive] = useState(false)
   const [ws, setWs] = useState(null)
   const [unauthorized, setUnauthorized] = useState(false)
 
@@ -121,13 +123,13 @@ function App() {
         <nav className="tabs">
           <button 
             className={activeTab === 'dashboard' ? 'active' : ''}
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => { setActiveTab('dashboard'); setShowArchive(false); }}
           >
             Dashboard
           </button>
           <button 
             className={activeTab === 'training' ? 'active' : ''}
-            onClick={() => setActiveTab('training')}
+            onClick={() => { setActiveTab('training'); setShowArchive(false); }}
           >
             Model Improvement
           </button>
@@ -143,7 +145,16 @@ function App() {
       <main className="app-content">
         {activeTab === 'dashboard' && <Dashboard stats={stats} settings={settings} />}
         {activeTab === 'training' && <Training />}
-        {activeTab === 'settings' && <Settings settings={settings} setSettings={setSettings} />}
+        {activeTab === 'settings' && !showArchive && (
+          <Settings 
+            settings={settings} 
+            setSettings={setSettings} 
+            onViewArchive={() => setShowArchive(true)}
+          />
+        )}
+        {activeTab === 'settings' && showArchive && (
+          <ArchivedVideos onBack={() => setShowArchive(false)} />
+        )}
       </main>
     </div>
   )

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './Settings.css'
 
-function Settings({ settings, setSettings }) {
+function Settings({ settings, setSettings, onViewArchive }) {
   // Default settings that match backend defaults
   const defaultSettings = {
     confidence_threshold: 0.6,
@@ -186,7 +186,16 @@ function Settings({ settings, setSettings }) {
 
   return (
     <div className="settings">
-      <h2>System Settings</h2>
+      <div className="settings-header-row">
+        <h2>System Settings</h2>
+        <button 
+          className="btn-view-archive"
+          onClick={onViewArchive}
+          title="View archived videos"
+        >
+          📦 Video Archive
+        </button>
+      </div>
       
       {message && (
         <div className={`message ${message.includes('✅') ? 'success' : 'error'}`}>

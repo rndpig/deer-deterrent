@@ -104,6 +104,31 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
     }
   }
 
+  const archiveVideo = async (videoId, videoFilename) => {
+    if (!confirm(`Archive "${videoFilename}"? This will hide it from the main gallery but preserve all data.`)) {
+      return
+    }
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/videos/${videoId}/archive`, {
+        method: 'POST'
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      
+      // Reload videos
+      await loadVideos()
+      await loadTrainingStatus()
+    } catch (error) {
+      console.error('Error archiving video:', error)
+      alert('Failed to archive video')
+    }
+  }
+
   const toggleMenu = (videoId, event) => {
     event.stopPropagation()
     setOpenMenuId(openMenuId === videoId ? null : videoId)
@@ -122,6 +147,9 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
         break
       case 'edit':
         handleEditVideo(video)
+        break
+      case 'archive':
+        archiveVideo(video.id, video.filename)
         break
       case 'delete':
         deleteVideo(video.id, video.filename)
@@ -531,6 +559,13 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
                     >
                       <span className="menu-icon">📝</span>
                       <span>Edit</span>
+                    </button>
+                    <button 
+                      className="menu-item"
+                      onClick={(e) => handleMenuAction('archive', video, e)}
+                    >
+                      <span className="menu-icon">🗄️</span>
+                      <span>Archive</span>
                     </button>
                     <button 
                       className="menu-item menu-item-delete"

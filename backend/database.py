@@ -32,6 +32,7 @@ def init_database():
             total_frames INTEGER,
             status TEXT DEFAULT 'analyzed',
             video_path TEXT,
+            archived BOOLEAN DEFAULT 0,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -138,6 +139,11 @@ def init_database():
         print("✓ Added 'captured_at' column to videos table")
         logger.info("Added 'captured_at' column to videos table")
     
+    if 'archived' not in columns:
+        cursor.execute("ALTER TABLE videos ADD COLUMN archived BOOLEAN DEFAULT 0")
+        print("✓ Added 'archived' column to videos table")
+        logger.info("Added 'archived' column to videos table")
+    
     conn.commit()
     conn.close()
     
@@ -169,7 +175,7 @@ def add_video(filename: str, camera_name: str, duration: float, fps: float,
     return video_id
 
 def get_all_videos() -> List[Dict]:
-    """Get all videos with frame and detection counts."""
+    """Get all non-archived videos with frame and detection counts."""
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -183,6 +189,7 @@ def get_all_videos() -> List[Dict]:
         LEFT JOIN frames f ON v.id = f.video_id
         LEFT JOIN detections d ON f.id = d.frame_id
         LEFT JOIN annotations a ON f.id = a.frame_id
+        WHERE v.archived = 0 OR v.archived IS NULL
         GROUP BY v.id
         ORDER BY v.created_at DESC
     """)
@@ -260,6 +267,65 @@ def get_video(video_id: int) -> Optional[Dict]:
     
     conn.close()
     return None
+
+def archive_video(video_id: int) -> bool:
+    """Archive a video (sets archived=1)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        UPDATE videos 
+        SET archived = 1
+        WHERE id = ?
+    """, (video_id,))
+    
+    conn.commit()
+    success = cursor.rowcount > 0
+    conn.close()
+    
+    return success
+
+def unarchive_video(video_id: int) -> bool:
+    """Unarchive a video (sets archived=0)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        UPDATE videos 
+        SET archived = 0
+        WHERE id = ?
+    """, (video_id,))
+    
+    conn.commit()
+    success = cursor.rowcount > 0
+    conn.close()
+    
+    return success
+
+def get_archived_videos() -> List[Dict]:
+    """Get all archived videos with frame and detection counts."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT 
+            v.*,
+            COUNT(DISTINCT f.id) as frame_count,
+            COUNT(DISTINCT d.id) as detection_count,
+            COUNT(DISTINCT a.id) as annotation_count
+        FROM videos v
+        LEFT JOIN frames f ON v.id = f.video_id
+        LEFT JOIN detections d ON f.id = d.frame_id
+        LEFT JOIN annotations a ON f.id = a.frame_id
+        WHERE v.archived = 1
+        GROUP BY v.id
+        ORDER BY v.created_at DESC
+    """)
+    
+    videos = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    return videos
 
 def update_video_camera_name(video_id: int, camera_name: str) -> bool:
     """Update the camera name for a video."""
