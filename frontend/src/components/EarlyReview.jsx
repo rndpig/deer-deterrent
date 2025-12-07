@@ -254,11 +254,14 @@ function EarlyReview({ onBack, selectedVideo }) {
         alert(`✓ Deleted ${result.frames_deleted} frames. Returning to video selection.`)
         onBack()
       } else {
-        alert('❌ Failed to clear frames')
+        const errorData = await response.json().catch(() => ({}))
+        const errorMsg = errorData.detail || response.statusText || 'Unknown error'
+        console.error('Clear frames error:', errorMsg)
+        alert(`❌ Failed to clear frames: ${errorMsg}`)
       }
     } catch (error) {
       console.error('Error clearing frames:', error)
-      alert('❌ Error: ' + error.message)
+      alert(`❌ Error: ${error.message}`)
     }
   }
 

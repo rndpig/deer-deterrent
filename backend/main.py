@@ -1644,23 +1644,30 @@ async def clear_video_training_frames(video_id: int):
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
     
-    # Get frames for this video
-    frames = db.get_frames_for_video(video_id)
-    deleted_count = 0
-    
-    for frame in frames:
-        if frame.get('selected_for_training', 0) == 1:
-            db.delete_frame(frame['id'])
-            deleted_count += 1
-    
-    logger.info(f"Cleared {deleted_count} training frames for video {video_id}")
-    
-    return {
-        "status": "success",
-        "video_id": video_id,
-        "frames_deleted": deleted_count,
-        "message": f"Deleted {deleted_count} training frames from video"
-    }
+    try:
+        # Get frames for this video
+        frames = db.get_frames_for_video(video_id)
+        deleted_count = 0
+        
+        for frame in frames:
+            if frame.get('selected_for_training', 0) == 1:
+                try:
+                    db.delete_frame(frame['id'])
+                    deleted_count += 1
+                except Exception as e:
+                    logger.error(f"Error deleting frame {frame['id']}: {e}")
+        
+        logger.info(f"Cleared {deleted_count} training frames for video {video_id}")
+        
+        return {
+            "status": "success",
+            "video_id": video_id,
+            "frames_deleted": deleted_count,
+            "message": f"Deleted {deleted_count} training frames from video"
+        }
+    except Exception as e:
+        logger.error(f"Error clearing frames for video {video_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/videos/{video_id}/extract-frames")
@@ -1679,16 +1686,25 @@ async def extract_frames_from_video(video_id: int, request: dict):
     
     sampling_rate = request.get('sampling_rate', 'medium')
     
-    # Delete all existing frames marked for training from this specific video
-    # This prevents accumulation when re-extracting
-    existing_frames = db.get_frames_for_video(video_id)
-    deleted_count = 0
-    for frame in existing_frames:
-        if frame.get('selected_for_training', 0) == 1:
-            db.delete_frame(frame['id'])
-            deleted_count += 1
+    logger.info(f"Starting frame extraction for video {video_id} with sampling rate: {sampling_rate}")
     
-    logger.info(f"Deleted {deleted_count} existing training frames before extracting new ones from video {video_id}")
+    # CRITICAL: Delete ALL existing training frames for this video before extracting
+    # This prevents accumulation from multiple extraction runs
+    existing_frames = db.get_frames_for_video(video_id)
+    training_frame_ids = [f['id'] for f in existing_frames if f.get('selected_for_training', 0) == 1]
+    
+    logger.info(f"Found {len(training_frame_ids)} existing training frames to delete for video {video_id}")
+    
+    deleted_count = 0
+    for frame_id in training_frame_ids:
+        try:
+            success = db.delete_frame(frame_id)
+            if success:
+                deleted_count += 1
+        except Exception as e:
+            logger.error(f"Error deleting frame {frame_id}: {e}")
+    
+    logger.info(f"Deleted {deleted_count} training frames for video {video_id}")
     
     # Map sampling rate to frame interval (in frames)
     # At 30fps: 0.5s=15, 1s=30, 2s=60, 5s=150
@@ -1746,7 +1762,8 @@ async def extract_frames_from_video(video_id: int, request: dict):
     
     cap.release()
     
-    logger.info(f"Extracted {extracted_count} frames from video {video_id} (every {frame_interval} frames)")
+    logger.info(f"Extraction complete: {extracted_count} frames from video {video_id}, interval: every {frame_interval} frames")
+    logger.info(f"Video stats: {frame_count} total frames at {fps} fps")
     
     return {
         "status": "success",
