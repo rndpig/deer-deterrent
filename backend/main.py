@@ -2226,8 +2226,13 @@ async def recover_all_video_frames():
         raise HTTPException(status_code=503, detail="Detector not initialized")
     
     # Get settings for sampling rate
-    settings_data = db.get_settings()
-    sample_rate_fps = settings_data.get('default_sampling_rate', 1.0)
+    try:
+        settings_data = db.get_settings()
+        sample_rate_fps = settings_data.get('default_sampling_rate', 1.0)
+    except (AttributeError, Exception):
+        # Fallback if get_settings doesn't exist or fails
+        sample_rate_fps = 1.0
+        logger.info("Using default sampling rate of 1.0 fps")
     
     # Get all videos
     videos = db.get_all_videos()
