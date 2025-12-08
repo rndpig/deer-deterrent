@@ -2056,6 +2056,56 @@ async def fix_camera_names():
     }
 
 
+@app.post("/api/videos/fill-all-missing-frames")
+async def fill_all_missing_frames():
+    """
+    ONE-TIME MIGRATION: Fill in missing frames for all videos.
+    This processes every video that has existing frames and fills in the gaps
+    caused by buggy frame sampling, while preserving all annotations.
+    """
+    if not CV2_AVAILABLE:
+        raise HTTPException(status_code=503, detail="OpenCV not available")
+    
+    videos = db.get_all_videos()
+    processed = 0
+    updated = 0
+    errors = []
+    details = []
+    
+    for video in videos:
+        video_id = video['id']
+        
+        # Only process videos that have frames
+        existing_frames = db.get_frames_for_video(video_id)
+        if not existing_frames:
+            continue
+        
+        processed += 1
+        
+        try:
+            # Call the existing fill-missing-frames logic
+            result = await fill_missing_frames(video_id)
+            if result['added_count'] > 0:
+                updated += 1
+                details.append({
+                    "video_id": video_id,
+                    "filename": video['filename'],
+                    "added_frames": result['added_count']
+                })
+        except Exception as e:
+            errors.append(f"Video {video_id}: {str(e)}")
+            logger.error(f"Error filling missing frames for video {video_id}: {e}")
+    
+    return {
+        "status": "success",
+        "processed_videos": processed,
+        "updated_videos": updated,
+        "total_frames_added": sum(d['added_frames'] for d in details),
+        "details": details,
+        "errors": errors if errors else None
+    }
+
+
 @app.post("/api/videos/sample-for-review")
 async def sample_frames_for_review(video_ids: list[int] = None):
     """
