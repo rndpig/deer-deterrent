@@ -591,14 +591,6 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
                     </button>
                     <button 
                       className="menu-item"
-                      onClick={(e) => handleMenuAction('fill', video, e)}
-                      title="Fill in missing frames (preserves annotations)"
-                    >
-                      <span className="menu-icon">🔧</span>
-                      <span>Fill Gaps</span>
-                    </button>
-                    <button 
-                      className="menu-item"
                       onClick={(e) => handleMenuAction('archive', video, e)}
                     >
                       <span className="menu-icon">🗄️</span>
