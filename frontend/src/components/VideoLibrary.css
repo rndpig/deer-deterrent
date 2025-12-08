@@ -641,6 +641,7 @@
   padding: 0.5rem;
   min-height: 0;
   overflow: hidden;
+  height: 100%;
 }
 
 .frame-nav-btn {
@@ -678,6 +679,8 @@
   position: relative;
   padding: 0 0.5rem;
   min-height: 0;
+  min-width: 0;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -689,6 +692,7 @@
   border-radius: 6px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   object-fit: contain;
+  display: block;
 }
 
 .frame-navigation {
