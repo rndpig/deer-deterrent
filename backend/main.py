@@ -2085,12 +2085,12 @@ async def fill_all_missing_frames():
         try:
             # Call the existing fill-missing-frames logic
             result = await fill_missing_frames(video_id)
-            if result['added_count'] > 0:
+            if result['frames_added'] > 0:
                 updated += 1
                 details.append({
                     "video_id": video_id,
                     "filename": video['filename'],
-                    "added_frames": result['added_count']
+                    "added_frames": result['frames_added']
                 })
         except Exception as e:
             errors.append(f"Video {video_id}: {str(e)}")
