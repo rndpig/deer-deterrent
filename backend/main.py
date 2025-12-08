@@ -2212,6 +2212,137 @@ async def clean_broken_frame_paths():
     }
 
 
+@app.post("/api/videos/recover-all-frames")
+async def recover_all_video_frames():
+    """
+    Recovery endpoint: Re-analyze all videos that have no frames.
+    Uses the same frame extraction and detection logic as video upload.
+    """
+    if not CV2_AVAILABLE:
+        raise HTTPException(status_code=503, detail="OpenCV not available")
+    
+    det = load_detector()
+    if not det:
+        raise HTTPException(status_code=503, detail="Detector not initialized")
+    
+    # Get settings for sampling rate
+    settings_data = db.get_settings()
+    sample_rate_fps = settings_data.get('default_sampling_rate', 1.0)
+    
+    # Get all videos
+    videos = db.get_all_videos()
+    total_recovered = 0
+    videos_processed = 0
+    details = []
+    
+    import cv2
+    frames_dir = Path("data/training_frames")
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    
+    for video in videos:
+        video_id = video['id']
+        video_path = video.get('video_path')
+        filename = video['filename']
+        
+        # Skip if video has frames already
+        existing_frames = db.get_frames_for_video(video_id)
+        if existing_frames and len(existing_frames) > 0:
+            logger.info(f"Video {video_id} ({filename}) already has {len(existing_frames)} frames, skipping")
+            continue
+        
+        # Skip if video file doesn't exist
+        if not video_path or not Path(video_path).exists():
+            logger.warning(f"Video {video_id} ({filename}): File not found at {video_path}")
+            continue
+        
+        logger.info(f"Recovering frames for video {video_id}: {filename}")
+        
+        # Open video
+        cap = cv2.VideoCapture(str(video_path))
+        if not cap.isOpened():
+            logger.error(f"  Failed to open video file: {video_path}")
+            continue
+        
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        # Calculate frame interval based on sampling rate
+        frame_interval = max(1, int(fps / sample_rate_fps)) if fps > 0 else 1
+        
+        frames_extracted = 0
+        detections_found = 0
+        frame_num = 0
+        
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            # Only process every Nth frame based on sample_rate
+            if frame_num % frame_interval == 0:
+                timestamp_in_video = frame_num / fps if fps > 0 else 0
+                
+                # Save frame to disk
+                frame_filename = f"video_{video_id}_frame_{frame_num}.jpg"
+                frame_path = frames_dir / frame_filename
+                cv2.imwrite(str(frame_path), frame)
+                
+                # Run detection on this frame
+                detections, annotated = det.detect(frame, return_annotated=True)
+                
+                # Save annotated version if there are detections
+                if detections:
+                    annotated_filename = f"video_{video_id}_frame_{frame_num}_annotated.jpg"
+                    annotated_path = frames_dir / annotated_filename
+                    cv2.imwrite(str(annotated_path), annotated)
+                    detections_found += 1
+                
+                # Add frame to database
+                frame_id = db.add_frame(
+                    video_id=video_id,
+                    frame_number=frame_num,
+                    timestamp_in_video=timestamp_in_video,
+                    image_path=f"data/training_frames/{frame_filename}",
+                    has_detections=len(detections) > 0
+                )
+                
+                # Add detections to database
+                for detection in detections:
+                    db.add_detection(
+                        frame_id=frame_id,
+                        bbox=detection['bbox'],
+                        confidence=detection['confidence'],
+                        class_name=detection.get('class_name', 'deer')
+                    )
+                
+                frames_extracted += 1
+            
+            frame_num += 1
+        
+        cap.release()
+        
+        videos_processed += 1
+        total_recovered += frames_extracted
+        details.append({
+            "video_id": video_id,
+            "filename": filename,
+            "frames_extracted": frames_extracted,
+            "detections_found": detections_found,
+            "sampling_rate_fps": sample_rate_fps,
+            "frame_interval": frame_interval
+        })
+        
+        logger.info(f"  ✓ Recovered {frames_extracted} frames ({detections_found} with detections)")
+    
+    return {
+        "status": "success",
+        "videos_processed": videos_processed,
+        "total_frames_recovered": total_recovered,
+        "sampling_rate_fps": sample_rate_fps,
+        "details": details
+    }
+
+
 @app.post("/api/videos/sample-for-review")
 async def sample_frames_for_review(video_ids: list[int] = None):
     """
