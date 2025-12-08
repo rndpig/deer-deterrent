@@ -91,6 +91,7 @@
 }
 
 .app-content {
+  margin-top: 1rem;
   animation: fadeIn 0.3s ease;
 }
 
