@@ -788,7 +788,11 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
                   
                   <div className="frame-display">
                     <img 
-                      src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/training-frames/${videoFrames[currentFrameIndex]?.image_path?.split('/').pop()}`}
+                      src={
+                        videoFrames[currentFrameIndex]?.detection_count > 0
+                          ? `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/frames/${videoFrames[currentFrameIndex]?.id}/annotated`
+                          : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/training-frames/${videoFrames[currentFrameIndex]?.image_path?.split('/').pop()}`
+                      }
                       alt={`Frame ${videoFrames[currentFrameIndex]?.frame_number}`}
                       className="frame-image"
                     />
