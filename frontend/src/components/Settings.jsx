@@ -13,7 +13,7 @@ function Settings({ settings, setSettings, onViewArchive }) {
     irrigation_duration: 30,
     zone_cooldown: 300,
     dry_run: true,
-    default_sampling_rate: 2.0  // frames per second
+    default_sampling_rate: 1.0  // frames per second
   }
 
   // Initialize from localStorage or defaults
@@ -142,7 +142,12 @@ function Settings({ settings, setSettings, onViewArchive }) {
     try {
       localStorage.setItem('deer-deterrent-settings', JSON.stringify(localSettings))
       localStorage.setItem('deer-deterrent-camera-zones', JSON.stringify(cameraZones))
-      console.log('Settings saved to localStorage')
+      console.log('Settings saved to localStorage:', localSettings)
+      
+      // Update parent state immediately to ensure persistence
+      if (setSettings) {
+        setSettings(localSettings)
+      }
     } catch (err) {
       console.error('Error saving to localStorage:', err)
     }
@@ -188,13 +193,23 @@ function Settings({ settings, setSettings, onViewArchive }) {
     <div className="settings">
       <div className="settings-header-row">
         <h2>System Settings</h2>
-        <button 
-          className="btn-view-archive"
-          onClick={onViewArchive}
-          title="View archived videos"
-        >
-          📦 Video Archive
-        </button>
+        <div className="header-actions">
+          <button 
+            className="btn-save-settings"
+            onClick={handleSave}
+            disabled={saving}
+            title="Save all settings"
+          >
+            {saving ? '⏳ Saving...' : '💾 Save Settings'}
+          </button>
+          <button 
+            className="btn-view-archive"
+            onClick={onViewArchive}
+            title="View archived videos"
+          >
+            📦 Video Archive
+          </button>
+        </div>
       </div>
       
       {message && (
@@ -244,13 +259,13 @@ function Settings({ settings, setSettings, onViewArchive }) {
                   min="0.1"
                   max="10"
                   step="0.1"
-                  value={localSettings.default_sampling_rate || 2.0}
+                  value={localSettings.default_sampling_rate || 1.0}
                   onChange={(e) => handleChange('default_sampling_rate', parseFloat(e.target.value))}
                   className="value-input"
                 />
                 <span className="unit-label">frames/sec</span>
               </div>
-              <p className="setting-hint">Number of frames to extract per second for annotation (default: 2.0)</p>
+              <p className="setting-hint">Number of frames to extract per second for annotation (default: 1.0)</p>
             </div>
           </div>
 
@@ -381,16 +396,6 @@ function Settings({ settings, setSettings, onViewArchive }) {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="settings-actions">
-        <button 
-          className="save-button" 
-          onClick={handleSave}
-          disabled={saving}
-        >
-          {saving ? 'Saving...' : 'Save Settings'}
-        </button>
       </div>
     </div>
   )
