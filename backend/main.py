@@ -2106,6 +2106,68 @@ async def fill_all_missing_frames():
     }
 
 
+@app.post("/api/videos/remove-duplicate-frames")
+async def remove_duplicate_frames():
+    """
+    ONE-TIME MIGRATION: Remove duplicate frames from all videos.
+    Keeps the frame with annotations if duplicates exist, otherwise keeps the first one.
+    """
+    videos = db.get_all_videos()
+    total_removed = 0
+    details = []
+    
+    for video in videos:
+        video_id = video['id']
+        
+        # Get all frames for this video
+        frames = db.get_frames_for_video(video_id)
+        if not frames:
+            continue
+        
+        # Group frames by frame_number
+        from collections import defaultdict
+        frame_groups = defaultdict(list)
+        for frame in frames:
+            frame_groups[frame['frame_number']].append(frame)
+        
+        # Find duplicates
+        removed_count = 0
+        for frame_number, frame_list in frame_groups.items():
+            if len(frame_list) > 1:
+                # Sort by: has annotations (desc), has review (desc), id (asc)
+                # This keeps the annotated one, or reviewed one, or earliest one
+                frame_list.sort(key=lambda f: (
+                    -(f.get('annotation_count', 0) or 0),  # Prefer annotated
+                    -(1 if f.get('reviewed') else 0),       # Prefer reviewed
+                    f['id']                                  # Prefer older (lower id)
+                ))
+                
+                # Keep the first one, delete the rest
+                keep_frame = frame_list[0]
+                for duplicate in frame_list[1:]:
+                    try:
+                        db.delete_frame(duplicate['id'])
+                        removed_count += 1
+                        logger.info(f"Deleted duplicate frame {duplicate['id']} (kept {keep_frame['id']}) for video {video_id}, frame_number {frame_number}")
+                    except Exception as e:
+                        logger.error(f"Error deleting duplicate frame {duplicate['id']}: {e}")
+        
+        if removed_count > 0:
+            total_removed += removed_count
+            details.append({
+                "video_id": video_id,
+                "filename": video['filename'],
+                "removed_count": removed_count
+            })
+    
+    return {
+        "status": "success",
+        "total_frames_removed": total_removed,
+        "videos_affected": len(details),
+        "details": details
+    }
+
+
 @app.post("/api/videos/sample-for-review")
 async def sample_frames_for_review(video_ids: list[int] = None):
     """
