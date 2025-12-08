@@ -2168,6 +2168,50 @@ async def remove_duplicate_frames():
     }
 
 
+@app.post("/api/videos/clean-broken-frame-paths")
+async def clean_broken_frame_paths():
+    """
+    ONE-TIME MIGRATION: Remove frames with broken /api/training-frames/ paths.
+    """
+    videos = db.get_all_videos()
+    total_removed = 0
+    details = []
+    
+    for video in videos:
+        video_id = video['id']
+        
+        # Get all frames for this video
+        frames = db.get_frames_for_video(video_id)
+        if not frames:
+            continue
+        
+        removed_count = 0
+        for frame in frames:
+            # Delete frames with broken /api/training-frames/ paths
+            if frame.get('image_path', '').startswith('/api/training-frames/'):
+                try:
+                    db.delete_frame(frame['id'])
+                    removed_count += 1
+                    logger.info(f"Deleted frame {frame['id']} with broken path: {frame['image_path']}")
+                except Exception as e:
+                    logger.error(f"Error deleting frame {frame['id']}: {e}")
+        
+        if removed_count > 0:
+            total_removed += removed_count
+            details.append({
+                "video_id": video_id,
+                "filename": video['filename'],
+                "removed_count": removed_count
+            })
+    
+    return {
+        "status": "success",
+        "total_frames_removed": total_removed,
+        "videos_affected": len(details),
+        "details": details
+    }
+
+
 @app.post("/api/videos/sample-for-review")
 async def sample_frames_for_review(video_ids: list[int] = None):
     """
