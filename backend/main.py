@@ -930,10 +930,14 @@ async def get_annotated_frame(frame_id: int):
     # Get the original frame path
     image_path = frame.get('image_path', '')
     if image_path.startswith('/api/training-frames/'):
+        # Old format: /api/training-frames/filename.jpg
         frame_filename = image_path.replace('/api/training-frames/', '')
         frame_path = Path("data/training_frames") / frame_filename
+    elif image_path.startswith('data/training_frames/'):
+        # New format: data/training_frames/filename.jpg
+        frame_path = Path(image_path)
     else:
-        raise HTTPException(status_code=404, detail="Frame path not found")
+        raise HTTPException(status_code=404, detail=f"Unsupported frame path format: {image_path}")
     
     if not frame_path.exists():
         raise HTTPException(status_code=404, detail="Frame file not found")
