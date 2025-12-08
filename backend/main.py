@@ -1798,15 +1798,20 @@ async def extract_frames_from_video(video_id: int, request: dict):
     
     logger.info(f"Deleted {deleted_count} training frames for video {video_id}")
     
-    # Map sampling rate to frame interval (in frames)
-    # At 30fps: 0.5s=15, 1s=30, 2s=60, 5s=150
-    rate_map = {
-        'high': 15,       # ~2 frames per second
-        'medium': 30,     # 1 frame per second  
-        'low': 60,        # 1 frame per 2 seconds
-        'sparse': 150     # 1 frame per 5 seconds
-    }
-    frame_interval = rate_map.get(sampling_rate, 30)
+    # Handle both string and numeric sampling rates
+    if isinstance(sampling_rate, (int, float)):
+        # Numeric value is frame_interval directly
+        frame_interval = int(sampling_rate)
+    else:
+        # Map sampling rate to frame interval (in frames)
+        # At 30fps: 0.5s=15, 1s=30, 2s=60, 5s=150
+        rate_map = {
+            'high': 15,       # ~2 frames per second
+            'medium': 30,     # 1 frame per second  
+            'low': 60,        # 1 frame per 2 seconds
+            'sparse': 150     # 1 frame per 5 seconds
+        }
+        frame_interval = rate_map.get(sampling_rate, 30)
     
     # Extract frames
     import cv2
