@@ -1523,6 +1523,22 @@ async def get_video_device_ids():
     return results
 
 
+@app.get("/api/videos/archived")
+async def get_archived_videos_endpoint():
+    """Get all archived videos with annotation status."""
+    videos = db.get_archived_videos()
+    
+    # Add annotation status for each video
+    for video in videos:
+        video_id = video['id']
+        fully_annotated = db.video_fully_annotated(video_id)
+        has_annotations = db.video_has_annotations(video_id)
+        video['fully_annotated'] = fully_annotated
+        video['has_annotations'] = has_annotations
+    
+    return videos
+
+
 @app.get("/api/videos/{video_id}")
 async def get_video_details(video_id: int):
     """Get detailed information about a specific video."""
@@ -1582,22 +1598,6 @@ async def unarchive_video_endpoint(video_id: int):
         raise HTTPException(status_code=500, detail="Failed to unarchive video")
     
     return {"status": "success", "message": "Video unarchived"}
-
-
-@app.get("/api/videos/archived")
-async def get_archived_videos_endpoint():
-    """Get all archived videos with annotation status."""
-    videos = db.get_archived_videos()
-    
-    # Add annotation status for each video
-    for video in videos:
-        video_id = video['id']
-        fully_annotated = db.video_fully_annotated(video_id)
-        has_annotations = db.video_has_annotations(video_id)
-        video['fully_annotated'] = fully_annotated
-        video['has_annotations'] = has_annotations
-    
-    return videos
 
 
 @app.patch("/api/videos/{video_id}")
