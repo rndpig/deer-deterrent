@@ -16,16 +16,17 @@ function ArchivedVideos({ onBack, onAnnotate }) {
     try {
       const response = await fetch(`${apiUrl}/api/videos/archived`)
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+        const errorText = await response.text()
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
       }
       
       const data = await response.json()
-      setVideos(data)
+      setVideos(Array.isArray(data) ? data : [])
+      setLoading(false)
     } catch (error) {
       console.error('Error loading archived videos:', error)
-      alert('Failed to load archived videos')
-    } finally {
       setLoading(false)
+      alert(`Failed to load archived videos: ${error.message}`)
     }
   }
 
