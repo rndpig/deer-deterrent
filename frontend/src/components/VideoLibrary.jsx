@@ -129,6 +129,35 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
     }
   }
 
+  const fillMissingFrames = async (videoId, videoFilename) => {
+    if (!confirm(`Fill in missing frames for "${videoFilename}"? This will preserve all existing annotations.`)) {
+      return
+    }
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/videos/${videoId}/fill-missing-frames`, {
+        method: 'POST'
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to fill missing frames')
+      }
+      
+      const result = await response.json()
+      alert(`✅ Success! Added ${result.frames_added} missing frames. All annotations preserved.`)
+      
+      // Reload videos to update frame count
+      await loadVideos()
+      await loadTrainingStatus()
+    } catch (error) {
+      console.error('Error filling missing frames:', error)
+      alert(`Failed to fill missing frames: ${error.message}`)
+    }
+  }
+
   const toggleMenu = (videoId, event) => {
     event.stopPropagation()
     setOpenMenuId(openMenuId === videoId ? null : videoId)
@@ -559,6 +588,14 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
                     >
                       <span className="menu-icon">📝</span>
                       <span>Edit</span>
+                    </button>
+                    <button 
+                      className="menu-item"
+                      onClick={(e) => handleMenuAction('fill', video, e)}
+                      title="Fill in missing frames (preserves annotations)"
+                    >
+                      <span className="menu-icon">🔧</span>
+                      <span>Fill Gaps</span>
                     </button>
                     <button 
                       className="menu-item"

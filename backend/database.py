@@ -769,3 +769,11 @@ def get_ring_events(hours: int = 24, camera_id: str = None) -> List[Dict]:
     
     conn.close()
     return events
+
+
+def clear_video_annotation_flag(video_id: int):
+    """Clear reviewed flags for all frames of a video (used after adding new frames)."""
+    # Note: The fully_annotated status is calculated dynamically,
+    # so we don't need to update anything. This function exists for
+    # clarity in migration scripts but doesn't actually need to do anything.
+    pass

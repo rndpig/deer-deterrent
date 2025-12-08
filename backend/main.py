@@ -1872,6 +1872,117 @@ async def extract_frames_from_video(video_id: int, request: dict):
     }
 
 
+@app.post("/api/videos/{video_id}/fill-missing-frames")
+async def fill_missing_frames(video_id: int):
+    """
+    Fill in missing frames that weren't extracted due to buggy frame sampling.
+    This preserves all existing frames and annotations, only adding the gaps.
+    """
+    if not CV2_AVAILABLE:
+        raise HTTPException(status_code=503, detail="OpenCV not available")
+    
+    video = db.get_video(video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    video_path = Path(video.get('video_path', ''))
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Video file not found")
+    
+    logger.info(f"Starting missing frame fill for video {video_id}")
+    
+    # Get existing frames to find the gaps
+    existing_frames = db.get_frames_for_video(video_id)
+    if not existing_frames:
+        raise HTTPException(status_code=400, detail="No existing frames found")
+    
+    # Get all existing frame numbers
+    existing_frame_numbers = sorted([f['frame_number'] for f in existing_frames])
+    logger.info(f"Found {len(existing_frame_numbers)} existing frames: {existing_frame_numbers[:20]}...")
+    
+    # Determine the frame interval by looking at the pattern
+    # Find the most common gap between consecutive frames
+    gaps = []
+    for i in range(len(existing_frame_numbers) - 1):
+        gap = existing_frame_numbers[i + 1] - existing_frame_numbers[i]
+        if gap > 0:
+            gaps.append(gap)
+    
+    if not gaps:
+        return {"status": "success", "message": "No gaps to fill", "frames_added": 0}
+    
+    # The frame interval should be close to the minimum gap
+    from collections import Counter
+    gap_counts = Counter(gaps)
+    frame_interval = min(gap_counts.keys())
+    logger.info(f"Detected frame interval: {frame_interval}, gap distribution: {dict(gap_counts)}")
+    
+    # Find all missing frame numbers within the range
+    min_frame = min(existing_frame_numbers)
+    max_frame = max(existing_frame_numbers)
+    
+    expected_frames = set(range(min_frame, max_frame + 1, frame_interval))
+    existing_set = set(existing_frame_numbers)
+    missing_frames = sorted(expected_frames - existing_set)
+    
+    logger.info(f"Found {len(missing_frames)} missing frames: {missing_frames[:20]}...")
+    
+    if not missing_frames:
+        return {"status": "success", "message": "No missing frames found", "frames_added": 0}
+    
+    # Extract the missing frames
+    import cv2
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise HTTPException(status_code=500, detail="Could not open video file")
+    
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    frames_dir = Path("data/training_frames")
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    
+    added_count = 0
+    
+    for frame_number in missing_frames:
+        # Seek to the specific frame
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+        ret, frame = cap.read()
+        
+        if not ret:
+            logger.warning(f"Could not read frame {frame_number}")
+            continue
+        
+        # Save frame
+        frame_filename = f"video_{video_id}_frame_{frame_number}.jpg"
+        frame_path = frames_dir / frame_filename
+        cv2.imwrite(str(frame_path), frame)
+        
+        # Calculate timestamp
+        timestamp_sec = frame_number / fps
+        
+        # Store in database
+        frame_id = db.add_frame(
+            video_id=video_id,
+            frame_number=frame_number,
+            timestamp_in_video=timestamp_sec,
+            image_path=str(frame_path),
+            has_detections=False
+        )
+        # Mark as selected for training
+        db.mark_frame_for_training(frame_id)
+        added_count += 1
+    
+    cap.release()
+    
+    logger.info(f"Fill complete: added {added_count} missing frames to video {video_id}")
+    
+    return {
+        "status": "success",
+        "video_id": video_id,
+        "frames_added": added_count,
+        "missing_frames": missing_frames
+    }
+
+
 @app.post("/api/videos/fix-camera-names")
 async def fix_camera_names():
     """
