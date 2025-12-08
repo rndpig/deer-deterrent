@@ -788,7 +788,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
                   
                   <div className="frame-display">
                     <img 
-                      src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/frames/${videoFrames[currentFrameIndex]?.id}/annotated`}
+                      src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/training-frames/${videoFrames[currentFrameIndex]?.image_path?.split('/').pop()}`}
                       alt={`Frame ${videoFrames[currentFrameIndex]?.frame_number}`}
                       className="frame-image"
                     />
@@ -814,7 +814,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
                         title={`Frame ${frame.frame_number} - ${frame.detection_count} detections`}
                       >
                         <img 
-                          src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${frame.image_path}`}
+                          src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/training-frames/${frame.image_path.split('/').pop()}`}
                           alt={`Thumb ${idx}`}
                         />
                         {frame.detection_count > 0 && (
