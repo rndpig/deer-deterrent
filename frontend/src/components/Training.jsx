@@ -58,14 +58,20 @@ function Training() {
         // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height)
         
+        console.log('🎨 Drawing boxes for frame:', currentDetection.id)
+        console.log('   Detections:', currentDetection.detections)
+        console.log('   Manual annotations:', currentDetection.manual_annotations)
+        
         // Draw auto-detected boxes (green solid)
         if (currentDetection.detections?.length > 0) {
+          console.log('   ✅ Drawing', currentDetection.detections.length, 'green detection boxes')
           ctx.strokeStyle = '#10b981'
           ctx.lineWidth = 3
           ctx.setLineDash([])
           
           currentDetection.detections.forEach(det => {
             const bbox = det.bbox
+            console.log('      Box:', bbox)
             ctx.strokeRect(
               bbox.x1,
               bbox.y1,
@@ -80,10 +86,13 @@ function Training() {
             ctx.font = '12px Arial'
             ctx.fillText(`Auto ${(det.confidence * 100).toFixed(0)}%`, bbox.x1 + 5, bbox.y1 - 5)
           })
+        } else {
+          console.log('   ❌ No detection boxes to draw')
         }
         
         // Draw manual annotation boxes (orange dashed)
         if (currentDetection.manual_annotations?.length > 0) {
+          console.log('   📝 Drawing', currentDetection.manual_annotations.length, 'orange annotation boxes')
           ctx.strokeStyle = '#f59e0b'
           ctx.lineWidth = 3
           ctx.setLineDash([8, 4])
@@ -777,9 +786,9 @@ function Training() {
                 <span className="divider">|</span>
                 <span>Frame: {currentDetection.frame_number || 'N/A'}</span>
                 <span className="divider">|</span>
-                <span className="info-badge-inline green">Auto: {currentDetection.deer_count}</span>
+                <span className="info-badge-inline green">Auto: {currentDetection.detection_count || currentDetection.deer_count || 0}</span>
                 <span className="divider">|</span>
-                <span className="info-badge-inline blue">Manual: {currentDetection.manual_annotations?.length || 0}</span>
+                <span className="info-badge-inline blue">Manual: {currentDetection.annotation_count || currentDetection.manual_annotations?.length || 0}</span>
                 {currentDetection.reviewed && (
                   <>
                     <span className="divider">|</span>
