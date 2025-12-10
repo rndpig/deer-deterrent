@@ -2645,13 +2645,14 @@ async def get_selected_training_frames():
             "review_type": frame.get('review_type'),
             "detections": [
                 {
-                    'bbox_x': d['bbox_x1'],
-                    'bbox_y': d['bbox_y1'],
-                    'bbox_width': d['bbox_x2'] - d['bbox_x1'],
-                    'bbox_height': d['bbox_y2'] - d['bbox_y1'],
+                    'bbox': {
+                        'x1': d['bbox_x1'],
+                        'y1': d['bbox_y1'],
+                        'x2': d['bbox_x2'],
+                        'y2': d['bbox_y2']
+                    },
                     'confidence': d['confidence'],
-                    'class_name': d['class_name'],
-                    'is_normalized': d.get('is_normalized', True)  # Flag to indicate if coords are 0-1 or pixels
+                    'class_name': d['class_name']
                 }
                 for d in frame['detections']
             ],
