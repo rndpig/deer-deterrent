@@ -2216,6 +2216,116 @@ async def clean_broken_frame_paths():
     }
 
 
+@app.post("/api/videos/merge-duplicate-frames")
+async def merge_duplicate_frames():
+    """
+    Migration endpoint: Merge model detections from old frames into new frames with annotations.
+    This handles the case where recovery created new frames while old frames with detections still existed.
+    """
+    videos = db.get_all_videos()
+    total_merged = 0
+    total_deleted = 0
+    details = []
+    
+    for video in videos:
+        video_id = video['id']
+        filename = video['filename']
+        
+        # Get all frames for this video
+        frames = db.get_frames_for_video(video_id)
+        if not frames or len(frames) == 0:
+            continue
+        
+        # Group frames by frame_number to find duplicates
+        frame_groups = {}
+        for frame in frames:
+            frame_num = frame['frame_number']
+            if frame_num not in frame_groups:
+                frame_groups[frame_num] = []
+            frame_groups[frame_num].append(frame)
+        
+        # Find frame numbers with duplicates
+        duplicates = {fn: frames_list for fn, frames_list in frame_groups.items() if len(frames_list) > 1}
+        
+        if not duplicates:
+            continue
+        
+        logger.info(f"Video {video_id} ({filename}): Found {len(duplicates)} frame numbers with duplicates")
+        
+        merged_count = 0
+        deleted_count = 0
+        
+        for frame_num, duplicate_frames in duplicates.items():
+            # Sort by ID - older frames first
+            duplicate_frames.sort(key=lambda f: f['id'])
+            
+            # Find frame with annotations (newer frame) and frame with detections (older frame)
+            frame_with_annotations = None
+            frame_with_detections = None
+            
+            for frame in duplicate_frames:
+                if frame.get('annotation_count', 0) > 0:
+                    frame_with_annotations = frame
+                if frame.get('detection_count', 0) > 0:
+                    frame_with_detections = frame
+            
+            # If we have both, merge detections from old to new, then delete old
+            if frame_with_annotations and frame_with_detections and frame_with_annotations['id'] != frame_with_detections['id']:
+                # Copy detections from old frame to new frame
+                conn = db.get_connection()
+                cursor = conn.cursor()
+                
+                # Get detections from old frame
+                cursor.execute("SELECT * FROM detections WHERE frame_id = ?", (frame_with_detections['id'],))
+                old_detections = [dict(row) for row in cursor.fetchall()]
+                
+                # Copy to new frame
+                for det in old_detections:
+                    cursor.execute("""
+                        INSERT INTO detections (frame_id, bbox_x1, bbox_y1, bbox_x2, bbox_y2, confidence, class_name)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (frame_with_annotations['id'], det['bbox_x1'], det['bbox_y1'], 
+                          det['bbox_x2'], det['bbox_y2'], det['confidence'], det['class_name']))
+                
+                conn.commit()
+                conn.close()
+                
+                merged_count += 1
+                logger.info(f"  Merged {len(old_detections)} detections from frame {frame_with_detections['id']} to {frame_with_annotations['id']}")
+                
+                # Delete the old frame
+                db.delete_frame(frame_with_detections['id'])
+                deleted_count += 1
+            
+            # If we only have old frame with detections and new frame without, delete the new empty one
+            elif frame_with_detections and not frame_with_annotations:
+                # Keep the frame with detections, delete others
+                for frame in duplicate_frames:
+                    if frame['id'] != frame_with_detections['id']:
+                        db.delete_frame(frame['id'])
+                        deleted_count += 1
+        
+        if merged_count > 0 or deleted_count > 0:
+            total_merged += merged_count
+            total_deleted += deleted_count
+            details.append({
+                "video_id": video_id,
+                "filename": filename,
+                "duplicate_frame_numbers": len(duplicates),
+                "frames_merged": merged_count,
+                "frames_deleted": deleted_count
+            })
+            logger.info(f"  ✓ Video {video_id}: Merged {merged_count}, deleted {deleted_count} duplicate frames")
+    
+    return {
+        "status": "success",
+        "total_frames_merged": total_merged,
+        "total_frames_deleted": total_deleted,
+        "videos_affected": len(details),
+        "details": details
+    }
+
+
 @app.post("/api/videos/recover-all-frames")
 async def recover_all_video_frames():
     """
