@@ -502,8 +502,18 @@ function EarlyReview({ onBack, selectedVideo }) {
         <div className="header-actions">
           <button className="btn-nav" onClick={previousFrame} disabled={currentIndex === 0}>←</button>
           <button className="btn-nav" onClick={nextFrame} disabled={currentIndex === frames.length - 1}>→</button>
-          <button className="btn-correct" onClick={() => reviewFrame('correct')}>✓ Correct</button>
-          <button className="btn-no-deer" onClick={() => reviewFrame('no_deer')}>∅ No Deer</button>
+          <button 
+            className={`btn-correct ${currentFrame.review_type === 'correct' ? 'active' : ''}`}
+            onClick={() => reviewFrame('correct')}
+          >
+            ✓ Correct
+          </button>
+          <button 
+            className={`btn-no-deer ${currentFrame.review_type === 'no_deer' ? 'active' : ''}`}
+            onClick={() => reviewFrame('no_deer')}
+          >
+            ∅ No Deer
+          </button>
           <button 
             className="btn-clear-frames" 
             onClick={handleClearFrames}

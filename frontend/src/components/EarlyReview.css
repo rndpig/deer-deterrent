@@ -103,6 +103,13 @@
   border-color: rgba(16, 185, 129, 0.5);
 }
 
+.btn-correct.active {
+  background: rgba(16, 185, 129, 0.35);
+  border-color: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+  font-weight: 600;
+}
+
 .btn-skip {
   padding: 0.4rem 0.75rem;
   background: rgba(255, 255, 255, 0.08);
@@ -134,6 +141,13 @@
 .btn-no-deer:hover {
   background: rgba(251, 191, 36, 0.25);
   border-color: rgba(251, 191, 36, 0.5);
+}
+
+.btn-no-deer.active {
+  background: rgba(251, 191, 36, 0.35);
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
+  font-weight: 600;
 }
 
 .btn-clear-frames {
