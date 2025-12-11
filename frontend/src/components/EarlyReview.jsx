@@ -61,14 +61,21 @@ function EarlyReview({ onBack, selectedVideo }) {
     // Draw model detections (green)
     if (currentFrame.detections && currentFrame.detections.length > 0) {
       currentFrame.detections.forEach((det) => {
-        // Detections might be in normalized (0-1) or pixel coordinates
-        // If values are > 1, they're likely pixel coordinates
-        const isNormalized = det.bbox_x <= 1 && det.bbox_y <= 1
+        // Detections come with bbox object containing x1, y1, x2, y2
+        const bbox = det.bbox
         
-        const x = isNormalized ? det.bbox_x * canvas.width : det.bbox_x
-        const y = isNormalized ? det.bbox_y * canvas.height : det.bbox_y
-        const w = isNormalized ? det.bbox_width * canvas.width : det.bbox_width
-        const h = isNormalized ? det.bbox_height * canvas.height : det.bbox_height
+        // Check if coordinates are normalized (0-1) or pixel values
+        const isNormalized = bbox.x1 <= 1 && bbox.y1 <= 1 && bbox.x2 <= 1 && bbox.y2 <= 1
+        
+        const x1 = isNormalized ? bbox.x1 * canvas.width : bbox.x1
+        const y1 = isNormalized ? bbox.y1 * canvas.height : bbox.y1
+        const x2 = isNormalized ? bbox.x2 * canvas.width : bbox.x2
+        const y2 = isNormalized ? bbox.y2 * canvas.height : bbox.y2
+        
+        const x = x1
+        const y = y1
+        const w = x2 - x1
+        const h = y2 - y1
         
         ctx.strokeStyle = '#10b981'
         ctx.lineWidth = 3
