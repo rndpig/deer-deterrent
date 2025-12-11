@@ -21,6 +21,8 @@ function EarlyReview({ onBack, selectedVideo }) {
     if (currentFrame) {
       console.log('Loading frame:', currentFrame.id, 'with', currentFrame.detection_count, 'detections')
       console.log('Frame data:', currentFrame)
+      console.log('Annotations count:', currentFrame.annotation_count)
+      console.log('Annotations array:', currentFrame.annotations)
       
       // Convert existing annotations to drawn boxes format
       const existing = (currentFrame.annotations || []).map(ann => ({
@@ -29,6 +31,8 @@ function EarlyReview({ onBack, selectedVideo }) {
         width: ann.width,
         height: ann.height
       }))
+      
+      console.log('Loaded manual boxes:', existing.length)
       setDrawnBoxes(existing)
     }
   }, [currentFrame])

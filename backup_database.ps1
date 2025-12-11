@@ -21,6 +21,6 @@ Write-Host "✓ Database backed up to: ${backupDir}/$backupFile" -ForegroundColo
 
 # Clean up old backups (keep last 20)
 Write-Host "Cleaning old backups..." -ForegroundColor Cyan
-ssh dilger "cd $backupDir && ls -t training_*.db 2>/dev/null | tail -n +21 | xargs -r rm && echo 'Kept last 20 backups'"
+ssh dilger "cd $backupDir; ls -t training_*.db 2>/dev/null | tail -n +21 | xargs -r rm; echo 'Kept last 20 backups'"
 
 Write-Host "✓ Backup complete!" -ForegroundColor Green

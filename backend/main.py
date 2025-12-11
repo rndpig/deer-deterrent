@@ -1005,7 +1005,7 @@ async def review_frame(frame_id: int, request: dict):
 
 @app.post("/api/frames/{frame_id}/annotate")
 async def annotate_frame(frame_id: int, request: dict):
-    """Add manual annotations to a frame."""
+    """Add manual annotations to a frame. Replaces all existing annotations."""
     annotations = request.get('annotations', [])
     
     # Get frame to ensure it exists
@@ -1013,7 +1013,10 @@ async def annotate_frame(frame_id: int, request: dict):
     if not frame:
         raise HTTPException(status_code=404, detail="Frame not found")
     
-    # Save annotations
+    # CRITICAL: Delete all existing annotations first to avoid duplicates
+    db.delete_annotations_for_frame(frame_id)
+    
+    # Save new annotations
     for ann in annotations:
         bbox = {
             'x': ann['x'],

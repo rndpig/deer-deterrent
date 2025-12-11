@@ -583,6 +583,16 @@ def add_annotation(frame_id: int, bbox: Dict, annotation_type: str = 'addition',
     conn.commit()
     conn.close()
 
+def delete_annotations_for_frame(frame_id: int):
+    """Delete all annotations for a specific frame."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("DELETE FROM annotations WHERE frame_id = ?", (frame_id,))
+    
+    conn.commit()
+    conn.close()
+
 def get_training_statistics() -> Dict:
     """Get statistics for training readiness."""
     conn = get_connection()
