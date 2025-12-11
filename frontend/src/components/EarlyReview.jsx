@@ -188,8 +188,44 @@ function EarlyReview({ onBack, selectedVideo }) {
     setCurrentBox(null)
   }
 
-  const handleRemoveBox = (index) => {
-    setDrawnBoxes(drawnBoxes.filter((_, i) => i !== index))
+  const handleRemoveBox = async (index) => {
+    const updatedBoxes = drawnBoxes.filter((_, i) => i !== index)
+    setDrawnBoxes(updatedBoxes)
+    
+    // Save immediately to persist the deletion
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/frames/${currentFrame.id}/annotate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          annotations: updatedBoxes
+        })
+      })
+      
+      if (response.ok) {
+        console.log(`✓ Removed box ${index + 1}, saved ${updatedBoxes.length} remaining boxes`)
+        // Update local frame data
+        const updated = [...frames]
+        updated[currentIndex] = {
+          ...currentFrame,
+          annotations: updatedBoxes,
+          annotation_count: updatedBoxes.length
+        }
+        setFrames(updated)
+      } else {
+        console.error('Failed to save after removal:', response.status)
+        alert('❌ Failed to save removal. Please try again.')
+        // Revert the UI change
+        setDrawnBoxes(drawnBoxes)
+      }
+    } catch (error) {
+      console.error('Error saving removal:', error)
+      alert('❌ Error saving removal. Please try again.')
+      // Revert the UI change
+      setDrawnBoxes(drawnBoxes)
+    }
   }
 
   const handleSaveBoxes = async () => {
@@ -238,8 +274,39 @@ function EarlyReview({ onBack, selectedVideo }) {
     }
   }
 
-  const handleClearBoxes = () => {
+  const handleClearBoxes = async () => {
     setDrawnBoxes([])
+    
+    // Save immediately to persist the clearing
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/frames/${currentFrame.id}/annotate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          annotations: []
+        })
+      })
+      
+      if (response.ok) {
+        console.log('✓ Cleared all manual boxes')
+        // Update local frame data
+        const updated = [...frames]
+        updated[currentIndex] = {
+          ...currentFrame,
+          annotations: [],
+          annotation_count: 0
+        }
+        setFrames(updated)
+      } else {
+        console.error('Failed to save clear operation:', response.status)
+        alert('❌ Failed to clear boxes. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error clearing boxes:', error)
+      alert('❌ Error clearing boxes. Please try again.')
+    }
   }
 
   const handleClearFrames = async () => {
