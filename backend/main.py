@@ -1829,40 +1829,53 @@ async def extract_frames_from_video(video_id: int, request: dict):
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
+    logger.info(f"Video properties: {frame_count} frames at {fps} fps")
+    
     frames_dir = Path("data/training_frames")
     frames_dir.mkdir(parents=True, exist_ok=True)
     
     extracted_count = 0
     frame_number = 0
     
-    while True:
+    # Use cv2.CAP_PROP_POS_FRAMES to seek to specific frames instead of reading sequentially
+    # This prevents issues with video codecs that might loop or have bad frame counts
+    frames_to_extract = list(range(0, frame_count, frame_interval))
+    
+    logger.info(f"Planning to extract {len(frames_to_extract)} frames at interval {frame_interval}")
+    
+    for target_frame in frames_to_extract:
+        # Seek to the specific frame
+        cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
         ret, frame = cap.read()
+        
         if not ret:
+            logger.warning(f"Failed to read frame {target_frame}, stopping extraction")
             break
         
-        # Extract every Nth frame
-        if frame_number % frame_interval == 0:
-            # Save frame
-            frame_filename = f"video_{video_id}_frame_{frame_number}.jpg"
-            frame_path = frames_dir / frame_filename
-            cv2.imwrite(str(frame_path), frame)
-            
-            # Calculate timestamp
-            timestamp_sec = frame_number / fps
-            
-            # Store in database
-            frame_id = db.add_frame(
-                video_id=video_id,
-                frame_number=frame_number,
-                timestamp_in_video=timestamp_sec,
-                image_path=str(frame_path),
-                has_detections=False
-            )
-            # Mark as selected for training so it appears in review
-            db.mark_frame_for_training(frame_id)
-            extracted_count += 1
+        # Verify we're at the correct frame position
+        actual_pos = int(cap.get(cv2.CAP_PROP_POS_FRAMES)) - 1
+        if actual_pos != target_frame:
+            logger.warning(f"Frame position mismatch: requested {target_frame}, got {actual_pos}")
         
-        frame_number += 1
+        # Save frame
+        frame_filename = f"video_{video_id}_frame_{target_frame}.jpg"
+        frame_path = frames_dir / frame_filename
+        cv2.imwrite(str(frame_path), frame)
+        
+        # Calculate timestamp
+        timestamp_sec = target_frame / fps
+        
+        # Store in database
+        frame_id = db.add_frame(
+            video_id=video_id,
+            frame_number=target_frame,
+            timestamp_in_video=timestamp_sec,
+            image_path=str(frame_path),
+            has_detections=False
+        )
+        # Mark as selected for training so it appears in review
+        db.mark_frame_for_training(frame_id)
+        extracted_count += 1
     
     cap.release()
     
