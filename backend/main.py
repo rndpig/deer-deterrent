@@ -1882,13 +1882,57 @@ async def extract_frames_from_video(video_id: int, request: dict):
     logger.info(f"Extraction complete: {extracted_count} frames from video {video_id}, interval: every {frame_interval} frames")
     logger.info(f"Video stats: {frame_count} total frames at {fps} fps")
     
+    # Run detection on the extracted frames
+    logger.info(f"Running detection on {extracted_count} extracted frames...")
+    detector = load_detector()
+    
+    if detector:
+        # Get the frames we just extracted
+        all_frames = db.get_frames_for_video(video_id)
+        newly_extracted = [f for f in all_frames if f.get('selected_for_training', 0) == 1]
+        
+        detections_found = 0
+        for frame in newly_extracted:
+            frame_path = Path(frame['image_path'])
+            if not frame_path.exists():
+                logger.warning(f"Frame file not found: {frame_path}")
+                continue
+            
+            # Read frame and run detection
+            frame_img = cv2.imread(str(frame_path))
+            if frame_img is None:
+                logger.warning(f"Could not read frame: {frame_path}")
+                continue
+            
+            detections, _ = detector.detect(frame_img, return_annotated=False)
+            
+            # Store detections in database
+            if detections:
+                detections_found += 1
+                for det in detections:
+                    db.add_detection(
+                        frame_id=frame['id'],
+                        bbox_x=det['bbox'][0],
+                        bbox_y=det['bbox'][1],
+                        bbox_width=det['bbox'][2],
+                        bbox_height=det['bbox'][3],
+                        confidence=det['confidence'],
+                        class_name=det.get('class', 'deer')
+                    )
+        
+        logger.info(f"Detection complete: {detections_found} frames with deer detected")
+    else:
+        logger.warning("Detector not available, skipping automatic detection")
+        detections_found = 0
+    
     return {
         "status": "success",
         "video_id": video_id,
         "frames_extracted": extracted_count,
         "total_frames": frame_count,
         "sampling_rate": sampling_rate,
-        "frame_interval": frame_interval
+        "frame_interval": frame_interval,
+        "detections_found": detections_found
     }
 
 
