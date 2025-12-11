@@ -289,11 +289,17 @@ function EarlyReview({ onBack, selectedVideo }) {
       
       const data = await response.json()
       
+      console.log('=== FRAMES LOADED FROM API ===')
+      console.log(`Total frames from API: ${data.length}`)
+      
       // Filter by selected video if provided
       let filteredFrames = data
       if (selectedVideo) {
         filteredFrames = data.filter(f => f.video_id === selectedVideo.id)
         console.log(`Filtered to ${filteredFrames.length} frames from video ${selectedVideo.id}`)
+        console.log('Sample frame data:', filteredFrames[0])
+        console.log('Frames with detections:', filteredFrames.filter(f => f.detections && f.detections.length > 0).length)
+        console.log('Frames without detections:', filteredFrames.filter(f => !f.detections || f.detections.length === 0).length)
       }
       
       // Show ALL frames for the video (don't filter out reviewed ones)
