@@ -1922,17 +1922,22 @@ async def extract_frames_from_video(video_id: int, request: dict):
                 if detections:
                     detections_found += 1
                     for det in detections:
+                        bbox = det['bbox']
+                        # Calculate width and height from x1,y1,x2,y2
+                        width = bbox['x2'] - bbox['x1']
+                        height = bbox['y2'] - bbox['y1']
+                        
                         db.add_detection(
                             frame_id=frame['id'],
-                            bbox_x=det['bbox'][0],
-                            bbox_y=det['bbox'][1],
-                            bbox_width=det['bbox'][2],
-                            bbox_height=det['bbox'][3],
+                            bbox_x=bbox['x1'],
+                            bbox_y=bbox['y1'],
+                            bbox_width=width,
+                            bbox_height=height,
                             confidence=det['confidence'],
-                            class_name=det.get('class', 'deer')
+                            class_name=det.get('class_name', 'deer')
                         )
                         total_detections += 1
-                        logger.debug(f"Added detection: bbox={det['bbox']}, conf={det['confidence']}")
+                        logger.debug(f"Added detection: bbox={bbox}, conf={det['confidence']}")
             except Exception as e:
                 logger.error(f"Error processing frame {frame['id']}: {e}", exc_info=True)
         
