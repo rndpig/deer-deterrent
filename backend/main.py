@@ -1886,44 +1886,58 @@ async def extract_frames_from_video(video_id: int, request: dict):
     logger.info(f"Running detection on {extracted_count} extracted frames...")
     detector = load_detector()
     
-    if detector:
+    if not detector:
+        logger.error("Detector not loaded! Cannot run automatic detection")
+        detections_found = 0
+    else:
+        logger.info("Detector loaded successfully")
         # Get the frames we just extracted
         all_frames = db.get_frames_for_video(video_id)
         newly_extracted = [f for f in all_frames if f.get('selected_for_training', 0) == 1]
         
+        logger.info(f"Found {len(newly_extracted)} frames marked for training")
+        
         detections_found = 0
-        for frame in newly_extracted:
+        total_detections = 0
+        
+        for i, frame in enumerate(newly_extracted):
             frame_path = Path(frame['image_path'])
             if not frame_path.exists():
                 logger.warning(f"Frame file not found: {frame_path}")
                 continue
             
             # Read frame and run detection
-            frame_img = cv2.imread(str(frame_path))
-            if frame_img is None:
-                logger.warning(f"Could not read frame: {frame_path}")
-                continue
-            
-            detections, _ = detector.detect(frame_img, return_annotated=False)
-            
-            # Store detections in database
-            if detections:
-                detections_found += 1
-                for det in detections:
-                    db.add_detection(
-                        frame_id=frame['id'],
-                        bbox_x=det['bbox'][0],
-                        bbox_y=det['bbox'][1],
-                        bbox_width=det['bbox'][2],
-                        bbox_height=det['bbox'][3],
-                        confidence=det['confidence'],
-                        class_name=det.get('class', 'deer')
-                    )
+            try:
+                frame_img = cv2.imread(str(frame_path))
+                if frame_img is None:
+                    logger.warning(f"Could not read frame: {frame_path}")
+                    continue
+                
+                logger.debug(f"Running detection on frame {i+1}/{len(newly_extracted)}: {frame['id']}")
+                detections, _ = detector.detect(frame_img, return_annotated=False)
+                
+                logger.debug(f"Frame {frame['id']}: {len(detections)} detections found")
+                
+                # Store detections in database
+                if detections:
+                    detections_found += 1
+                    for det in detections:
+                        db.add_detection(
+                            frame_id=frame['id'],
+                            bbox_x=det['bbox'][0],
+                            bbox_y=det['bbox'][1],
+                            bbox_width=det['bbox'][2],
+                            bbox_height=det['bbox'][3],
+                            confidence=det['confidence'],
+                            class_name=det.get('class', 'deer')
+                        )
+                        total_detections += 1
+                        logger.debug(f"Added detection: bbox={det['bbox']}, conf={det['confidence']}")
+            except Exception as e:
+                logger.error(f"Error processing frame {frame['id']}: {e}", exc_info=True)
         
-        logger.info(f"Detection complete: {detections_found} frames with deer detected")
-    else:
-        logger.warning("Detector not available, skipping automatic detection")
-        detections_found = 0
+        logger.info(f"Detection complete: {detections_found}/{len(newly_extracted)} frames with deer ({total_detections} total detections)")
+        detections_found = total_detections
     
     return {
         "status": "success",
