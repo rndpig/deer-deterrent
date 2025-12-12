@@ -1923,16 +1923,10 @@ async def extract_frames_from_video(video_id: int, request: dict):
                     detections_found += 1
                     for det in detections:
                         bbox = det['bbox']
-                        # Calculate width and height from x1,y1,x2,y2
-                        width = bbox['x2'] - bbox['x1']
-                        height = bbox['y2'] - bbox['y1']
                         
                         db.add_detection(
                             frame_id=frame['id'],
-                            bbox_x=bbox['x1'],
-                            bbox_y=bbox['y1'],
-                            bbox_width=width,
-                            bbox_height=height,
+                            bbox=bbox,
                             confidence=det['confidence'],
                             class_name=det.get('class_name', 'deer')
                         )
