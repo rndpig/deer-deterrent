@@ -548,26 +548,30 @@ function EarlyReview({ onBack, selectedVideo }) {
         {/* Canvas area */}
         <div className="canvas-area">
           <div className="image-wrapper">
-            <img 
-              ref={imageRef}
-              src={imageUrl}
-              alt="Frame"
-              className="review-image"
-              onLoad={() => redrawCanvas()}
-            />
-            <canvas 
-              ref={canvasRef}
-              className="drawing-canvas"
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-              style={{ 
-                cursor: 'crosshair',
-                width: imageRef.current?.clientWidth || 0,
-                height: imageRef.current?.clientHeight || 0
-              }}
-            />
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <img 
+                ref={imageRef}
+                src={imageUrl}
+                alt="Frame"
+                className="review-image"
+                onLoad={() => redrawCanvas()}
+              />
+              <canvas 
+                ref={canvasRef}
+                className="drawing-canvas"
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                style={{ 
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  cursor: 'crosshair',
+                  pointerEvents: 'auto'
+                }}
+              />
+            </div>
           </div>
         </div>
 
