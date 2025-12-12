@@ -51,9 +51,10 @@ function EarlyReview({ onBack, selectedVideo }) {
     
     if (!ctx || !img.complete || img.naturalWidth === 0) return
     
-    // Set canvas size to match image
-    canvas.width = img.naturalWidth
-    canvas.height = img.naturalHeight
+    // Set canvas size to match DISPLAYED image size, not natural size
+    // This ensures coordinates align with what the user sees
+    canvas.width = img.clientWidth
+    canvas.height = img.clientHeight
     
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -71,10 +72,14 @@ function EarlyReview({ onBack, selectedVideo }) {
         // Check if coordinates are normalized (0-1) or pixel values
         const isNormalized = bbox.x1 <= 1 && bbox.y1 <= 1 && bbox.x2 <= 1 && bbox.y2 <= 1
         
-        const x1 = isNormalized ? bbox.x1 * canvas.width : bbox.x1
-        const y1 = isNormalized ? bbox.y1 * canvas.height : bbox.y1
-        const x2 = isNormalized ? bbox.x2 * canvas.width : bbox.x2
-        const y2 = isNormalized ? bbox.y2 * canvas.height : bbox.y2
+        // Scale from natural image size to displayed canvas size
+        const scaleX = canvas.width / img.naturalWidth
+        const scaleY = canvas.height / img.naturalHeight
+        
+        const x1 = isNormalized ? bbox.x1 * canvas.width : bbox.x1 * scaleX
+        const y1 = isNormalized ? bbox.y1 * canvas.height : bbox.y1 * scaleY
+        const x2 = isNormalized ? bbox.x2 * canvas.width : bbox.x2 * scaleX
+        const y2 = isNormalized ? bbox.y2 * canvas.height : bbox.y2 * scaleY
         
         const x = x1
         const y = y1
