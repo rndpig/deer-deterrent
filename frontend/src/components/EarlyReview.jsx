@@ -520,21 +520,22 @@ function EarlyReview({ onBack, selectedVideo }) {
                       top: `${bbox.y1 * scaleY}px`,
                       width: `${(bbox.x2 - bbox.x1) * scaleX}px`,
                       height: `${(bbox.y2 - bbox.y1) * scaleY}px`,
-                      border: '3px solid #10b981',
+                      border: '2px solid #10b981',
                       pointerEvents: 'none',
                       boxSizing: 'border-box'
                     }}
                   >
                     <div style={{
                       position: 'absolute',
-                      top: '-20px',
-                      left: '5px',
+                      top: '-18px',
+                      left: '2px',
                       background: '#10b981',
                       color: 'white',
-                      padding: '2px 6px',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      borderRadius: '3px'
+                      padding: '1px 4px',
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      borderRadius: '2px',
+                      whiteSpace: 'nowrap'
                     }}>
                       {det.class_name} {(det.confidence * 100).toFixed(0)}%
                     </div>
