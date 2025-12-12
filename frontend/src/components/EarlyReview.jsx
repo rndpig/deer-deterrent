@@ -508,16 +508,24 @@ function EarlyReview({ onBack, selectedVideo }) {
               {currentFrame.detections && imageRef.current && currentFrame.detections.map((det, idx) => {
                 const img = imageRef.current
                 const bbox = det.bbox
+                
+                // Calculate scale based on displayed vs natural size
                 const scaleX = img.clientWidth / img.naturalWidth
                 const scaleY = img.clientHeight / img.naturalHeight
+                
+                // Get image's position within its parent to account for any centering
+                const imgRect = img.getBoundingClientRect()
+                const parentRect = img.parentElement.getBoundingClientRect()
+                const offsetX = imgRect.left - parentRect.left
+                const offsetY = imgRect.top - parentRect.top
                 
                 return (
                   <div
                     key={`det-${idx}`}
                     style={{
                       position: 'absolute',
-                      left: `${bbox.x1 * scaleX}px`,
-                      top: `${bbox.y1 * scaleY}px`,
+                      left: `${offsetX + (bbox.x1 * scaleX)}px`,
+                      top: `${offsetY + (bbox.y1 * scaleY)}px`,
                       width: `${(bbox.x2 - bbox.x1) * scaleX}px`,
                       height: `${(bbox.y2 - bbox.y1) * scaleY}px`,
                       border: '2px solid #10b981',
