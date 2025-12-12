@@ -567,6 +567,8 @@ function EarlyReview({ onBack, selectedVideo }) {
                   position: 'absolute',
                   top: 0,
                   left: 0,
+                  width: `${imageRef.current?.clientWidth || 0}px`,
+                  height: `${imageRef.current?.clientHeight || 0}px`,
                   cursor: 'crosshair',
                   pointerEvents: 'auto'
                 }}
