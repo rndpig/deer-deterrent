@@ -562,8 +562,53 @@ function Training() {
   }
 
   const handleTrainModel = async () => {
-    // Placeholder for model training
-    alert('Model training feature coming soon!\n\nThis will:\n1. Export all annotations to YOLO format\n2. Upload to training environment\n3. Start model training\n4. Download improved model')
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    
+    // Confirm with user
+    if (!confirm('🚀 Ready to train the model?\n\nThis will:\n1. Export all annotated frames to COCO format\n2. Sync training data to Google Drive\n3. Prepare for Colab training\n\nContinue?')) {
+      return
+    }
+    
+    try {
+      // Show loading indicator
+      const loadingAlert = window.alert
+      setTimeout(() => {
+        console.log('Training pipeline started...')
+      }, 100)
+      
+      console.log('Calling training API...')
+      const response = await fetch(`${apiUrl}/api/training/train-model`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Training pipeline failed')
+      }
+      
+      const result = await response.json()
+      
+      console.log('Training pipeline result:', result)
+      
+      // Show success message with next steps
+      alert(
+        `✅ Training data prepared successfully!\n\n` +
+        `📊 Exported: ${result.export.images_count} images with ${result.export.annotations_count} annotations\n` +
+        `☁️ Synced: ${result.drive.files_uploaded} files to Google Drive\n\n` +
+        `📝 Next Steps:\n` +
+        `1. Open Google Colab notebook\n` +
+        `2. Run all cells to train the model\n` +
+        `3. Download the trained model\n\n` +
+        `Drive folder: ${result.next_steps.drive_folder}`
+      )
+      
+    } catch (error) {
+      console.error('Training pipeline error:', error)
+      alert(`❌ Training pipeline failed:\n\n${error.message}`)
+    }
   }
 
   // Show library view

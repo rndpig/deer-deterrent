@@ -2769,6 +2769,176 @@ async def get_training_stats_legacy():
     }
 
 
+@app.post("/api/training/export-annotations")
+async def export_training_annotations():
+    """
+    Export annotated training frames to COCO format for model training.
+    
+    This exports frames marked for training (selected_for_training=1) from the database,
+    including both model detections and manual annotations.
+    """
+    try:
+        from datetime import datetime
+        import shutil
+        from PIL import Image
+        
+        # Get all training frames with their detections and annotations
+        training_frames = db.get_training_frames()
+        
+        if not training_frames:
+            raise HTTPException(
+                status_code=404,
+                detail="No training frames found. Please annotate some videos first."
+            )
+        
+        # Create export directory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        export_dir = PROJECT_ROOT / "temp" / "training_export" / f"export_{timestamp}"
+        images_dir = export_dir / "images"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Build COCO format dataset
+        coco_data = {
+            "info": {
+                "description": "Deer Detection Training Dataset - Annotated Frames",
+                "version": "1.0",
+                "date_created": datetime.now().isoformat(),
+                "contributor": "Deer Deterrent System"
+            },
+            "licenses": [],
+            "categories": [
+                {
+                    "id": 1,
+                    "name": "deer",
+                    "supercategory": "animal"
+                }
+            ],
+            "images": [],
+            "annotations": []
+        }
+        
+        annotation_id = 1
+        images_copied = 0
+        
+        # Process each frame
+        for frame in training_frames:
+            # Copy image to export directory
+            source_image = Path(frame['image_path'])
+            if not source_image.exists():
+                logger.warning(f"Image not found: {source_image}")
+                continue
+            
+            # Use frame ID in filename to ensure uniqueness
+            image_filename = f"frame_{frame['id']:06d}.jpg"
+            dest_image = images_dir / image_filename
+            shutil.copy2(source_image, dest_image)
+            images_copied += 1
+            
+            # Get image dimensions
+            img = Image.open(source_image)
+            width, height = img.size
+            
+            # Add image to COCO
+            image_entry = {
+                "id": frame['id'],
+                "file_name": image_filename,
+                "width": width,
+                "height": height,
+                "video_filename": frame.get('filename', 'unknown'),
+                "camera_name": frame.get('camera_name', 'unknown'),
+                "frame_number": frame.get('frame_number', 0),
+                "timestamp": frame.get('timestamp_in_video', 0.0)
+            }
+            coco_data["images"].append(image_entry)
+            
+            # Add model detections (confirmed by user viewing the frame)
+            for detection in frame.get('detections', []):
+                # Convert from pixel or normalized coordinates to COCO format
+                x1 = detection['bbox_x1']
+                y1 = detection['bbox_y1']
+                x2 = detection['bbox_x2']
+                y2 = detection['bbox_y2']
+                
+                # Handle normalized coordinates (0-1)
+                if x1 <= 1.0 and y1 <= 1.0 and x2 <= 1.0 and y2 <= 1.0:
+                    x1 = x1 * width
+                    y1 = y1 * height
+                    x2 = x2 * width
+                    y2 = y2 * height
+                
+                bbox_width = x2 - x1
+                bbox_height = y2 - y1
+                
+                annotation_entry = {
+                    "id": annotation_id,
+                    "image_id": frame['id'],
+                    "category_id": 1,  # deer
+                    "bbox": [x1, y1, bbox_width, bbox_height],
+                    "area": bbox_width * bbox_height,
+                    "iscrowd": 0,
+                    "source": "model_detection",
+                    "confidence": detection.get('confidence', 1.0)
+                }
+                coco_data["annotations"].append(annotation_entry)
+                annotation_id += 1
+            
+            # Add manual annotations
+            for annotation in frame.get('annotations', []):
+                # Convert from normalized YOLO format (center x, center y, width, height)
+                # to COCO format (top-left x, top-left y, width, height)
+                x_center = annotation['bbox_x']
+                y_center = annotation['bbox_y']
+                bbox_width_norm = annotation['bbox_width']
+                bbox_height_norm = annotation['bbox_height']
+                
+                # Convert to pixel coordinates
+                x_center_px = x_center * width
+                y_center_px = y_center * height
+                bbox_width_px = bbox_width_norm * width
+                bbox_height_px = bbox_height_norm * height
+                
+                # Convert center format to top-left corner format
+                x1 = x_center_px - (bbox_width_px / 2)
+                y1 = y_center_px - (bbox_height_px / 2)
+                
+                annotation_entry = {
+                    "id": annotation_id,
+                    "image_id": frame['id'],
+                    "category_id": 1,  # deer
+                    "bbox": [x1, y1, bbox_width_px, bbox_height_px],
+                    "area": bbox_width_px * bbox_height_px,
+                    "iscrowd": 0,
+                    "source": "manual_annotation",
+                    "annotator": annotation.get('annotator', 'user')
+                }
+                coco_data["annotations"].append(annotation_entry)
+                annotation_id += 1
+        
+        # Save COCO JSON
+        coco_json_path = export_dir / "annotations.json"
+        with open(coco_json_path, 'w') as f:
+            json.dump(coco_data, f, indent=2)
+        
+        logger.info(f"✓ Exported {len(coco_data['images'])} images with {len(coco_data['annotations'])} annotations to {export_dir}")
+        
+        return {
+            "status": "success",
+            "export_path": str(export_dir),
+            "images_count": len(coco_data['images']),
+            "images_copied": images_copied,
+            "annotations_count": len(coco_data['annotations']),
+            "timestamp": timestamp,
+            "coco_json": str(coco_json_path)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to export annotations: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to export annotations: {str(e)}"
+        )
+
+
 @app.get("/api/training/export")
 async def export_training_data():
     """
@@ -2979,6 +3149,103 @@ async def sync_training_to_drive():
         raise HTTPException(
             status_code=500,
             detail=f"Failed to sync to Drive: {e}"
+        )
+
+
+@app.post("/api/training/train-model")
+async def train_model():
+    """
+    Complete training pipeline: Export annotations and sync to Google Drive.
+    
+    This endpoint:
+    1. Exports annotated frames to COCO format
+    2. Syncs the export to Google Drive
+    3. Returns information for running the Colab notebook
+    """
+    try:
+        from pathlib import Path
+        import os
+        from dotenv import load_dotenv
+        load_dotenv()
+        
+        # Step 1: Export annotations
+        logger.info("Step 1: Exporting training annotations...")
+        export_result = await export_training_annotations()
+        
+        if export_result["status"] != "success":
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to export annotations"
+            )
+        
+        export_path = export_result["export_path"]
+        logger.info(f"✓ Exported {export_result['images_count']} images with {export_result['annotations_count']} annotations")
+        
+        # Step 2: Sync to Google Drive
+        logger.info("Step 2: Syncing to Google Drive...")
+        
+        credentials_path = os.getenv(
+            'GOOGLE_DRIVE_CREDENTIALS_PATH',
+            'configs/google-credentials.json'
+        )
+        folder_id = os.getenv('GOOGLE_DRIVE_TRAINING_FOLDER_ID')
+        
+        if not credentials_path or not folder_id:
+            raise HTTPException(
+                status_code=500,
+                detail="Google Drive not configured. Set GOOGLE_DRIVE_TRAINING_FOLDER_ID in .env"
+            )
+        
+        # Check if credentials file exists
+        if not Path(credentials_path).exists():
+            raise HTTPException(
+                status_code=500,
+                detail=f"Google Drive credentials file not found: {credentials_path}"
+            )
+        
+        # Import and sync
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+        
+        from services.drive_sync import DriveSync
+        
+        drive = DriveSync(credentials_path, folder_id)
+        
+        # Upload the export directory to Drive
+        sync_result = drive.upload_training_data(export_path)
+        
+        logger.info(f"✓ Synced to Google Drive")
+        
+        return {
+            "status": "success",
+            "message": "Training data exported and synced successfully",
+            "export": {
+                "images_count": export_result["images_count"],
+                "annotations_count": export_result["annotations_count"],
+                "local_path": export_path
+            },
+            "drive": {
+                "folder_id": sync_result.get("folder_id"),
+                "files_uploaded": sync_result.get("files_uploaded", 0)
+            },
+            "next_steps": {
+                "instructions": "Open Google Colab notebook and run all cells",
+                "notebook_url": "https://colab.research.google.com/drive/your-notebook-id",
+                "drive_folder": f"https://drive.google.com/drive/folders/{folder_id}"
+            }
+        }
+        
+    except ImportError as e:
+        logger.error(f"Import error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Google Drive dependencies not installed. Run: pip install google-auth google-api-python-client"
+        )
+    except Exception as e:
+        logger.error(f"Training pipeline failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Training pipeline failed: {str(e)}"
         )
 
 
