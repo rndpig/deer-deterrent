@@ -2866,7 +2866,7 @@ async def export_training_annotations():
         
         # Create export directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        export_dir = PROJECT_ROOT / "temp" / "training_export" / f"export_{timestamp}"
+        export_dir = Path(project_root) / "temp" / "training_export" / f"export_{timestamp}"
         images_dir = export_dir / "images"
         images_dir.mkdir(parents=True, exist_ok=True)
         
@@ -3377,7 +3377,7 @@ async def deploy_latest_model():
         
         # Deploy to ml-detector service
         # For now, we'll move it to the models directory where detector can pick it up
-        models_dir = PROJECT_ROOT / "temp" / "models"
+        models_dir = Path(project_root) / "temp" / "models"
         models_dir.mkdir(parents=True, exist_ok=True)
         
         deployed_path = models_dir / f"deer_detection_latest.pt"
