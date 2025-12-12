@@ -2835,13 +2835,25 @@ async def export_training_annotations():
     This exports frames marked for training (selected_for_training=1) from the database,
     including both model detections and manual annotations.
     
-    SAFETY: This operation only READS from the database and COPIES images.
-    Original data is never modified or deleted.
+    SAFETY: 
+    - Creates automatic database backup before export
+    - Only READS from the database and COPIES images
+    - Original data is never modified or deleted
     """
     try:
         from datetime import datetime
         import shutil
         from PIL import Image
+        
+        # Automatic database backup (safety first!)
+        db_path = Path("data/training.db")
+        if db_path.exists():
+            backup_dir = Path("data/backups")
+            backup_dir.mkdir(exist_ok=True)
+            timestamp_backup = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = backup_dir / f"training_backup_{timestamp_backup}.db"
+            shutil.copy2(db_path, backup_path)
+            logger.info(f"✓ Database backed up to {backup_path}")
         
         # Get all training frames with their detections and annotations
         training_frames = db.get_training_frames()
@@ -3219,15 +3231,31 @@ async def train_model():
     Complete training pipeline: Export annotations and sync to Google Drive.
     
     This endpoint:
-    1. Exports annotated frames to COCO format
-    2. Syncs the export to Google Drive
-    3. Returns information for running the Colab notebook
+    1. Creates automatic database backup
+    2. Exports annotated frames to COCO format
+    3. Syncs the export to Google Drive
+    4. Returns information for running the Colab notebook
     """
     try:
         from pathlib import Path
         import os
+        import shutil
+        from datetime import datetime
         from dotenv import load_dotenv
         load_dotenv()
+        
+        # Step 0: Automatic database backup
+        logger.info("Step 0: Creating database backup...")
+        db_path = Path("data/training.db")
+        if db_path.exists():
+            backup_dir = Path("data/backups")
+            backup_dir.mkdir(exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = backup_dir / f"training_backup_{timestamp}.db"
+            shutil.copy2(db_path, backup_path)
+            logger.info(f"✓ Database backed up to {backup_path}")
+        else:
+            logger.warning("Database not found, skipping backup")
         
         # Step 1: Export annotations
         logger.info("Step 1: Exporting training annotations...")
