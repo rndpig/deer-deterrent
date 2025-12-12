@@ -18,6 +18,11 @@ from collections import defaultdict
 import tempfile
 import shutil
 import base64
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
