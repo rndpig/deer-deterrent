@@ -51,20 +51,10 @@ function EarlyReview({ onBack, selectedVideo }) {
     
     if (!ctx || !img.complete || img.naturalWidth === 0) return
     
-    // Wait for layout to complete before getting client dimensions
-    if (img.clientWidth === 0 || img.clientHeight === 0) {
-      requestAnimationFrame(() => redrawCanvas())
-      return
-    }
-    
-    // Set canvas size to match DISPLAYED image size, not natural size
-    // This ensures coordinates align with what the user sees
-    canvas.width = img.clientWidth
-    canvas.height = img.clientHeight
-    
-    console.log('Canvas size:', canvas.width, 'x', canvas.height)
-    console.log('Image natural:', img.naturalWidth, 'x', img.naturalHeight)
-    console.log('Scale factors:', canvas.width / img.naturalWidth, canvas.height / img.naturalHeight)
+    // Set canvas internal size to match natural image size
+    // This keeps detection coordinates accurate
+    canvas.width = img.naturalWidth
+    canvas.height = img.naturalHeight
     
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -75,27 +65,15 @@ function EarlyReview({ onBack, selectedVideo }) {
     
     // Draw model detections (green)
     if (currentFrame.detections && currentFrame.detections.length > 0) {
-      currentFrame.detections.forEach((det, idx) => {
-        // Detections come with bbox object containing x1, y1, x2, y2
+      currentFrame.detections.forEach((det) => {
         const bbox = det.bbox
         
-        console.log(`Detection ${idx}:`, bbox)
-        
-        // Check if coordinates are normalized (0-1) or pixel values
-        const isNormalized = bbox.x1 <= 1 && bbox.y1 <= 1 && bbox.x2 <= 1 && bbox.y2 <= 1
-        
-        console.log('Is normalized?', isNormalized)
-        
-        // Scale from natural image size to displayed canvas size
-        const scaleX = canvas.width / img.naturalWidth
-        const scaleY = canvas.height / img.naturalHeight
-        
-        const x1 = isNormalized ? bbox.x1 * canvas.width : bbox.x1 * scaleX
-        const y1 = isNormalized ? bbox.y1 * canvas.height : bbox.y1 * scaleY
-        const x2 = isNormalized ? bbox.x2 * canvas.width : bbox.x2 * scaleX
-        const y2 = isNormalized ? bbox.y2 * canvas.height : bbox.y2 * scaleY
-        
-        console.log('Scaled coordinates:', { x1, y1, x2, y2 })
+        // Detections are stored in pixel coordinates relative to natural image size
+        // Canvas is now set to natural size, so use coordinates directly
+        const x1 = bbox.x1
+        const y1 = bbox.y1
+        const x2 = bbox.x2
+        const y2 = bbox.y2
         
         const x = x1
         const y = y1
@@ -567,8 +545,8 @@ function EarlyReview({ onBack, selectedVideo }) {
                   position: 'absolute',
                   top: 0,
                   left: 0,
-                  width: `${imageRef.current?.clientWidth || 0}px`,
-                  height: `${imageRef.current?.clientHeight || 0}px`,
+                  width: '100%',
+                  height: '100%',
                   cursor: 'crosshair',
                   pointerEvents: 'auto'
                 }}
