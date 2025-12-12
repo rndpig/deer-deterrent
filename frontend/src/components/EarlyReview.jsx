@@ -51,10 +51,20 @@ function EarlyReview({ onBack, selectedVideo }) {
     
     if (!ctx || !img.complete || img.naturalWidth === 0) return
     
+    // Wait for layout to complete before getting client dimensions
+    if (img.clientWidth === 0 || img.clientHeight === 0) {
+      requestAnimationFrame(() => redrawCanvas())
+      return
+    }
+    
     // Set canvas size to match DISPLAYED image size, not natural size
     // This ensures coordinates align with what the user sees
     canvas.width = img.clientWidth
     canvas.height = img.clientHeight
+    
+    console.log('Canvas size:', canvas.width, 'x', canvas.height)
+    console.log('Image natural:', img.naturalWidth, 'x', img.naturalHeight)
+    console.log('Scale factors:', canvas.width / img.naturalWidth, canvas.height / img.naturalHeight)
     
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
