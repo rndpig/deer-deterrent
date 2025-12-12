@@ -59,42 +59,7 @@ function EarlyReview({ onBack, selectedVideo }) {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     
-    // Debug logging
-    console.log('Frame detections:', currentFrame.detections)
-    console.log('Manual boxes:', drawnBoxes)
-    
-    // Draw model detections (green)
-    if (currentFrame.detections && currentFrame.detections.length > 0) {
-      currentFrame.detections.forEach((det) => {
-        const bbox = det.bbox
-        
-        // Detections are stored in pixel coordinates relative to natural image size
-        // Canvas is now set to natural size, so use coordinates directly
-        const x1 = bbox.x1
-        const y1 = bbox.y1
-        const x2 = bbox.x2
-        const y2 = bbox.y2
-        
-        const x = x1
-        const y = y1
-        const w = x2 - x1
-        const h = y2 - y1
-        
-        ctx.strokeStyle = '#10b981'
-        ctx.lineWidth = 3
-        ctx.strokeRect(x, y, w, h)
-        
-        ctx.fillStyle = '#10b981'
-        ctx.font = '14px Arial'
-        ctx.fillText(
-          `${det.class_name} ${(det.confidence * 100).toFixed(0)}%`,
-          x + 5,
-          y - 5
-        )
-      })
-    }
-    
-    // Draw manual boxes (blue)
+    // Draw manual boxes (blue) - detections are now rendered as HTML divs
     drawnBoxes.forEach((box, idx) => {
       ctx.strokeStyle = '#3b82f6'
       ctx.lineWidth = 3
@@ -532,8 +497,51 @@ function EarlyReview({ onBack, selectedVideo }) {
                 src={imageUrl}
                 alt="Frame"
                 className="review-image"
-                onLoad={() => redrawCanvas()}
+                onLoad={() => {
+                  redrawCanvas()
+                  // Force re-render to update detection boxes
+                  setDrawnBoxes([...drawnBoxes])
+                }}
               />
+              
+              {/* Render detection boxes as divs */}
+              {currentFrame.detections && imageRef.current && currentFrame.detections.map((det, idx) => {
+                const img = imageRef.current
+                const bbox = det.bbox
+                const scaleX = img.clientWidth / img.naturalWidth
+                const scaleY = img.clientHeight / img.naturalHeight
+                
+                return (
+                  <div
+                    key={`det-${idx}`}
+                    style={{
+                      position: 'absolute',
+                      left: `${bbox.x1 * scaleX}px`,
+                      top: `${bbox.y1 * scaleY}px`,
+                      width: `${(bbox.x2 - bbox.x1) * scaleX}px`,
+                      height: `${(bbox.y2 - bbox.y1) * scaleY}px`,
+                      border: '3px solid #10b981',
+                      pointerEvents: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <div style={{
+                      position: 'absolute',
+                      top: '-20px',
+                      left: '5px',
+                      background: '#10b981',
+                      color: 'white',
+                      padding: '2px 6px',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      borderRadius: '3px'
+                    }}>
+                      {det.class_name} {(det.confidence * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                )
+              })}
+              
               <canvas 
                 ref={canvasRef}
                 className="drawing-canvas"
