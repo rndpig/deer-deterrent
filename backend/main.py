@@ -2769,6 +2769,64 @@ async def get_training_stats_legacy():
     }
 
 
+@app.get("/api/training/preview-export")
+async def preview_export():
+    """
+    Preview what would be exported without actually exporting.
+    
+    Returns statistics about training frames and annotations that would be exported.
+    Use this to verify data before running the actual export.
+    """
+    try:
+        # Get all training frames with their detections and annotations
+        training_frames = db.get_training_frames()
+        
+        if not training_frames:
+            return {
+                "status": "no_data",
+                "message": "No training frames found",
+                "images_count": 0,
+                "annotations_count": 0
+            }
+        
+        # Count annotations
+        total_model_detections = 0
+        total_manual_annotations = 0
+        videos_included = set()
+        
+        for frame in training_frames:
+            total_model_detections += len(frame.get('detections', []))
+            total_manual_annotations += len(frame.get('annotations', []))
+            videos_included.add(frame.get('filename', 'unknown'))
+        
+        return {
+            "status": "ready",
+            "message": "Training data is ready to export",
+            "statistics": {
+                "total_frames": len(training_frames),
+                "model_detections": total_model_detections,
+                "manual_annotations": total_manual_annotations,
+                "total_annotations": total_model_detections + total_manual_annotations,
+                "videos_included": list(videos_included),
+                "video_count": len(videos_included)
+            },
+            "safety": {
+                "database_modified": False,
+                "files_deleted": False,
+                "creates_new_export_folder": True,
+                "copies_images": True,
+                "original_data_safe": True
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to preview export: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to preview export: {str(e)}"
+        )
+
+
 @app.post("/api/training/export-annotations")
 async def export_training_annotations():
     """
@@ -2776,6 +2834,9 @@ async def export_training_annotations():
     
     This exports frames marked for training (selected_for_training=1) from the database,
     including both model detections and manual annotations.
+    
+    SAFETY: This operation only READS from the database and COPIES images.
+    Original data is never modified or deleted.
     """
     try:
         from datetime import datetime
