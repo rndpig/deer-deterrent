@@ -75,12 +75,16 @@ function EarlyReview({ onBack, selectedVideo }) {
     
     // Draw model detections (green)
     if (currentFrame.detections && currentFrame.detections.length > 0) {
-      currentFrame.detections.forEach((det) => {
+      currentFrame.detections.forEach((det, idx) => {
         // Detections come with bbox object containing x1, y1, x2, y2
         const bbox = det.bbox
         
+        console.log(`Detection ${idx}:`, bbox)
+        
         // Check if coordinates are normalized (0-1) or pixel values
         const isNormalized = bbox.x1 <= 1 && bbox.y1 <= 1 && bbox.x2 <= 1 && bbox.y2 <= 1
+        
+        console.log('Is normalized?', isNormalized)
         
         // Scale from natural image size to displayed canvas size
         const scaleX = canvas.width / img.naturalWidth
@@ -90,6 +94,8 @@ function EarlyReview({ onBack, selectedVideo }) {
         const y1 = isNormalized ? bbox.y1 * canvas.height : bbox.y1 * scaleY
         const x2 = isNormalized ? bbox.x2 * canvas.width : bbox.x2 * scaleX
         const y2 = isNormalized ? bbox.y2 * canvas.height : bbox.y2 * scaleY
+        
+        console.log('Scaled coordinates:', { x1, y1, x2, y2 })
         
         const x = x1
         const y = y1
