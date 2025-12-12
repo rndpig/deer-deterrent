@@ -562,7 +562,11 @@ function EarlyReview({ onBack, selectedVideo }) {
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
-              style={{ cursor: 'crosshair' }}
+              style={{ 
+                cursor: 'crosshair',
+                width: imageRef.current?.clientWidth || 0,
+                height: imageRef.current?.clientHeight || 0
+              }}
             />
           </div>
         </div>
