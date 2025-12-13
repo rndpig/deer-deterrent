@@ -3252,6 +3252,11 @@ async def train_model():
         from dotenv import load_dotenv
         load_dotenv()
         
+        # DEBUG: Log what we're seeing
+        logger.info("=== TRAIN MODEL CALLED ===")
+        logger.info(f"Current working directory: {os.getcwd()}")
+        logger.info(f"Project root: {project_root}")
+        
         # Step 0: Automatic database backup
         logger.info("Step 0: Creating database backup...")
         db_path = Path("data/training.db")
