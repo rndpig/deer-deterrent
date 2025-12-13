@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import './VideoLibrary.css'
 
-function VideoLibrary({ onStartReview, onTrainModel }) {
+function VideoLibrary({ onStartReview, onTrainModel, syncing = false }) {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
   const [trainingStatus, setTrainingStatus] = useState(null)
@@ -506,8 +506,9 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
             className="btn-train-model"
             onClick={onTrainModel}
             title="Train model with collected annotations"
+            disabled={uploading || syncing}
           >
-            🚀 Train Model
+            {syncing ? '⏳ Exporting & syncing to Drive...' : '🚀 Train Model'}
           </button>
         </div>
       </div>

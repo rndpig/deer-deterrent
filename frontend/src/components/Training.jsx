@@ -569,13 +569,10 @@ function Training() {
       return
     }
     
+    // Set syncing state to show progress
+    setSyncing(true)
+    
     try {
-      // Show loading indicator
-      const loadingAlert = window.alert
-      setTimeout(() => {
-        console.log('Training pipeline started...')
-      }, 100)
-      
       console.log('Calling training API...')
       const response = await fetch(`${apiUrl}/api/training/train-model`, {
         method: 'POST',
@@ -594,20 +591,28 @@ function Training() {
       console.log('Training pipeline result:', result)
       
       // Show success message with next steps
+      const driveUrl = result.next_steps?.drive_folder || `https://drive.google.com/drive/folders/${result.drive?.folder_id}`
+      
       alert(
         `✅ Training data prepared successfully!\n\n` +
-        `📊 Exported: ${result.export.images_count} images with ${result.export.annotations_count} annotations\n` +
-        `☁️ Synced: ${result.drive.files_uploaded} files to Google Drive\n\n` +
+        `📊 Exported: ${result.export?.images_count || 0} images with ${result.export?.annotations_count || 0} annotations\n` +
+        `☁️ Synced: ${result.drive?.files_uploaded || 0} files to Google Drive\n\n` +
         `📝 Next Steps:\n` +
-        `1. Open Google Colab notebook\n` +
-        `2. Run all cells to train the model\n` +
-        `3. Download the trained model\n\n` +
-        `Drive folder: ${result.next_steps.drive_folder}`
+        `1. Open your Google Drive folder to verify files\n` +
+        `2. Open Google Colab notebook for training\n` +
+        `3. Run all cells to train the model\n\n` +
+        `📁 Drive folder: ${driveUrl}\n\n` +
+        `Click OK to open Google Drive folder`
       )
+      
+      // Open Google Drive folder in new tab
+      window.open(driveUrl, '_blank')
       
     } catch (error) {
       console.error('Training pipeline error:', error)
       alert(`❌ Training pipeline failed:\n\n${error.message}`)
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -618,6 +623,7 @@ function Training() {
         <VideoLibrary 
           onStartReview={handleStartReview}
           onTrainModel={handleTrainModel}
+          syncing={syncing}
         />
       </div>
     )
