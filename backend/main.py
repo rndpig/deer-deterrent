@@ -3290,10 +3290,14 @@ async def train_model():
             '1NUuOhA7rWCiGcxWPe6sOHNnzOKO0zZf5'
         )
         
+        logger.info(f"DEBUG: credentials_path = {credentials_path}")
+        logger.info(f"DEBUG: folder_id = {folder_id}")
+        logger.info(f"DEBUG: credentials_path exists = {Path(credentials_path).exists()}")
+        
         if not credentials_path or not folder_id:
             raise HTTPException(
                 status_code=500,
-                detail="Google Drive not configured. Set GOOGLE_DRIVE_TRAINING_FOLDER_ID in .env"
+                detail=f"Google Drive not configured. credentials_path={credentials_path}, folder_id={folder_id}"
             )
         
         # Check if credentials file exists
