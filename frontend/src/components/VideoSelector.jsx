@@ -13,7 +13,7 @@ function VideoSelector({ onBack, onVideoSelected, onTrainModel }) {
   }, [])
 
   const loadVideos = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     setLoading(true)
     
     try {
@@ -32,7 +32,7 @@ function VideoSelector({ onBack, onVideoSelected, onTrainModel }) {
 
   const handleVideoClick = async (video) => {
     setSelectedVideo(video)
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     setProcessing(true)
 
     console.log('=== VIDEO CLICK ===')
@@ -82,7 +82,7 @@ function VideoSelector({ onBack, onVideoSelected, onTrainModel }) {
     const videoToExtract = video || selectedVideo
     if (!videoToExtract) return
     
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     setProcessing(true)
 
     try {
@@ -175,7 +175,7 @@ function VideoSelector({ onBack, onVideoSelected, onTrainModel }) {
         <div className="selector-content">
           <div className="video-grid">
             {videos.map(video => {
-              const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+              const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
               const thumbnailUrl = `${apiUrl}/api/videos/${video.id}/thumbnail`
               const fullyAnnotated = video.fully_annotated || false
               const hasAnnotations = video.has_annotations || false
@@ -217,3 +217,5 @@ function VideoSelector({ onBack, onVideoSelected, onTrainModel }) {
 }
 
 export default VideoSelector
+
+

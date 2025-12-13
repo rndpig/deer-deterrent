@@ -7,7 +7,7 @@ function DetectionHistory() {
   const [filter, setFilter] = useState('last24h') // all, last24h, last7d
 
   useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     const endpoint = filter === 'all' 
       ? `${apiUrl}/api/detections?limit=100`
@@ -88,7 +88,7 @@ function DetectionHistory() {
                   <td>
                     {detection.image_path && (
                       <a 
-                        href={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${detection.image_path}`}
+                        href={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}${detection.image_path}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="view-image-link"
@@ -108,3 +108,5 @@ function DetectionHistory() {
 }
 
 export default DetectionHistory
+
+

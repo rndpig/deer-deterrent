@@ -98,7 +98,7 @@ function EarlyReview({ onBack }) {
   }, [])
 
   const loadFrames = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     setLoading(true)
     
     try {
@@ -126,7 +126,7 @@ function EarlyReview({ onBack }) {
   }
 
   const loadTrainingStats = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const response = await fetch(`${apiUrl}/api/training/stats`)
@@ -140,7 +140,7 @@ function EarlyReview({ onBack }) {
   }
 
   const reviewFrame = async (reviewType) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     const frame = frames[currentIndex]
     
     if (!frame) return
@@ -206,7 +206,7 @@ function EarlyReview({ onBack }) {
   }
 
   const handleAnnotationSave = async (annotations) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     const frame = frames[currentIndex]
     
     try {
@@ -260,7 +260,7 @@ function EarlyReview({ onBack }) {
     )
   }
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
   const imageUrl = currentFrame.image_url?.startsWith('http') 
     ? currentFrame.image_url 
     : `${apiUrl}${currentFrame.image_url}`
@@ -345,3 +345,5 @@ function EarlyReview({ onBack }) {
 }
 
 export default EarlyReview
+
+

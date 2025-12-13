@@ -40,7 +40,7 @@ function Settings({ settings, setSettings, onViewArchive }) {
   useEffect(() => {
     const fetchRainbirdZones = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
         const response = await fetch(`${apiUrl}/api/rainbird/zones`)
         const data = await response.json()
         
@@ -59,7 +59,7 @@ function Settings({ settings, setSettings, onViewArchive }) {
   useEffect(() => {
     const fetchRingCameras = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
         const response = await fetch(`${apiUrl}/api/ring/cameras`)
         const data = await response.json()
         
@@ -154,7 +154,7 @@ function Settings({ settings, setSettings, onViewArchive }) {
     
     // Try to save to backend if available
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
       console.log('Attempting to save to backend:', `${apiUrl}/api/settings`)
       console.log('Settings data:', localSettings)
       
@@ -402,3 +402,5 @@ function Settings({ settings, setSettings, onViewArchive }) {
 }
 
 export default Settings
+
+

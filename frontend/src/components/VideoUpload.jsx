@@ -40,7 +40,7 @@ function VideoUpload() {
     const formData = new FormData()
     formData.append('video', selectedFile)
     
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const response = await fetch(`${apiUrl}/api/detect/video`, {
@@ -310,3 +310,5 @@ function VideoUpload() {
 }
 
 export default VideoUpload
+
+

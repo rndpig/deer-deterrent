@@ -161,7 +161,7 @@ function EarlyReview({ onBack, selectedVideo }) {
     setDrawnBoxes(updatedBoxes)
     
     // Save immediately to persist the deletion
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const response = await fetch(`${apiUrl}/api/frames/${currentFrame.id}/annotate`, {
@@ -199,7 +199,7 @@ function EarlyReview({ onBack, selectedVideo }) {
   const handleSaveBoxes = async () => {
     if (drawnBoxes.length === 0) return
     
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     console.log('Saving annotations for frame:', currentFrame.id)
     console.log('Boxes to save:', drawnBoxes)
@@ -246,7 +246,7 @@ function EarlyReview({ onBack, selectedVideo }) {
     setDrawnBoxes([])
     
     // Save immediately to persist the clearing
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const response = await fetch(`${apiUrl}/api/frames/${currentFrame.id}/annotate`, {
@@ -284,7 +284,7 @@ function EarlyReview({ onBack, selectedVideo }) {
       return
     }
     
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const response = await fetch(`${apiUrl}/api/videos/${selectedVideo.id}/clear-frames`, {
@@ -312,7 +312,7 @@ function EarlyReview({ onBack, selectedVideo }) {
   }, [])
 
   const loadFrames = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     setLoading(true)
     
     try {
@@ -350,7 +350,7 @@ function EarlyReview({ onBack, selectedVideo }) {
   }
 
   const reviewFrame = async (reviewType) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     if (!currentFrame) return
 
@@ -431,7 +431,7 @@ function EarlyReview({ onBack, selectedVideo }) {
     )
   }
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
   const imageUrl = currentFrame.image_url?.startsWith('http') 
     ? currentFrame.image_url 
     : `${apiUrl}${currentFrame.image_url}`
@@ -639,3 +639,5 @@ function EarlyReview({ onBack, selectedVideo }) {
 }
 
 export default EarlyReview
+
+

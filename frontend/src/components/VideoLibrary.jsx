@@ -43,7 +43,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
   }, [openMenuId])
 
   const loadVideos = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     setLoading(true)
     
     try {
@@ -63,7 +63,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
   }
 
   const loadTrainingStatus = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const response = await fetch(`${apiUrl}/api/videos/training/status`)
@@ -81,7 +81,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
       return
     }
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     setDeleting(videoId)
     
     try {
@@ -109,7 +109,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
       return
     }
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const response = await fetch(`${apiUrl}/api/videos/${videoId}/archive`, {
@@ -134,7 +134,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
       return
     }
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const response = await fetch(`${apiUrl}/api/videos/${videoId}/fill-missing-frames`, {
@@ -187,7 +187,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
   }
 
   const handleStartReview = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       // Trigger frame selection algorithm
@@ -220,7 +220,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
     const file = event.target.files[0]
     if (!file) return
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     setUploading(true)
 
     try {
@@ -293,7 +293,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
   const handleConfirmVideo = async () => {
     if (!uploadedVideo) return
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     const isEditing = !!videos.find(v => v.id === uploadedVideo.video_id)
 
     try {
@@ -327,7 +327,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
   const handleCancelVideo = async () => {
     if (!uploadedVideo) return
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
 
     try {
       // Delete the uploaded video
@@ -382,7 +382,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
   }
 
   const handleViewFrames = async (video) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const response = await fetch(`${apiUrl}/api/videos/${video.id}`)
@@ -531,7 +531,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
               >
                 {video.video_path ? (
                   <img 
-                    src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/videos/${video.id}/thumbnail`}
+                    src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/videos/${video.id}/thumbnail`}
                     alt={video.filename}
                     className="thumbnail-image"
                     onError={(e) => {
@@ -718,7 +718,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
                 controls 
                 autoPlay
                 className="video-player"
-                src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/videos/${playingVideo.id}/stream`}
+                src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/videos/${playingVideo.id}/stream`}
               >
                 Your browser does not support video playback.
               </video>
@@ -782,8 +782,8 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
                     <img 
                       src={
                         videoFrames[currentFrameIndex]?.detection_count > 0
-                          ? `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/frames/${videoFrames[currentFrameIndex]?.id}/annotated`
-                          : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/training-frames/${videoFrames[currentFrameIndex]?.image_path?.split('/').pop()}`
+                          ? `${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/frames/${videoFrames[currentFrameIndex]?.id}/annotated`
+                          : `${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/training-frames/${videoFrames[currentFrameIndex]?.image_path?.split('/').pop()}`
                       }
                       alt={`Frame ${videoFrames[currentFrameIndex]?.frame_number}`}
                       className="frame-image"
@@ -810,7 +810,7 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
                         title={`Frame ${frame.frame_number} - ${frame.detection_count} detections`}
                       >
                         <img 
-                          src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/training-frames/${frame.image_path.split('/').pop()}`}
+                          src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/training-frames/${frame.image_path.split('/').pop()}`}
                           alt={`Thumb ${idx}`}
                         />
                         {frame.detection_count > 0 && (
@@ -830,3 +830,5 @@ function VideoLibrary({ onStartReview, onTrainModel }) {
 }
 
 export default VideoLibrary
+
+

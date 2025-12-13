@@ -10,7 +10,7 @@ function ArchivedVideos({ onBack, onAnnotate }) {
   }, [])
 
   const loadArchivedVideos = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     setLoading(true)
     
     try {
@@ -35,7 +35,7 @@ function ArchivedVideos({ onBack, onAnnotate }) {
       return
     }
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const response = await fetch(`${apiUrl}/api/videos/${videoId}/unarchive`, {
@@ -151,3 +151,5 @@ function ArchivedVideos({ onBack, onAnnotate }) {
 }
 
 export default ArchivedVideos
+
+

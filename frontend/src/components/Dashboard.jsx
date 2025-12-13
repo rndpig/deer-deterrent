@@ -7,7 +7,7 @@ function Dashboard({ stats, settings }) {
   const [filter, setFilter] = useState('last24h') // last24h, last7d, all
 
   useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     const endpoint = filter === 'all' 
       ? `${apiUrl}/api/detections?limit=100`
@@ -115,7 +115,7 @@ function Dashboard({ stats, settings }) {
                     <td>
                       {detection.image_path ? (
                         <a 
-                          href={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${detection.image_path}`}
+                          href={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}${detection.image_path}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="view-image-link"
@@ -150,3 +150,5 @@ function Dashboard({ stats, settings }) {
 }
 
 export default Dashboard
+
+

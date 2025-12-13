@@ -244,3 +244,5 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
 }
 
 export default AnnotationTool
+
+

@@ -132,7 +132,7 @@ function Training() {
   }, [filter])
 
   const loadDetections = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     setLoading(true)
     
     // If in review mode, load training frames instead of all detections
@@ -174,7 +174,7 @@ function Training() {
   }
 
   const loadTrainingStats = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const response = await fetch(`${apiUrl}/api/training/stats`)
@@ -188,7 +188,7 @@ function Training() {
   }
 
   const reviewDetection = async (reviewType, correctedCount = null) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     const detection = detections[currentIndex]
     
     if (!detection) return
@@ -262,7 +262,7 @@ function Training() {
   }
 
   const exportAndSync = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     setSyncing(true)
     
     try {
@@ -332,7 +332,7 @@ function Training() {
     formData.append('video', selectedFile)
     formData.append('sample_rate', sampleRate.toString())
     
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const response = await fetch(`${apiUrl}/api/videos/upload`, {
@@ -377,7 +377,7 @@ function Training() {
     if (!currentDetection) return
     
     setAnnotating(true)
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const response = await fetch(`${apiUrl}/api/detections/${currentDetection.id}/annotate`, {
@@ -415,7 +415,7 @@ function Training() {
     
     if (!confirm('Delete this frame? This cannot be undone.')) return
     
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const response = await fetch(`${apiUrl}/api/detections/${currentDetection.id}`, {
@@ -453,7 +453,7 @@ function Training() {
     
     if (!confirm(message)) return
     
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
       const ids = detections.map(d => d.id)
@@ -481,7 +481,7 @@ function Training() {
   const handleStartReview = async (videoId = null) => {
     if (videoId) {
       // Direct annotation: find the video and go straight to review
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
       
       try {
         // First, get the video details
@@ -562,7 +562,7 @@ function Training() {
   }
 
   const handleTrainModel = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     // Confirm with user
     if (!confirm('🚀 Ready to train the model?\n\nThis will:\n1. Export all annotated frames to COCO format\n2. Sync training data to Google Drive\n3. Prepare for Colab training\n\nContinue?')) {
@@ -876,7 +876,7 @@ function Training() {
                   <>
                     <img 
                       ref={imageRef}
-                      src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${currentDetection.image_path}`}
+                      src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}${currentDetection.image_path}`}
                       alt="Detection"
                       className="frame-image-fullscreen"
                       onError={(e) => {
@@ -909,7 +909,7 @@ function Training() {
       {/* Annotation Tool Modal */}
       {showAnnotationTool && currentDetection && (
         <AnnotationTool
-          imageSrc={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${currentDetection.image_path}`}
+          imageSrc={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}${currentDetection.image_path}`}
           existingBoxes={currentDetection.manual_annotations || []}
           onSave={handleSaveAnnotations}
           onCancel={() => setShowAnnotationTool(false)}
@@ -920,3 +920,5 @@ function Training() {
 }
 
 export default Training
+
+
