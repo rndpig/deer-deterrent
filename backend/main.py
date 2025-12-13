@@ -1652,29 +1652,34 @@ async def reanalyze_all_videos():
             raise HTTPException(status_code=500, detail="Detector not available")
         
         # Get all non-archived videos
-        videos = db.get_videos(archived=False)
+        videos = db.get_all_videos()
+        videos = [v for v in videos if not v.get('archived')]
         
         processed = 0
         total_detections = 0
+        project_root = Path(__file__).parent.parent
         
         for video in videos:
             video_id = video['id']
-            video_path = video.get('video_path')
-            
-            if not video_path or not Path(video_path).exists():
-                continue
             
             # Get all frames for this video
-            frames = db.get_frames_by_video(video_id)
+            frames = db.get_frames_for_video(video_id)
             
             # Re-run detection on each frame
             for frame in frames:
-                frame_path = frame.get('frame_path')
-                if not frame_path or not Path(frame_path).exists():
+                # Convert image_path from API format to actual file path
+                image_path = frame.get('image_path', '')
+                if image_path.startswith('/api/training-frames/'):
+                    frame_filename = image_path.replace('/api/training-frames/', '')
+                    frame_path = project_root / "data" / "training_frames" / frame_filename
+                else:
+                    continue
+                
+                if not frame_path.exists():
                     continue
                 
                 # Load frame image
-                frame_img = cv2.imread(frame_path)
+                frame_img = cv2.imread(str(frame_path))
                 if frame_img is None:
                     continue
                 
@@ -1682,17 +1687,23 @@ async def reanalyze_all_videos():
                 detections, _ = detector.detect(frame_img)
                 
                 # Delete old detections for this frame
-                db.delete_detections_by_frame(frame['id'])
+                conn = db.get_connection()
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM detections WHERE frame_id = ?", (frame['id'],))
+                conn.commit()
+                conn.close()
                 
                 # Add new detections
                 for det in detections:
+                    bbox = {
+                        'x1': int(det['bbox'][0]),
+                        'y1': int(det['bbox'][1]),
+                        'x2': int(det['bbox'][2]),
+                        'y2': int(det['bbox'][3])
+                    }
                     db.add_detection(
                         frame_id=frame['id'],
-                        video_id=video_id,
-                        bbox_x=int(det['bbox'][0]),
-                        bbox_y=int(det['bbox'][1]),
-                        bbox_width=int(det['bbox'][2]),
-                        bbox_height=int(det['bbox'][3]),
+                        bbox=bbox,
                         confidence=float(det['confidence']),
                         class_name='deer'
                     )
