@@ -43,12 +43,24 @@ def load_detector():
             from src.inference.detector import DeerDetector
             # Try production model first, fall back to base model
             import os
-            if os.path.exists("models/production/best.pt"):
-                model_path = "models/production/best.pt"
-            elif os.path.exists("models/deer_detector_best.pt"):
-                model_path = "models/deer_detector_best.pt"
+            from pathlib import Path
+            
+            # Get the project root (one level up from backend directory)
+            project_root = Path(__file__).parent.parent
+            
+            production_model = project_root / "models" / "production" / "best.pt"
+            fallback_model = project_root / "models" / "deer_detector_best.pt"
+            base_model = project_root / "yolov8n.pt"
+            
+            if production_model.exists():
+                model_path = str(production_model)
+            elif fallback_model.exists():
+                model_path = str(fallback_model)
+            elif base_model.exists():
+                model_path = str(base_model)
             else:
                 model_path = "yolov8n.pt"  # Download default if needed
+                
             detector = DeerDetector(model_path=model_path, conf_threshold=0.6)
             print(f"✓ Detector initialized with model: {model_path}")
         except Exception as e:
