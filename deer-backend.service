@@ -1,0 +1,18 @@
+[Unit]
+Description=Deer Deterrent Backend API
+After=network.target
+
+[Service]
+Type=simple
+User=rndpig
+WorkingDirectory=/home/rndpig/deer-deterrent
+Environment="GOOGLE_DRIVE_TRAINING_FOLDER_ID=1NUuOhA7rWCiGcxWPe6sOHNnzOKO0zZf5"
+Environment="GOOGLE_DRIVE_CREDENTIALS_PATH=configs/google-credentials.json"
+ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --app-dir /home/rndpig/deer-deterrent/backend
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/rndpig/logs/backend.log
+StandardError=append:/home/rndpig/logs/backend.log
+
+[Install]
+WantedBy=multi-user.target

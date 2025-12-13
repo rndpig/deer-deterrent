@@ -3186,8 +3186,15 @@ async def sync_training_to_drive():
         from dotenv import load_dotenv
         load_dotenv()
         
-        credentials_path = os.getenv('GOOGLE_DRIVE_CREDENTIALS_PATH')
-        folder_id = os.getenv('GOOGLE_DRIVE_TRAINING_FOLDER_ID')
+        # Use environment variables with hardcoded defaults as fallback
+        credentials_path = os.getenv(
+            'GOOGLE_DRIVE_CREDENTIALS_PATH',
+            'configs/google-credentials.json'
+        )
+        folder_id = os.getenv(
+            'GOOGLE_DRIVE_TRAINING_FOLDER_ID',
+            '1NUuOhA7rWCiGcxWPe6sOHNnzOKO0zZf5'
+        )
         
         if not credentials_path or not folder_id:
             raise HTTPException(
@@ -3278,7 +3285,10 @@ async def train_model():
             'GOOGLE_DRIVE_CREDENTIALS_PATH',
             'configs/google-credentials.json'
         )
-        folder_id = os.getenv('GOOGLE_DRIVE_TRAINING_FOLDER_ID')
+        folder_id = os.getenv(
+            'GOOGLE_DRIVE_TRAINING_FOLDER_ID',
+            '1NUuOhA7rWCiGcxWPe6sOHNnzOKO0zZf5'
+        )
         
         if not credentials_path or not folder_id:
             raise HTTPException(
@@ -3347,8 +3357,14 @@ async def deploy_latest_model():
     try:
         from services.drive_sync import DriveSync
         
-        credentials_path = os.getenv("GOOGLE_DRIVE_CREDENTIALS_PATH")
-        folder_id = os.getenv("GOOGLE_DRIVE_TRAINING_FOLDER_ID")
+        credentials_path = os.getenv(
+            "GOOGLE_DRIVE_CREDENTIALS_PATH",
+            "configs/google-credentials.json"
+        )
+        folder_id = os.getenv(
+            "GOOGLE_DRIVE_TRAINING_FOLDER_ID",
+            "1NUuOhA7rWCiGcxWPe6sOHNnzOKO0zZf5"
+        )
         
         if not credentials_path or not folder_id:
             raise HTTPException(
