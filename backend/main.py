@@ -943,7 +943,9 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
 @app.get("/api/training-frames/{frame_name}")
 async def get_training_frame(frame_name: str):
     """Serve training frames."""
-    frame_path = Path("data/training_frames") / frame_name
+    # Use absolute path from project root
+    project_root = Path(__file__).parent.parent
+    frame_path = project_root / "data" / "training_frames" / frame_name
     if not frame_path.exists():
         raise HTTPException(status_code=404, detail="Frame not found")
     return FileResponse(frame_path)
@@ -960,14 +962,15 @@ async def get_annotated_frame(frame_id: int):
         raise HTTPException(status_code=404, detail="Frame not found")
     
     # Get the original frame path
+    project_root = Path(__file__).parent.parent
     image_path = frame.get('image_path', '')
     if image_path.startswith('/api/training-frames/'):
         # Old format: /api/training-frames/filename.jpg
         frame_filename = image_path.replace('/api/training-frames/', '')
-        frame_path = Path("data/training_frames") / frame_filename
+        frame_path = project_root / "data" / "training_frames" / frame_filename
     elif image_path.startswith('data/training_frames/'):
         # New format: data/training_frames/filename.jpg
-        frame_path = Path(image_path)
+        frame_path = project_root / image_path
     else:
         raise HTTPException(status_code=404, detail=f"Unsupported frame path format: {image_path}")
     
