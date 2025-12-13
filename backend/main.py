@@ -88,6 +88,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Debug endpoint
+@app.get("/api/debug/env")
+async def debug_env():
+    """Debug endpoint to check environment variables"""
+    import os
+    from pathlib import Path
+    return {
+        "GOOGLE_DRIVE_CREDENTIALS_PATH": os.getenv('GOOGLE_DRIVE_CREDENTIALS_PATH'),
+        "GOOGLE_DRIVE_TRAINING_FOLDER_ID": os.getenv('GOOGLE_DRIVE_TRAINING_FOLDER_ID'),
+        "credentials_file_exists": Path(os.getenv('GOOGLE_DRIVE_CREDENTIALS_PATH', 'configs/google-credentials.json')).exists(),
+        "cwd": os.getcwd(),
+        "all_google_env": {k: v for k, v in os.environ.items() if 'GOOGLE' in k}
+    }
+
 # Initialize detector
 detector = None
 detection_history = []  # Legacy - will be phased out
@@ -1606,6 +1620,77 @@ async def unarchive_video_endpoint(video_id: int):
         raise HTTPException(status_code=500, detail="Failed to unarchive video")
     
     return {"status": "success", "message": "Video unarchived"}
+
+
+@app.post("/api/videos/reanalyze-all")
+async def reanalyze_all_videos():
+    """Re-analyze all videos with the updated model."""
+    try:
+        # Load detector with production model
+        detector = load_detector()
+        if detector is None:
+            raise HTTPException(status_code=500, detail="Detector not available")
+        
+        # Get all non-archived videos
+        videos = db.get_videos(archived=False)
+        
+        processed = 0
+        total_detections = 0
+        
+        for video in videos:
+            video_id = video['id']
+            video_path = video.get('video_path')
+            
+            if not video_path or not Path(video_path).exists():
+                continue
+            
+            # Get all frames for this video
+            frames = db.get_frames_by_video(video_id)
+            
+            # Re-run detection on each frame
+            for frame in frames:
+                frame_path = frame.get('frame_path')
+                if not frame_path or not Path(frame_path).exists():
+                    continue
+                
+                # Load frame image
+                frame_img = cv2.imread(frame_path)
+                if frame_img is None:
+                    continue
+                
+                # Run detection
+                detections, _ = detector.detect(frame_img)
+                
+                # Delete old detections for this frame
+                db.delete_detections_by_frame(frame['id'])
+                
+                # Add new detections
+                for det in detections:
+                    db.add_detection(
+                        frame_id=frame['id'],
+                        video_id=video_id,
+                        bbox_x=int(det['bbox'][0]),
+                        bbox_y=int(det['bbox'][1]),
+                        bbox_width=int(det['bbox'][2]),
+                        bbox_height=int(det['bbox'][3]),
+                        confidence=float(det['confidence']),
+                        class_name='deer'
+                    )
+                    total_detections += 1
+            
+            processed += 1
+        
+        logger.info(f"Re-analyzed {processed} videos, found {total_detections} detections")
+        
+        return {
+            "status": "success",
+            "processed": processed,
+            "total_detections": total_detections
+        }
+        
+    except Exception as e:
+        logger.error(f"Re-analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.patch("/api/videos/{video_id}")
@@ -3253,7 +3338,7 @@ async def train_model():
         load_dotenv()
         
         # DEBUG: Log what we're seeing
-        logger.info("=== TRAIN MODEL CALLED ===")
+        logger.info("=== TRAIN MODEL CALLED v2.0 ABSOLUTE PATHS ===")
         logger.info(f"Current working directory: {os.getcwd()}")
         logger.info(f"Project root: {project_root}")
         
@@ -3286,14 +3371,9 @@ async def train_model():
         # Step 2: Sync to Google Drive
         logger.info("Step 2: Syncing to Google Drive...")
         
-        credentials_path = os.getenv(
-            'GOOGLE_DRIVE_CREDENTIALS_PATH',
-            'configs/google-credentials.json'
-        )
-        folder_id = os.getenv(
-            'GOOGLE_DRIVE_TRAINING_FOLDER_ID',
-            '1NUuOhA7rWCiGcxWPe6sOHNnzOKO0zZf5'
-        )
+        # Use absolute paths
+        credentials_path = '/home/rndpig/deer-deterrent/configs/google-credentials.json'
+        folder_id = '1NUuOhA7rWCiGcxWPe6sOHNnzOKO0zZf5'
         
         logger.info(f"DEBUG: credentials_path = {credentials_path}")
         logger.info(f"DEBUG: folder_id = {folder_id}")
@@ -3316,14 +3396,46 @@ async def train_model():
         import sys
         sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
         
-        from services.drive_sync import DriveSync
+        try:
+            from services.drive_sync import DriveSync
+            logger.info("✓ DriveSync imported successfully")
+        except ImportError as e:
+            logger.error(f"Failed to import DriveSync: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Google Drive dependencies not installed. Run: pip install google-auth google-api-python-client"
+            )
         
-        drive = DriveSync(credentials_path, folder_id)
+        try:
+            drive = DriveSync(credentials_path, folder_id)
+            logger.info("✓ DriveSync connected successfully")
+        except FileNotFoundError as e:
+            logger.error(f"Credentials file error: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=str(e)
+            )
+        except ConnectionError as e:
+            logger.error(f"Google Drive connection error: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=str(e)
+            )
+        except Exception as e:
+            logger.error(f"DriveSync initialization failed: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to initialize Google Drive connection: {str(e)}"
+            )
         
         # Upload the export directory to Drive
-        sync_result = drive.upload_training_data(export_path)
+        uploaded_files = drive.upload_directory(
+            local_dir=Path(export_path),
+            drive_folder_id=folder_id,
+            exclude_patterns=['*.pyc', '__pycache__', '.git']
+        )
         
-        logger.info(f"✓ Synced to Google Drive")
+        logger.info(f"✓ Synced {len(uploaded_files)} files to Google Drive")
         
         return {
             "status": "success",
@@ -3334,8 +3446,8 @@ async def train_model():
                 "local_path": export_path
             },
             "drive": {
-                "folder_id": sync_result.get("folder_id"),
-                "files_uploaded": sync_result.get("files_uploaded", 0)
+                "folder_id": folder_id,
+                "files_uploaded": len(uploaded_files)
             },
             "next_steps": {
                 "instructions": "Open Google Colab notebook and run all cells",
@@ -3344,12 +3456,6 @@ async def train_model():
             }
         }
         
-    except ImportError as e:
-        logger.error(f"Import error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Google Drive dependencies not installed. Run: pip install google-auth google-api-python-client"
-        )
     except Exception as e:
         logger.error(f"Training pipeline failed: {e}")
         raise HTTPException(

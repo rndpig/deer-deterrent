@@ -11,6 +11,8 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false }) {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [selectedCamera, setSelectedCamera] = useState('front')
   const [captureDateTime, setCaptureDateTime] = useState('')
+  const [reanalyzing, setReanalyzing] = useState(false)
+  const [reanalysisProgress, setReanalysisProgress] = useState(null)
   
   // Video player state
   const [showVideoPlayer, setShowVideoPlayer] = useState(false)
@@ -214,6 +216,48 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false }) {
   
   const handleUploadClick = () => {
     document.getElementById('video-upload-input').click()
+  }
+
+  const handleReanalyzeAll = async () => {
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+    
+    if (!confirm('🔄 Re-analyze all videos with the new model?\n\nThis will:\n1. Run the updated model on all videos\n2. Update detection counts\n3. Take a few minutes to complete\n\nContinue?')) {
+      return
+    }
+    
+    setReanalyzing(true)
+    setReanalysisProgress({ current: 0, total: videos.length, results: [] })
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/videos/reanalyze-all`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Re-analysis failed')
+      }
+      
+      const result = await response.json()
+      
+      alert(
+        `✅ Re-analysis complete!\n\n` +
+        `Videos processed: ${result.processed}\n` +
+        `Total detections: ${result.total_detections}\n` +
+        `Average detections per video: ${(result.total_detections / result.processed).toFixed(1)}`
+      )
+      
+      // Reload videos to show updated counts
+      await loadVideos()
+      
+    } catch (error) {
+      console.error('Re-analysis error:', error)
+      alert(`❌ Re-analysis failed:\n\n${error.message}`)
+    } finally {
+      setReanalyzing(false)
+      setReanalysisProgress(null)
+    }
   }
 
   const handleVideoUpload = async (event) => {
@@ -503,10 +547,19 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false }) {
           </button>
           
           <button 
+            className="btn-reanalyze"
+            onClick={handleReanalyzeAll}
+            title="Re-analyze all videos with updated model"
+            disabled={uploading || syncing || reanalyzing || videos.length === 0}
+          >
+            {reanalyzing ? '⏳ Re-analyzing...' : '🔄 Re-analyze All'}
+          </button>
+          
+          <button 
             className="btn-train-model"
             onClick={onTrainModel}
             title="Train model with collected annotations"
-            disabled={uploading || syncing}
+            disabled={uploading || syncing || reanalyzing}
           >
             {syncing ? '⏳ Exporting & syncing to Drive...' : '🚀 Train Model'}
           </button>
