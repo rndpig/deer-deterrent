@@ -43,8 +43,13 @@ def load_detector():
             from src.inference.detector import DeerDetector
             # Try production model first, fall back to base model
             import os
-            model_path = "models/deer_detector_best.pt" if os.path.exists("models/deer_detector_best.pt") else "models/yolov8n.pt"
-            detector = DeerDetector(model_path=model_path, conf_threshold=settings.confidence_threshold)
+            if os.path.exists("models/production/best.pt"):
+                model_path = "models/production/best.pt"
+            elif os.path.exists("models/deer_detector_best.pt"):
+                model_path = "models/deer_detector_best.pt"
+            else:
+                model_path = "yolov8n.pt"  # Download default if needed
+            detector = DeerDetector(model_path=model_path, conf_threshold=0.6)
             print(f"✓ Detector initialized with model: {model_path}")
         except Exception as e:
             print(f"⚠ Detector initialization failed: {e}")
@@ -3428,7 +3433,39 @@ async def train_model():
                 detail=f"Failed to initialize Google Drive connection: {str(e)}"
             )
         
-        # Upload the export directory to Drive
+        # Step 2.1: Archive existing training data on Drive
+        logger.info("Step 2.1: Archiving previous training data...")
+        archive_folder_name = f"training_archive_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # Check if images and annotations.json exist at root
+        existing_files = drive.service.files().list(
+            q=f"'{folder_id}' in parents and trashed=false and (name='images' or name='annotations.json')",
+            fields='files(id, name, mimeType)',
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True
+        ).execute().get('files', [])
+        
+        if existing_files:
+            # Create archive folder
+            archive_folder_id = drive.create_folder(archive_folder_name, folder_id)
+            logger.info(f"Created archive folder: {archive_folder_name}")
+            
+            # Move existing images folder and annotations.json to archive
+            for file in existing_files:
+                drive.service.files().update(
+                    fileId=file['id'],
+                    addParents=archive_folder_id,
+                    removeParents=folder_id,
+                    supportsAllDrives=True
+                ).execute()
+                logger.info(f"Moved {file['name']} to archive")
+            
+            logger.info(f"✓ Archived {len(existing_files)} items to {archive_folder_name}")
+        else:
+            logger.info("No existing training data to archive")
+        
+        # Step 2.2: Upload new training data to Drive
+        logger.info("Step 2.2: Uploading new training data...")
         uploaded_files = drive.upload_directory(
             local_dir=Path(export_path),
             drive_folder_id=folder_id,
