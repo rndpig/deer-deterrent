@@ -314,6 +314,48 @@ async def get_recent_detections(hours: int = 24):
     return recent
 
 
+@app.post("/api/detections")
+async def create_detection(event_data: dict):
+    """Log a detection event from the coordinator."""
+    # Add unique ID if not present
+    if 'id' not in event_data:
+        event_data['id'] = f"{event_data.get('timestamp', '')}_{event_data.get('camera_id', '')}"
+    
+    # Map camera_id to camera_name if needed
+    if 'camera_id' in event_data and 'camera_name' not in event_data:
+        # Use camera_id as fallback
+        event_data['camera_name'] = event_data.get('camera_id', 'Unknown')
+    
+    # Ensure required fields with defaults
+    event_data.setdefault('zone_name', 'Auto-Detection')
+    event_data.setdefault('deer_count', len([d for d in event_data.get('detections', []) if d.get('class', '').lower() == 'deer']))
+    event_data.setdefault('max_confidence', event_data.get('confidence', 0.0))
+    event_data.setdefault('image_path', event_data.get('snapshot_path', ''))
+    event_data.setdefault('irrigation_activated', False)
+    event_data.setdefault('reviewed', False)
+    
+    # Add to detection history
+    detection_history.append(event_data)
+    
+    # Update stats
+    stats['total_detections'] = len(detection_history)
+    if event_data.get('deer_detected'):
+        stats['total_deer'] = stats.get('total_deer', 0) + event_data.get('deer_count', 0)
+    if event_data.get('irrigation_activated'):
+        stats['irrigation_activated'] = stats.get('irrigation_activated', 0) + 1
+    stats['last_detection'] = event_data.get('timestamp')
+    
+    # Broadcast via WebSocket
+    await broadcast({
+        "type": "detection",
+        "data": event_data
+    })
+    
+    logger.info(f"Logged detection event: camera={event_data.get('camera_name')}, deer={event_data.get('deer_detected')}")
+    
+    return {"status": "success", "detection_id": event_data['id']}
+
+
 @app.get("/api/settings", response_model=SystemSettings)
 async def get_settings():
     """Get current system settings."""

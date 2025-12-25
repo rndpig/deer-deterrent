@@ -6,7 +6,10 @@ from typing import Optional, List, Dict
 from datetime import datetime
 import io
 
-from google.oauth2.service_account import Credentials
+from google.oauth2.service_account import Credentials as ServiceAccountCredentials
+from google.oauth2.credentials import Credentials as UserCredentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from googleapiclient.errors import HttpError
@@ -30,7 +33,7 @@ class DriveSync:
         self._connect()
     
     def _connect(self):
-        """Establish connection to Google Drive API."""
+        """Establish connection to Google Drive API using OAuth2 or service account."""
         if not self.credentials_path.exists():
             raise FileNotFoundError(
                 f"Credentials file not found: {self.credentials_path}\n"
@@ -38,14 +41,48 @@ class DriveSync:
             )
         
         try:
-            credentials = Credentials.from_service_account_file(
-                str(self.credentials_path),
-                scopes=self.SCOPES
-            )
+            # Check if it's a service account or OAuth2 client credentials
+            with open(self.credentials_path, 'r') as f:
+                cred_data = json.load(f)
+            
+            if cred_data.get('type') == 'service_account':
+                # Service account (won't work for personal Google Drive)
+                print("⚠ Warning: Service accounts don't work with personal Google Drive")
+                print("⚠ Please use OAuth2 credentials instead")
+                credentials = ServiceAccountCredentials.from_service_account_file(
+                    str(self.credentials_path),
+                    scopes=self.SCOPES
+                )
+            else:
+                # OAuth2 user credentials
+                token_path = self.credentials_path.parent / 'drive_token.json'
+                credentials = None
+                
+                # Load existing token if available
+                if token_path.exists():
+                    credentials = UserCredentials.from_authorized_user_file(
+                        str(token_path),
+                        self.SCOPES
+                    )
+                
+                # If no valid credentials, require user to authenticate
+                if not credentials or not credentials.valid:
+                    if credentials and credentials.expired and credentials.refresh_token:
+                        credentials.refresh(Request())
+                    else:
+                        raise ConnectionError(
+                            "OAuth2 token missing or expired. "
+                            "Run: python scripts/setup_google_drive_oauth.py"
+                        )
+                    
+                    # Save the refreshed token
+                    with open(token_path, 'w') as token_file:
+                        token_file.write(credentials.to_json())
+            
             self.service = build('drive', 'v3', credentials=credentials)
             
             # Test connection
-            self.service.files().get(fileId=self.root_folder_id).execute()
+            self.service.files().get(fileId=self.root_folder_id, supportsAllDrives=True).execute()
             print(f"✓ Connected to Google Drive (folder: {self.root_folder_id})")
             
         except Exception as e:
@@ -68,7 +105,7 @@ class DriveSync:
         
         # Check if folder already exists
         query = f"name='{name}' and '{parent_id}' in parents and trashed=false"
-        results = self.service.files().list(q=query, fields='files(id, name)').execute()
+        results = self.service.files().list(q=query, fields='files(id, name)', supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
         items = results.get('files', [])
         
         if items:
@@ -84,7 +121,8 @@ class DriveSync:
         
         folder = self.service.files().create(
             body=file_metadata,
-            fields='id'
+            fields='id',
+            supportsAllDrives=True
         ).execute()
         
         print(f"✓ Created folder '{name}'")
@@ -110,7 +148,7 @@ class DriveSync:
         
         # Check if file already exists
         query = f"name='{filename}' and '{drive_folder_id}' in parents and trashed=false"
-        results = self.service.files().list(q=query, fields='files(id, name)').execute()
+        results = self.service.files().list(q=query, fields='files(id, name)', supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
         items = results.get('files', [])
         
         file_metadata = {
@@ -128,7 +166,8 @@ class DriveSync:
             file_id = items[0]['id']
             self.service.files().update(
                 fileId=file_id,
-                media_body=media
+                media_body=media,
+                supportsAllDrives=True
             ).execute()
             print(f"✓ Updated '{filename}'")
         else:
@@ -136,7 +175,8 @@ class DriveSync:
             file = self.service.files().create(
                 body=file_metadata,
                 media_body=media,
-                fields='id'
+                fields='id',
+                supportsAllDrives=True
             ).execute()
             file_id = file['id']
             print(f"✓ Uploaded '{filename}'")
@@ -201,7 +241,7 @@ class DriveSync:
             file_id: Drive file ID
             local_path: Path to save file locally
         """
-        request = self.service.files().get_media(fileId=file_id)
+        request = self.service.files().get_media(fileId=file_id, supportsAllDrives=True)
         
         local_path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -236,7 +276,9 @@ class DriveSync:
         
         results = self.service.files().list(
             q=query,
-            fields='files(id, name, mimeType, createdTime, modifiedTime)'
+            fields='files(id, name, mimeType, createdTime, modifiedTime)',
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True
         ).execute()
         
         return results.get('files', [])
