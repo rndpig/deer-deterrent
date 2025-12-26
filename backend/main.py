@@ -185,6 +185,14 @@ RING_DEVICE_ID_MAP = {
     "768534ffrmpl": "Side",      # Main camera ID for Side
 }
 
+# Ring-MQTT camera ID mapping (from MQTT topics)
+RING_CAMERA_ID_MAP = {
+    "587a624d3fae": "Driveway",
+    "4439c4de7a79": "Front Door",
+    "f045dae9383a": "Back",
+    "10cea9e4511f": "Side"
+}
+
 # Manual overrides for specific videos where device ID mapping is wrong
 # Format: {filename: "CameraName"}
 VIDEO_CAMERA_OVERRIDES = {
@@ -317,17 +325,26 @@ async def get_recent_detections(hours: int = 24):
 @app.post("/api/detections")
 async def create_detection(event_data: dict):
     """Log a detection event from the coordinator."""
+    # Only log if deer were actually detected
+    if not event_data.get('deer_detected', False):
+        logger.info(f"Skipping non-deer detection from camera {event_data.get('camera_id')}")
+        return {"status": "skipped", "reason": "no deer detected"}
+    
     # Add unique ID if not present
     if 'id' not in event_data:
         event_data['id'] = f"{event_data.get('timestamp', '')}_{event_data.get('camera_id', '')}"
     
-    # Map camera_id to camera_name if needed
-    if 'camera_id' in event_data and 'camera_name' not in event_data:
-        # Use camera_id as fallback
-        event_data['camera_name'] = event_data.get('camera_id', 'Unknown')
+    # Map camera_id to camera_name using Ring-MQTT camera ID map
+    camera_id = event_data.get('camera_id', '')
+    if camera_id in RING_CAMERA_ID_MAP:
+        event_data['camera_name'] = RING_CAMERA_ID_MAP[camera_id]
+    else:
+        # Fallback: use camera_id if not in map
+        event_data['camera_name'] = camera_id
+        logger.warning(f"Unknown camera ID '{camera_id}' - add to RING_CAMERA_ID_MAP")
     
     # Ensure required fields with defaults
-    event_data.setdefault('zone_name', 'Auto-Detection')
+    event_data.setdefault('zone_name', '')  # Empty zone name - not used on frontend
     event_data.setdefault('deer_count', len([d for d in event_data.get('detections', []) if d.get('class', '').lower() == 'deer']))
     event_data.setdefault('max_confidence', event_data.get('confidence', 0.0))
     event_data.setdefault('image_path', event_data.get('snapshot_path', ''))
@@ -346,12 +363,12 @@ async def create_detection(event_data: dict):
     stats['last_detection'] = event_data.get('timestamp')
     
     # Broadcast via WebSocket
-    await broadcast({
+    await broadcast_message({
         "type": "detection",
         "data": event_data
     })
     
-    logger.info(f"Logged detection event: camera={event_data.get('camera_name')}, deer={event_data.get('deer_detected')}")
+    logger.info(f"Logged deer detection: camera={event_data.get('camera_name')}, confidence={event_data.get('max_confidence'):.2f}")
     
     return {"status": "success", "detection_id": event_data['id']}
 
@@ -1122,6 +1139,25 @@ async def delete_frame(frame_id: int):
     db.delete_frame(frame_id)
     
     return {"success": True, "frame_id": frame_id}
+
+
+@app.get("/app/snapshots/{snapshot_name}")
+async def get_snapshot(snapshot_name: str):
+    """Serve snapshot images from coordinator"""
+    from fastapi.responses import FileResponse
+    
+    # Snapshots are mounted to host at ./dell-deployment/data/snapshots
+    snapshot_path = Path(__file__).parent.parent / "dell-deployment" / "data" / "snapshots" / snapshot_name
+    
+    if not snapshot_path.exists():
+        logger.error(f"Snapshot not found: {snapshot_path}")
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    return FileResponse(
+        path=str(snapshot_path),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=3600"}
+    )
 
 
 @app.get("/api/images/{image_name}")
