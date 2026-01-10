@@ -656,14 +656,14 @@
 }
 
 .irrigation-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.875rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
   width: 100%;
+  max-width: 600px;
 }
 
 .btn-test {
-  flex: 0 0 calc(33.333% - 0.6rem);
   padding: 0.7rem 1rem;
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: white;
