@@ -657,8 +657,9 @@
 
 .irrigation-buttons {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  max-width: 600px;
 }
 
 .btn-test {
