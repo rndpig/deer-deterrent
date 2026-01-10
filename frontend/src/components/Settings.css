@@ -656,15 +656,15 @@
 }
 
 .irrigation-buttons {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem 1.5rem;
-  max-width: 650px;
-  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.875rem;
+  width: 100%;
 }
 
 .btn-test {
-  padding: 0.75rem 1.25rem;
+  flex: 0 0 calc(33.333% - 0.6rem);
+  padding: 0.7rem 1rem;
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: white;
   border: none;
@@ -674,11 +674,7 @@
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
-  white-space: nowrap;
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  text-align: center;
 }
 
 .btn-test:hover:not(:disabled) {
