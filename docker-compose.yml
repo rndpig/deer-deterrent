@@ -129,6 +129,9 @@ services:
     container_name: deer-backend
     restart: unless-stopped
     
+    group_add:
+      - "988"  # Docker group GID for socket access
+    
     depends_on:
       database:
         condition: service_healthy
@@ -152,6 +155,7 @@ services:
       - ./data:/app/project_data
       - ./temp:/app/temp
       - ./configs:/app/configs:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     
     ports:
       - "8000:8000"
