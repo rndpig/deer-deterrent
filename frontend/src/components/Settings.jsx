@@ -234,7 +234,7 @@ function Settings({ settings, setSettings, onViewArchive }) {
 
   const viewRecentEvents = () => {
     const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    window.open(`${apiUrl}/api/ring-events?hours=1`, '_blank')
+    window.open(`${apiUrl}/api/ring-events?hours=24`, '_blank')
   }
 
   const viewCoordinatorLogs = () => {
@@ -517,7 +517,7 @@ function Settings({ settings, setSettings, onViewArchive }) {
             {/* Recent Events */}
             <div className="test-card">
               <h4>📜 Recent Events</h4>
-              <p>View Ring camera motion events from the past hour</p>
+              <p>View Ring camera motion events from the past 24 hours</p>
               <button 
                 className="btn-test"
                 onClick={viewRecentEvents}
