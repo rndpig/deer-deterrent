@@ -223,8 +223,8 @@ function Settings({ settings, setSettings, onViewArchive }) {
 
   const loadCoordinatorStats = async () => {
     try {
-      const coordinatorUrl = 'http://192.168.7.215:5000'
-      const response = await fetch(`${coordinatorUrl}/stats`)
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+      const response = await fetch(`${apiUrl}/api/coordinator/stats`)
       const data = await response.json()
       setCoordinatorStats(data)
     } catch (err) {

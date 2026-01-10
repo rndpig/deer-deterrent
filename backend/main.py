@@ -297,6 +297,20 @@ async def update_ring_event(event_id: int, update: dict):
     return {"status": "success"}
 
 
+@app.get("/api/coordinator/stats")
+async def get_coordinator_stats():
+    """Proxy coordinator stats to avoid CORS issues."""
+    import requests
+    try:
+        # Use Docker service name instead of IP (coordinator is on same network)
+        response = requests.get("http://deer-coordinator:5000/stats", timeout=5)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.error(f"Failed to fetch coordinator stats: {e}")
+        raise HTTPException(status_code=503, detail="Coordinator unavailable")
+
+
 @app.get("/api/detections", response_model=List[DetectionEvent])
 async def get_detections(limit: int = 50, offset: int = 0):
     """Get detection history (excludes manual video uploads)."""
@@ -705,7 +719,7 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
     
     # Create directories
     video_archive_dir = Path("data/video_archive")
-    frames_dir = Path("data/training_frames")
+    frames_dir = Path("data/frames")
     video_archive_dir.mkdir(parents=True, exist_ok=True)
     frames_dir.mkdir(parents=True, exist_ok=True)
     
@@ -1024,19 +1038,24 @@ async def get_annotated_frame(frame_id: int):
         raise HTTPException(status_code=404, detail="Frame not found")
     
     # Get the original frame path
-    project_root = Path(__file__).parent.parent
     image_path = frame.get('image_path', '')
+    
+    # Handle different path formats
     if image_path.startswith('/api/training-frames/'):
-        # Old format: /api/training-frames/filename.jpg
+        # URL format: /api/training-frames/filename.jpg
         frame_filename = image_path.replace('/api/training-frames/', '')
-        frame_path = project_root / "data" / "training_frames" / frame_filename
-    elif image_path.startswith('data/training_frames/'):
-        # New format: data/training_frames/filename.jpg
-        frame_path = project_root / image_path
+        frame_path = Path("data/frames") / frame_filename
+        # Legacy frames may still be in training_frames during migration
+        if not frame_path.exists():
+            frame_path = Path("data/training_frames") / frame_filename
+    elif image_path.startswith('data/'):
+        # Direct path format: data/frames/filename.jpg or data/training_frames/filename.jpg
+        frame_path = Path(image_path)
     else:
         raise HTTPException(status_code=404, detail=f"Unsupported frame path format: {image_path}")
     
     if not frame_path.exists():
+        logger.error(f"Frame file not found: {frame_path}")
         raise HTTPException(status_code=404, detail="Frame file not found")
     
     # Check if annotated version already exists
@@ -1078,6 +1097,25 @@ async def get_annotated_frame(frame_id: int):
         
         # Draw text
         cv2.putText(img, label, (x1, y1 - 5), font, font_scale, (0, 0, 0), thickness)
+    
+    # Draw manual annotations
+    annotations = frame.get('annotations', [])
+    for ann in annotations:
+        # Convert normalized coordinates to pixel coordinates
+        img_height, img_width = img.shape[:2]
+        x_center = int(ann['x'] * img_width)
+        y_center = int(ann['y'] * img_height)
+        width = int(ann['width'] * img_width)
+        height = int(ann['height'] * img_height)
+        
+        x1 = x_center - width // 2
+        y1 = y_center - height // 2
+        x2 = x_center + width // 2
+        y2 = y_center + height // 2
+        
+        # Draw manual annotation in blue
+        cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
+        cv2.putText(img, "manual", (x1, y1 - 5), font, 0.5, (255, 0, 0), 1)
     
     # Save annotated version for future use
     cv2.imwrite(str(annotated_path), img)
@@ -1752,7 +1790,12 @@ async def reanalyze_all_videos():
                 image_path = frame.get('image_path', '')
                 if image_path.startswith('/api/training-frames/'):
                     frame_filename = image_path.replace('/api/training-frames/', '')
-                    frame_path = project_root / "data" / "training_frames" / frame_filename
+                    frame_path = project_root / "data" / "frames" / frame_filename
+                    # Legacy: check training_frames if not found in frames
+                    if not frame_path.exists():
+                        frame_path = project_root / "data" / "training_frames" / frame_filename
+                elif image_path.startswith('data/'):
+                    frame_path = project_root / image_path
                 else:
                     continue
                 
@@ -2029,7 +2072,7 @@ async def extract_frames_from_video(video_id: int, request: dict):
     
     logger.info(f"Video properties: {frame_count} frames at {fps} fps")
     
-    frames_dir = Path("data/training_frames")
+    frames_dir = Path("data/frames")
     frames_dir.mkdir(parents=True, exist_ok=True)
     
     extracted_count = 0
@@ -2212,7 +2255,7 @@ async def fill_missing_frames(video_id: int):
         raise HTTPException(status_code=500, detail="Could not open video file")
     
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
-    frames_dir = Path("data/training_frames")
+    frames_dir = Path("data/frames")
     frames_dir.mkdir(parents=True, exist_ok=True)
     
     added_count = 0
@@ -2626,7 +2669,7 @@ async def recover_all_video_frames():
     details = []
     
     import cv2
-    frames_dir = Path("data/training_frames")
+    frames_dir = Path("data/frames")
     frames_dir.mkdir(parents=True, exist_ok=True)
     
     for video in videos:
@@ -2692,7 +2735,7 @@ async def recover_all_video_frames():
                     video_id=video_id,
                     frame_number=frame_num,
                     timestamp_in_video=timestamp_in_video,
-                    image_path=f"data/training_frames/{frame_filename}",
+                    image_path=f"data/frames/{frame_filename}",
                     has_detections=len(detections) > 0
                 )
                 
