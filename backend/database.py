@@ -33,7 +33,7 @@ def init_database():
             status TEXT DEFAULT 'analyzed',
             video_path TEXT,
             archived BOOLEAN DEFAULT 0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            created_at TEXT DEFAULT (datetime('now', 'localtime'))
         )
     """)
     
@@ -49,7 +49,7 @@ def init_database():
             reviewed BOOLEAN DEFAULT 0,
             review_type TEXT,
             selected_for_training BOOLEAN DEFAULT 0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
         )
     """)
@@ -65,7 +65,7 @@ def init_database():
             bbox_y2 REAL NOT NULL,
             confidence REAL NOT NULL,
             class_name TEXT DEFAULT 'deer',
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (frame_id) REFERENCES frames(id) ON DELETE CASCADE
         )
     """)
@@ -81,7 +81,7 @@ def init_database():
             bbox_height REAL NOT NULL,
             annotation_type TEXT DEFAULT 'addition',
             annotator TEXT DEFAULT 'user',
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (frame_id) REFERENCES frames(id) ON DELETE CASCADE
         )
     """)
@@ -95,7 +95,7 @@ def init_database():
             annotation_count INTEGER NOT NULL,
             exported BOOLEAN DEFAULT 0,
             export_path TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            created_at TEXT DEFAULT (datetime('now', 'localtime'))
         )
     """)
     
@@ -113,7 +113,7 @@ def init_database():
             deer_detected BOOLEAN,
             detection_confidence REAL,
             error_message TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            created_at TEXT DEFAULT (datetime('now', 'localtime'))
         )
     """)
     
