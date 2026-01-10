@@ -311,6 +311,26 @@ async def get_coordinator_stats():
         raise HTTPException(status_code=503, detail="Coordinator unavailable")
 
 
+@app.get("/api/coordinator/logs")
+async def get_coordinator_logs(lines: int = 100):
+    """Get recent coordinator logs."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["docker", "logs", "--tail", str(lines), "deer-coordinator"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return {
+            "logs": result.stdout + result.stderr,
+            "lines": lines
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch coordinator logs: {e}")
+        raise HTTPException(status_code=503, detail="Failed to fetch logs")
+
+
 @app.get("/api/detections", response_model=List[DetectionEvent])
 async def get_detections(limit: int = 50, offset: int = 0):
     """Get detection history (excludes manual video uploads)."""

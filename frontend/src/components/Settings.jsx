@@ -38,6 +38,8 @@ function Settings({ settings, setSettings, onViewArchive }) {
   const [testingIrrigation, setTestingIrrigation] = useState(false)
   const [testMessage, setTestMessage] = useState('')
   const [coordinatorStats, setCoordinatorStats] = useState(null)
+  const [coordinatorLogs, setCoordinatorLogs] = useState(null)
+  const [loadingLogs, setLoadingLogs] = useState(false)
   // Fetch Rainbird zones on component mount
   useEffect(() => {
     const fetchRainbirdZones = async () => {
@@ -237,8 +239,19 @@ function Settings({ settings, setSettings, onViewArchive }) {
     window.open(`${apiUrl}/api/ring-events?hours=24`, '_blank')
   }
 
-  const viewCoordinatorLogs = () => {
-    alert('To view coordinator logs, run:\nssh rndpig@192.168.7.215 "docker logs -f deer-coordinator"')
+  const viewCoordinatorLogs = async () => {
+    setLoadingLogs(true)
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+      const response = await fetch(`${apiUrl}/api/coordinator/logs?lines=100`)
+      const data = await response.json()
+      setCoordinatorLogs(data.logs)
+    } catch (err) {
+      console.error('Failed to load coordinator logs:', err)
+      setCoordinatorLogs('Error loading logs: ' + err.message)
+    } finally {
+      setLoadingLogs(false)
+    }
   }
 
   return (
@@ -529,13 +542,19 @@ function Settings({ settings, setSettings, onViewArchive }) {
             {/* Coordinator Logs */}
             <div className="test-card">
               <h4>📝 Coordinator Logs</h4>
-              <p>Real-time log streaming (requires SSH access)</p>
+              <p>View last 100 lines of coordinator logs</p>
               <button 
                 className="btn-test"
                 onClick={viewCoordinatorLogs}
+                disabled={loadingLogs}
               >
-                ℹ️ View Instructions
+                {loadingLogs ? '⏳ Loading...' : '📋 View Logs'}
               </button>
+              {coordinatorLogs && (
+                <div className="log-output">
+                  <pre>{coordinatorLogs}</pre>
+                </div>
+              )}
             </div>
           </div>
         </div>
