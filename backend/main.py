@@ -314,21 +314,18 @@ async def get_coordinator_stats():
 @app.get("/api/coordinator/logs")
 async def get_coordinator_logs(lines: int = 100):
     """Get recent coordinator logs."""
-    import subprocess
+    import docker
     try:
-        result = subprocess.run(
-            ["docker", "logs", "--tail", str(lines), "deer-coordinator"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
+        client = docker.from_env()
+        container = client.containers.get("deer-coordinator")
+        logs = container.logs(tail=lines, timestamps=True).decode('utf-8')
         return {
-            "logs": result.stdout + result.stderr,
+            "logs": logs,
             "lines": lines
         }
     except Exception as e:
         logger.error(f"Failed to fetch coordinator logs: {e}")
-        raise HTTPException(status_code=503, detail="Failed to fetch logs")
+        raise HTTPException(status_code=503, detail=f"Failed to fetch logs: {str(e)}")
 
 
 @app.get("/api/detections", response_model=List[DetectionEvent])
