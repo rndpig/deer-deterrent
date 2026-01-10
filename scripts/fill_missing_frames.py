@@ -77,7 +77,7 @@ def fill_missing_frames_for_video(video_id: int):
         return False
     
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
-    frames_dir = Path("data/training_frames")
+    frames_dir = Path("data/frames")
     frames_dir.mkdir(parents=True, exist_ok=True)
     
     added_count = 0

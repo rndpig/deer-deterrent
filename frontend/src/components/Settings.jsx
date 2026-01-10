@@ -38,8 +38,6 @@ function Settings({ settings, setSettings, onViewArchive }) {
   const [testingIrrigation, setTestingIrrigation] = useState(false)
   const [testMessage, setTestMessage] = useState('')
   const [coordinatorStats, setCoordinatorStats] = useState(null)
-  const [coordinatorLogs, setCoordinatorLogs] = useState(null)
-  const [loadingLogs, setLoadingLogs] = useState(false)
   // Fetch Rainbird zones on component mount
   useEffect(() => {
     const fetchRainbirdZones = async () => {
@@ -237,21 +235,6 @@ function Settings({ settings, setSettings, onViewArchive }) {
   const viewRecentEvents = () => {
     const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     window.open(`${apiUrl}/api/ring-events?hours=24`, '_blank')
-  }
-
-  const viewCoordinatorLogs = async () => {
-    setLoadingLogs(true)
-    try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-      const response = await fetch(`${apiUrl}/api/coordinator/logs?lines=100`)
-      const data = await response.json()
-      setCoordinatorLogs(data.logs)
-    } catch (err) {
-      console.error('Failed to load coordinator logs:', err)
-      setCoordinatorLogs('Error loading logs: ' + err.message)
-    } finally {
-      setLoadingLogs(false)
-    }
   }
 
   return (
@@ -537,24 +520,6 @@ function Settings({ settings, setSettings, onViewArchive }) {
               >
                 🔗 Open Event Log
               </button>
-            </div>
-
-            {/* Coordinator Logs */}
-            <div className="test-card">
-              <h4>📝 Coordinator Logs</h4>
-              <p>View last 100 lines of coordinator logs</p>
-              <button 
-                className="btn-test"
-                onClick={viewCoordinatorLogs}
-                disabled={loadingLogs}
-              >
-                {loadingLogs ? '⏳ Loading...' : '📋 View Logs'}
-              </button>
-              {coordinatorLogs && (
-                <div className="log-output">
-                  <pre>{coordinatorLogs}</pre>
-                </div>
-              )}
             </div>
           </div>
         </div>

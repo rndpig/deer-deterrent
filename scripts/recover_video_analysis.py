@@ -34,7 +34,7 @@ def recover_video_analysis():
     videos = db.get_all_videos()
     logger.info(f"Found {len(videos)} videos to process")
     
-    frames_dir = Path("data/training_frames")
+    frames_dir = Path("data/frames")
     frames_dir.mkdir(parents=True, exist_ok=True)
     
     for video in videos:
@@ -108,7 +108,7 @@ def recover_video_analysis():
                     video_id=video_id,
                     frame_number=frame_number,
                     timestamp=timestamp,
-                    image_path=f"data/training_frames/{frame_filename}",
+                    image_path=f"data/frames/{frame_filename}",
                     has_detections=has_detections
                 )
                 

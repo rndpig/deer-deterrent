@@ -10,7 +10,7 @@ The Model Improvement tab provides a complete workflow for collecting training d
 
 When you upload a video:
 - The system extracts **every Nth frame** based on your sampling rate
-- Each extracted frame is saved to disk (`data/training_frames/`)
+- Each extracted frame is saved to disk (`data/frames/`)
 - The YOLOv8 model runs detection on each frame
 - Detection results are added to the **review queue**
 

@@ -5,9 +5,9 @@ After=network.target
 [Service]
 Type=simple
 User=rndpig
-WorkingDirectory=/home/rndpig/deer-deterrent
+WorkingDirectory=/home/rndpig/deer-deterrent/backend
 Environment="GOOGLE_DRIVE_TRAINING_FOLDER_ID=1NUuOhA7rWCiGcxWPe6sOHNnzOKO0zZf5"
-Environment="GOOGLE_DRIVE_CREDENTIALS_PATH=configs/google-credentials.json"
+Environment="GOOGLE_DRIVE_CREDENTIALS_PATH=/home/rndpig/deer-deterrent/configs/google-credentials.json"
 ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --app-dir /home/rndpig/deer-deterrent/backend
 Restart=always
 RestartSec=10
