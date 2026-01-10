@@ -658,11 +658,12 @@
 .irrigation-buttons {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
+  grid-gap: 1.5rem;
+  row-gap: 1.5rem;
+  column-gap: 1.5rem;
 }
 
 .btn-test {
-  margin: 0;
   padding: 0.75rem 1.15rem;
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: white;
@@ -673,7 +674,6 @@
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
-  text-align: center;
 }
 
 .btn-test:hover:not(:disabled) {
