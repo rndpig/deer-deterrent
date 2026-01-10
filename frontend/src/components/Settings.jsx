@@ -489,26 +489,26 @@ function Settings({ settings, setSettings, onViewArchive }) {
                 🔄 Refresh Stats
               </button>
               {coordinatorStats && (
-                <div className="stats-display">
-                  <div className="stat-row">
-                    <span>MQTT Connected:</span>
-                    <span className={coordinatorStats.mqtt_connected ? 'status-good' : 'status-bad'}>
+                <div className="stats-grid">
+                  <div className="stat-item">
+                    <div className="stat-label">MQTT Connected</div>
+                    <div className={`stat-value ${coordinatorStats.mqtt_connected ? 'status-good' : 'status-bad'}`}>
                       {coordinatorStats.mqtt_connected ? '✅ Yes' : '❌ No'}
-                    </span>
+                    </div>
                   </div>
-                  <div className="stat-row">
-                    <span>Snapshots Cached:</span>
-                    <span>{coordinatorStats.total_snapshots.toLocaleString()}</span>
+                  <div className="stat-item">
+                    <div className="stat-label">Snapshots Cached</div>
+                    <div className="stat-value">{coordinatorStats.total_snapshots.toLocaleString()}</div>
                   </div>
-                  <div className="stat-row">
-                    <span>Active Hours:</span>
-                    <span className={coordinatorStats.active_hours ? 'status-good' : 'status-neutral'}>
+                  <div className="stat-item">
+                    <div className="stat-label">Active Hours</div>
+                    <div className={`stat-value ${coordinatorStats.active_hours ? 'status-good' : 'status-neutral'}`}>
                       {coordinatorStats.active_hours ? '🟢 Active' : '🔴 Inactive'}
-                    </span>
+                    </div>
                   </div>
-                  <div className="stat-row">
-                    <span>Cooldown:</span>
-                    <span>{coordinatorStats.cooldown_remaining_seconds}s</span>
+                  <div className="stat-item">
+                    <div className="stat-label">Cooldown</div>
+                    <div className="stat-value">{coordinatorStats.cooldown_remaining_seconds}s</div>
                   </div>
                 </div>
               )}
