@@ -35,7 +35,9 @@ function Settings({ settings, setSettings, onViewArchive }) {
   const [rainbirdZones, setRainbirdZones] = useState([])
   const [ringCameras, setRingCameras] = useState([])
   const [cameraZones, setCameraZones] = useState({})
-
+  const [testingIrrigation, setTestingIrrigation] = useState(false)
+  const [testMessage, setTestMessage] = useState('')
+  const [coordinatorStats, setCoordinatorStats] = useState(null)
   // Fetch Rainbird zones on component mount
   useEffect(() => {
     const fetchRainbirdZones = async () => {
@@ -187,6 +189,56 @@ function Settings({ settings, setSettings, onViewArchive }) {
       setSaving(false)
       setTimeout(() => setMessage(''), 5000)
     }
+  }
+
+  const testIrrigation = async (zone, duration) => {
+    setTestingIrrigation(true)
+    setTestMessage('')
+    
+    try {
+      const coordinatorUrl = 'http://192.168.7.215:5000'
+      const response = await fetch(`${coordinatorUrl}/test-irrigation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ zone: zone.toString(), duration }),
+      })
+      
+      const data = await response.json()
+      
+      if (data.status === 'success') {
+        setTestMessage(`✅ ${data.message}`)
+      } else {
+        setTestMessage(`⚠️ ${data.message}`)
+      }
+    } catch (err) {
+      console.error('Test irrigation error:', err)
+      setTestMessage(`❌ Failed to test irrigation: ${err.message}`)
+    } finally {
+      setTestingIrrigation(false)
+      setTimeout(() => setTestMessage(''), 8000)
+    }
+  }
+
+  const loadCoordinatorStats = async () => {
+    try {
+      const coordinatorUrl = 'http://192.168.7.215:5000'
+      const response = await fetch(`${coordinatorUrl}/stats`)
+      const data = await response.json()
+      setCoordinatorStats(data)
+    } catch (err) {
+      console.error('Failed to load coordinator stats:', err)
+    }
+  }
+
+  const viewRecentEvents = () => {
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+    window.open(`${apiUrl}/api/ring-events?hours=1`, '_blank')
+  }
+
+  const viewCoordinatorLogs = () => {
+    alert('To view coordinator logs, run:\nssh rndpig@192.168.7.215 "docker logs -f deer-coordinator"')
   }
 
   return (
@@ -393,6 +445,97 @@ function Settings({ settings, setSettings, onViewArchive }) {
                   <p>Loading cameras and zones...</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* System Testing & Diagnostics */}
+        <div className="settings-section">
+          <h3>🔧 System Testing & Diagnostics</h3>
+          
+          {testMessage && (
+            <div className={`message ${testMessage.includes('✅') ? 'success' : 'error'}`} style={{ marginBottom: '1rem' }}>
+              {testMessage}
+            </div>
+          )}
+
+          <div className="testing-grid">
+            {/* Irrigation Test */}
+            <div className="test-card">
+              <h4>💧 Test Irrigation</h4>
+              <p>Manually trigger irrigation to verify zone operation</p>
+              <div className="test-controls">
+                {rainbirdZones.map(zone => (
+                  <button
+                    key={zone.number}
+                    className="btn-test"
+                    onClick={() => testIrrigation(zone.number, 10)}
+                    disabled={testingIrrigation}
+                    title={`Test ${zone.name} for 10 seconds`}
+                  >
+                    {testingIrrigation ? '⏳' : '▶️'} Zone {zone.number}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* System Status */}
+            <div className="test-card">
+              <h4>📊 Coordinator Stats</h4>
+              <button 
+                className="btn-test"
+                onClick={loadCoordinatorStats}
+              >
+                🔄 Refresh Stats
+              </button>
+              {coordinatorStats && (
+                <div className="stats-display">
+                  <div className="stat-row">
+                    <span>MQTT Connected:</span>
+                    <span className={coordinatorStats.mqtt_connected ? 'status-good' : 'status-bad'}>
+                      {coordinatorStats.mqtt_connected ? '✅ Yes' : '❌ No'}
+                    </span>
+                  </div>
+                  <div className="stat-row">
+                    <span>Snapshots Cached:</span>
+                    <span>{coordinatorStats.total_snapshots.toLocaleString()}</span>
+                  </div>
+                  <div className="stat-row">
+                    <span>Active Hours:</span>
+                    <span className={coordinatorStats.active_hours ? 'status-good' : 'status-neutral'}>
+                      {coordinatorStats.active_hours ? '🟢 Active' : '🔴 Inactive'}
+                    </span>
+                  </div>
+                  <div className="stat-row">
+                    <span>Cooldown:</span>
+                    <span>{coordinatorStats.cooldown_remaining_seconds}s</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Recent Events */}
+            <div className="test-card">
+              <h4>📜 Recent Events</h4>
+              <p>View Ring camera motion events from the past hour</p>
+              <button 
+                className="btn-test"
+                onClick={viewRecentEvents}
+              >
+                🔗 Open Event Log
+              </button>
+            </div>
+
+            {/* Coordinator Logs */}
+            <div className="test-card">
+              <h4>📝 Coordinator Logs</h4>
+              <p>Real-time log streaming (requires SSH access)</p>
+              <button 
+                className="btn-test"
+                onClick={viewCoordinatorLogs}
+              >
+                ℹ️ View Instructions
+              </button>
             </div>
           </div>
         </div>
