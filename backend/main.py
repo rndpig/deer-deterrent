@@ -1002,11 +1002,14 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
 @app.get("/api/training-frames/{frame_name}")
 async def get_training_frame(frame_name: str):
     """Serve training frames."""
-    # Use absolute path from project root
-    project_root = Path(__file__).parent.parent
-    frame_path = project_root / "data" / "training_frames" / frame_name
+    # Frames are stored in data/frames/ directory
+    frame_path = Path("data/frames") / frame_name
     if not frame_path.exists():
-        raise HTTPException(status_code=404, detail="Frame not found")
+        # Also try training_frames directory for backward compatibility
+        frame_path = Path("data/training_frames") / frame_name
+        if not frame_path.exists():
+            logger.error(f"Frame not found: {frame_name}")
+            raise HTTPException(status_code=404, detail="Frame not found")
     return FileResponse(frame_path)
 
 
