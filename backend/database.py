@@ -108,6 +108,7 @@ def init_database():
             timestamp TEXT NOT NULL,
             snapshot_available BOOLEAN DEFAULT 0,
             snapshot_size INTEGER,
+            snapshot_path TEXT,
             recording_url TEXT,
             processed BOOLEAN DEFAULT 0,
             deer_detected BOOLEAN,
@@ -708,16 +709,16 @@ def select_diverse_frames(target_count: int = 120) -> List[int]:
 # Ring event logging functions
 def log_ring_event(camera_id: str, event_type: str, timestamp: str, 
                    snapshot_available: bool = False, snapshot_size: int = None,
-                   recording_url: str = None) -> int:
+                   snapshot_path: str = None, recording_url: str = None) -> int:
     """Log a Ring camera event for diagnostics."""
     conn = get_connection()
     cursor = conn.cursor()
     
     cursor.execute("""
         INSERT INTO ring_events (camera_id, event_type, timestamp, snapshot_available,
-                                snapshot_size, recording_url, processed)
-        VALUES (?, ?, ?, ?, ?, ?, 0)
-    """, (camera_id, event_type, timestamp, snapshot_available, snapshot_size, recording_url))
+                                snapshot_size, snapshot_path, recording_url, processed)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+    """, (camera_id, event_type, timestamp, snapshot_available, snapshot_size, snapshot_path, recording_url))
     
     event_id = cursor.lastrowid
     conn.commit()
@@ -779,6 +780,43 @@ def get_ring_events(hours: int = 24, camera_id: str = None) -> List[Dict]:
     
     conn.close()
     return events
+
+
+def get_ring_events_with_snapshots(limit: int = 100, with_deer: bool = None) -> List[Dict]:
+    """Get Ring events that have saved snapshots."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    query = "SELECT * FROM ring_events WHERE snapshot_path IS NOT NULL"
+    
+    if with_deer is not None:
+        if with_deer:
+            query += " AND deer_detected = 1"
+        else:
+            query += " AND (deer_detected = 0 OR deer_detected IS NULL)"
+    
+    query += " ORDER BY timestamp DESC LIMIT ?"
+    
+    cursor.execute(query, (limit,))
+    events = [dict(row) for row in cursor.fetchall()]
+    
+    conn.close()
+    return events
+
+
+def get_ring_event_by_id(event_id: int) -> Optional[Dict]:
+    """Get a specific Ring event by ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM ring_events WHERE id = ?", (event_id,))
+    row = cursor.fetchone()
+    
+    conn.close()
+    
+    if row:
+        return dict(row)
+    return None
 
 
 def clear_video_annotation_flag(video_id: int):

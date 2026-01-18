@@ -279,6 +279,7 @@ async def create_ring_event(event: dict):
         timestamp=event.get("timestamp"),
         snapshot_available=event.get("snapshot_available", False),
         snapshot_size=event.get("snapshot_size"),
+        snapshot_path=event.get("snapshot_path"),
         recording_url=event.get("recording_url")
     )
     return {"status": "success", "event_id": event_id}
@@ -295,6 +296,120 @@ async def update_ring_event(event_id: int, update: dict):
         error_message=update.get("error_message")
     )
     return {"status": "success"}
+
+
+@app.get("/api/ring-snapshots")
+async def get_ring_snapshots(limit: int = 100, with_deer: bool = None):
+    """Get Ring snapshots with metadata."""
+    events = db.get_ring_events_with_snapshots(limit=limit, with_deer=with_deer)
+    
+    # Add snapshot file info
+    for event in events:
+        snapshot_path = event.get('snapshot_path')
+        if snapshot_path:
+            snapshot_file = Path(snapshot_path)
+            event['snapshot_exists'] = snapshot_file.exists()
+            if event['snapshot_exists']:
+                event['snapshot_size_bytes'] = snapshot_file.stat().st_size
+    
+    return {
+        "snapshots": events,
+        "total_count": len(events),
+        "limit": limit,
+        "filter": "with_deer" if with_deer else "all"
+    }
+
+
+@app.get("/api/ring-snapshots/{event_id}/image")
+async def get_snapshot_image(event_id: int):
+    """Serve snapshot image file."""
+    event = db.get_ring_event_by_id(event_id)
+    if not event or not event.get('snapshot_path'):
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    snapshot_path = Path(event['snapshot_path'])
+    if not snapshot_path.exists():
+        raise HTTPException(status_code=404, detail="Snapshot file not found")
+    
+    return FileResponse(
+        path=str(snapshot_path),
+        media_type="image/jpeg",
+        filename=snapshot_path.name
+    )
+
+
+@app.post("/api/ring-snapshots/{event_id}/rerun-detection")
+async def rerun_snapshot_detection(event_id: int, threshold: float = 0.15):
+    """Re-run ML detection on a saved snapshot."""
+    detector_obj = load_detector()
+    if not detector_obj:
+        raise HTTPException(status_code=503, detail="Detector not initialized")
+    
+    # Get event and snapshot
+    event = db.get_ring_event_by_id(event_id)
+    if not event or not event.get('snapshot_path'):
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    snapshot_path = Path(event['snapshot_path'])
+    if not snapshot_path.exists():
+        raise HTTPException(status_code=404, detail="Snapshot file not found")
+    
+    try:
+        import cv2
+        import numpy as np
+        
+        # Load image
+        img = cv2.imread(str(snapshot_path))
+        if img is None:
+            raise HTTPException(status_code=400, detail="Failed to load image")
+        
+        # Run detection
+        results = detector_obj.predict(img, confidence_threshold=threshold)
+        
+        # Format results
+        detections = []
+        max_confidence = 0.0
+        
+        for det in results:
+            confidence = float(det.confidence)
+            detections.append({
+                "confidence": confidence,
+                "bbox": {
+                    "x1": float(det.bbox.x1),
+                    "y1": float(det.bbox.y1),
+                    "x2": float(det.bbox.x2),
+                    "y2": float(det.bbox.y2)
+                }
+            })
+            if confidence > max_confidence:
+                max_confidence = confidence
+        
+        deer_detected = len(detections) > 0
+        
+        # Optionally update database
+        db.update_ring_event_result(
+            event_id=event_id,
+            processed=True,
+            deer_detected=deer_detected,
+            confidence=max_confidence if deer_detected else 0.0
+        )
+        
+        return {
+            "event_id": event_id,
+            "deer_detected": deer_detected,
+            "detection_count": len(detections),
+            "max_confidence": max_confidence,
+            "threshold": threshold,
+            "detections": detections,
+            "image_size": {
+                "width": img.shape[1],
+                "height": img.shape[0]
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Detection error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/coordinator/stats")

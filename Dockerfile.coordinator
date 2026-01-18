@@ -454,15 +454,36 @@ def on_mqtt_message(client, userdata, msg):
                 
                 # Log Ring event if within active hours (synchronous call)
                 ring_event_id = None
+                snapshot_path = None
                 if is_active_hours():
                     snapshot_available = camera_id in camera_snapshots
                     snapshot_size = len(camera_snapshots[camera_id]) if snapshot_available else None
+                    
+                    # Save snapshot to disk for later analysis/testing
+                    if snapshot_available:
+                        try:
+                            from pathlib import Path
+                            snapshot_dir = Path("data/ring_snapshots")
+                            snapshot_dir.mkdir(parents=True, exist_ok=True)
+                            
+                            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            snapshot_filename = f"event_{timestamp_str}_{camera_id}_snapshot.jpg"
+                            snapshot_path_obj = snapshot_dir / snapshot_filename
+                            snapshot_path_obj.write_bytes(camera_snapshots[camera_id])
+                            snapshot_path = str(snapshot_path_obj)
+                            
+                            logger.info(f"✓ Saved snapshot to {snapshot_path}")
+                        except Exception as e:
+                            logger.error(f"Failed to save snapshot: {e}")
+                            snapshot_path = None
+                    
                     # Call synchronous logging function (runs in MQTT thread)
                     ring_event_id = log_ring_event(
                         camera_id=camera_id,
                         event_type="motion",
                         snapshot_available=snapshot_available,
-                        snapshot_size=snapshot_size
+                        snapshot_size=snapshot_size,
+                        snapshot_path=snapshot_path
                     )
                     if ring_event_id:
                         logger.info(f"Logged Ring event #{ring_event_id}")
