@@ -308,6 +308,9 @@ async def get_ring_snapshots(limit: int = 100, with_deer: bool = None):
         snapshot_path = event.get('snapshot_path')
         if snapshot_path:
             snapshot_file = Path(snapshot_path)
+            if not snapshot_file.is_absolute():
+                snapshot_file = Path("/app") / snapshot_path
+            
             event['snapshot_exists'] = snapshot_file.exists()
             if event['snapshot_exists']:
                 event['snapshot_size_bytes'] = snapshot_file.stat().st_size
@@ -327,7 +330,12 @@ async def get_snapshot_image(event_id: int):
     if not event or not event.get('snapshot_path'):
         raise HTTPException(status_code=404, detail="Snapshot not found")
     
+    # Handle both absolute and relative paths
     snapshot_path = Path(event['snapshot_path'])
+    if not snapshot_path.is_absolute():
+        # Relative path - resolve from /app
+        snapshot_path = Path("/app") / snapshot_path
+    
     if not snapshot_path.exists():
         raise HTTPException(status_code=404, detail="Snapshot file not found")
     

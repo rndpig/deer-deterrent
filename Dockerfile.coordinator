@@ -464,14 +464,14 @@ def on_mqtt_message(client, userdata, msg):
                     if snapshot_available:
                         try:
                             from pathlib import Path
-                            snapshot_dir = Path("data/ring_snapshots")
+                            snapshot_dir = Path("/app/snapshots")
                             snapshot_dir.mkdir(parents=True, exist_ok=True)
                             
                             timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
                             snapshot_filename = f"event_{timestamp_str}_{camera_id}_snapshot.jpg"
                             snapshot_path_obj = snapshot_dir / snapshot_filename
                             snapshot_path_obj.write_bytes(camera_snapshots[camera_id])
-                            snapshot_path = str(snapshot_path_obj)
+                            snapshot_path = f"snapshots/{snapshot_filename}"
                             
                             logger.info(f"✓ Saved snapshot to {snapshot_path}")
                         except Exception as e:
