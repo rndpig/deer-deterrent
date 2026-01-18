@@ -4,9 +4,10 @@ import AnnotationTool from './AnnotationTool'
 import VideoLibrary from './VideoLibrary'
 import VideoSelector from './VideoSelector'
 import EarlyReview from './EarlyReview'
+import SnapshotViewer from './SnapshotViewer'
 
 function Training() {
-  const [viewMode, setViewMode] = useState('library') // 'library', 'selector', or 'review'
+  const [viewMode, setViewMode] = useState('library') // 'library', 'selector', 'review', or 'snapshots'
   const [selectedVideo, setSelectedVideo] = useState(null)
   const [detections, setDetections] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -560,6 +561,10 @@ function Training() {
   const handleBackFromSelector = () => {
     setViewMode('library')
   }
+  
+  const handleViewSnapshots = () => {
+    setViewMode('snapshots')
+  }
 
   const handleTrainModel = async () => {
     const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
@@ -623,6 +628,7 @@ function Training() {
         <VideoLibrary 
           onStartReview={handleStartReview}
           onTrainModel={handleTrainModel}
+          onViewSnapshots={handleViewSnapshots}
           syncing={syncing}
         />
       </div>
@@ -637,6 +643,24 @@ function Training() {
         onVideoSelected={handleVideoSelected}
         onTrainModel={handleTrainModel}
       />
+    )
+  }
+
+  // Show snapshot viewer
+  if (viewMode === 'snapshots') {
+    return (
+      <div className="training-container">
+        <div className="snapshot-header-nav">
+          <button 
+            className="btn-back-to-library"
+            onClick={handleBackToLibrary}
+            title="Back to Video Library"
+          >
+            ← Back to Library
+          </button>
+        </div>
+        <SnapshotViewer />
+      </div>
     )
   }
 

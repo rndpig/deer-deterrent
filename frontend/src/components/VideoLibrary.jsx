@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import './VideoLibrary.css'
 
-function VideoLibrary({ onStartReview, onTrainModel, syncing = false }) {
+function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnapshots }) {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
   const [trainingStatus, setTrainingStatus] = useState(null)
@@ -538,6 +538,14 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false }) {
         </div>
         
         <div className="header-right">
+          <button 
+            className="btn-view-snapshots"
+            onClick={onViewSnapshots}
+            title="View Ring snapshot collection"
+          >
+            📸 View Snapshots
+          </button>
+          
           <button 
             className="btn-upload-video"
             onClick={handleUploadClick}
