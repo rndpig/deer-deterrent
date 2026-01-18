@@ -183,6 +183,7 @@ class ZoneConfig(BaseModel):
 RING_DEVICE_ID_MAP = {
     "27c3cea0rmpl": "Driveway",  # Main camera ID for Driveway
     "768534ffrmpl": "Side",      # Main camera ID for Side
+    "0268c865rmpl": "Side",      # Alternate device ID for Side camera
 }
 
 # Ring-MQTT camera ID mapping (from MQTT topics)
