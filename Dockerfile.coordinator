@@ -216,7 +216,7 @@ async def activate_rainbird(zone: str, duration: int) -> bool:
 
 
 def log_ring_event(camera_id: str, event_type: str, snapshot_available: bool = False,
-                   snapshot_size: int = None, recording_url: str = None) -> Optional[int]:
+                   snapshot_size: int = None, snapshot_path: str = None, recording_url: str = None) -> Optional[int]:
     """Log Ring event to backend database for diagnostics (synchronous for MQTT thread)"""
     try:
         response = requests.post(
@@ -227,6 +227,7 @@ def log_ring_event(camera_id: str, event_type: str, snapshot_available: bool = F
                 "timestamp": datetime.now().isoformat(),
                 "snapshot_available": snapshot_available,
                 "snapshot_size": snapshot_size,
+                "snapshot_path": snapshot_path,
                 "recording_url": recording_url
             },
             timeout=5.0
