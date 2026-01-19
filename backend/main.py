@@ -984,8 +984,17 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
                 # Log all metadata tags to see what's available
                 logger.info(f"Video metadata tags: {json.dumps(format_tags, indent=2)}")
                 
-                # Try to get camera name from Ring device ID in comment field
-                if 'comment' in format_tags:
+                # Try to get camera name from user-assigned name in title/description (most stable)
+                camera_name_fields = ['title', 'description', 'artist', 'album', 'device_name', 'camera_name', 
+                                    'com.ring.device_name', 'com.ring.camera_name']
+                for key in camera_name_fields:
+                    if key in format_tags and format_tags[key]:
+                        detected_camera = format_tags[key].strip()
+                        logger.info(f"Extracted camera name from metadata field '{key}': {detected_camera}")
+                        break
+                
+                # If no camera name found in primary fields, try to parse device ID from comment as fallback
+                if not detected_camera and 'comment' in format_tags:
                     device_id_full = format_tags['comment']
                     # Parse device ID: gml.{camera_id}.{session_id} -> extract camera_id
                     parts = device_id_full.split('.')
@@ -995,21 +1004,10 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
                             detected_camera = RING_DEVICE_ID_MAP[camera_id]
                             logger.info(f"Mapped camera ID '{camera_id}' (from '{device_id_full}') to camera: {detected_camera}")
                         else:
-                            detected_camera = device_id_full
-                            logger.warning(f"Unknown camera ID '{camera_id}' from full ID '{device_id_full}' - add to RING_DEVICE_ID_MAP")
+                            logger.warning(f"Unknown camera ID '{camera_id}' from full ID '{device_id_full}' - device ID rotation detected")
+                            # Don't use the rotating ID - better to use "Unknown Camera"
                     else:
-                        detected_camera = device_id_full
                         logger.warning(f"Could not parse device ID '{device_id_full}'")
-                
-                # If no camera detected yet, try other fields
-                if not detected_camera:
-                    camera_fields = ['title', 'description', 'device_name', 'camera_name', 
-                                    'com.ring.device_name', 'com.ring.camera_name', 'artist', 'album']
-                    for key in camera_fields:
-                        if key in format_tags and format_tags[key]:
-                            detected_camera = format_tags[key]
-                            logger.info(f"Extracted camera name from metadata field '{key}': {detected_camera}")
-                            break
                 
                 # Try to get creation_time from metadata (this should be the actual recording time)
                 if 'creation_time' in format_tags:

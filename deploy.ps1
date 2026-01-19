@@ -7,7 +7,7 @@
 # ============================================================================
 
 param(
-    [string]$ServerIP = "192.168.7.200",
+    [string]$ServerIP = "192.168.7.215",
     [string]$ServerUser = "rndpig",
     [string]$ProjectPath = "/home/rndpig/deer-deterrent"
 )
