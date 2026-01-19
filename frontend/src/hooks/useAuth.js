@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { auth, googleProvider } from '../firebase'
+import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth'
 
 export function useAuth() {
   const [user, setUser] = useState(null)
@@ -12,32 +14,40 @@ export function useAuth() {
       // Mock user for local development
       setUser({ email: 'local-user@localhost', name: 'Local User' })
       setLoading(false)
-    } else {
-      checkAuth()
+      return
     }
+
+    // Subscribe to Firebase auth state changes
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser({
+          email: firebaseUser.email,
+          name: firebaseUser.displayName,
+          photoURL: firebaseUser.photoURL
+        })
+      } else {
+        setUser(null)
+      }
+      setLoading(false)
+    })
+
+    return () => unsubscribe()
   }, [authDisabled])
 
-  const checkAuth = async () => {
+  const signIn = async () => {
     try {
-      const response = await fetch('/api/auth/session')
-      const data = await response.json()
-      setUser(data.user || null)
+      await signInWithPopup(auth, googleProvider)
     } catch (error) {
-      console.error('Auth check failed:', error)
-      setUser(null)
-    } finally {
-      setLoading(false)
+      console.error('Sign in failed:', error)
     }
-  }
-
-  const signIn = () => {
-    console.log('Sign in clicked, redirecting to:', '/api/auth/signin')
-    window.location.href = '/api/auth/signin'
   }
 
   const signOut = async () => {
-    await fetch('/api/auth/signout', { method: 'POST' })
-    window.location.href = '/'
+    try {
+      await firebaseSignOut(auth)
+    } catch (error) {
+      console.error('Sign out failed:', error)
+    }
   }
 
   return { user, loading, signIn, signOut }

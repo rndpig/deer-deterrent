@@ -15,21 +15,12 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [showArchive, setShowArchive] = useState(false)
   const [ws, setWs] = useState(null)
-  const [unauthorized, setUnauthorized] = useState(false)
-
-  // Check for error in URL
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('error') === 'unauthorized') {
-      setUnauthorized(true)
-    }
-  }, [])
 
   // Connect to WebSocket
   useEffect(() => {
     if (!user) return // Only connect if authenticated
     
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     const wsUrl = apiUrl.replace('http', 'ws') + '/ws'
     
     const websocket = new WebSocket(wsUrl)
@@ -69,7 +60,7 @@ function App() {
   useEffect(() => {
     if (!user) return // Only fetch if authenticated
     
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     fetch(`${apiUrl}/api/stats`)
       .then(res => res.json())
@@ -101,12 +92,6 @@ function App() {
         <div className="login-box">
           <h1>🦌 Deer Deterrent System</h1>
           <p>Secure access required</p>
-          {unauthorized && (
-            <div className="unauthorized-message">
-              <strong>Access Denied</strong>
-              <p>Only rndpig@gmail.com is authorized to access this system.</p>
-            </div>
-          )}
           <AuthButton user={user} signIn={signIn} signOut={signOut} />
         </div>
       </div>
