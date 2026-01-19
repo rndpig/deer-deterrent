@@ -45,8 +45,8 @@ def load_detector():
             import os
             from pathlib import Path
             
-            # Get the project root (one level up from backend directory)
-            project_root = Path(__file__).parent.parent
+            # In Docker, main.py is at /app/main.py, so project root is /app
+            project_root = Path(__file__).parent
             
             production_model = project_root / "models" / "production" / "best.pt"
             fallback_model = project_root / "models" / "deer_detector_best.pt"
