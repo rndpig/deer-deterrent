@@ -11,6 +11,18 @@ function SnapshotViewer() {
 
   const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
 
+  // Camera ID to name mapping
+  const CAMERA_NAMES = {
+    '587a624d3fae': 'Driveway',
+    '4439c4de7a79': 'Front Door',
+    'f045dae9383a': 'Back',
+    '10cea9e4511f': 'Side'
+  }
+
+  const formatCameraName = (cameraId) => {
+    return CAMERA_NAMES[cameraId] || cameraId
+  }
+
   useEffect(() => {
     loadSnapshots()
   }, [filter])
@@ -158,10 +170,9 @@ function SnapshotViewer() {
                 )}
               </div>
               <div className="snapshot-info">
-                <div className="snapshot-camera">{snapshot.camera_id}</div>
-                <div className="snapshot-time">{formatTimestamp(snapshot.timestamp)}</div>
-                <div className="snapshot-size">
-                  {snapshot.snapshot_size ? `${(snapshot.snapshot_size / 1024).toFixed(1)} KB` : 'Unknown size'}
+                <div className="snapshot-meta">
+                  <span className="snapshot-camera">{formatCameraName(snapshot.camera_id)}</span>
+                  <span className="snapshot-time">{formatTimestamp(snapshot.timestamp)}</span>
                 </div>
               </div>
             </div>

@@ -29,6 +29,7 @@
   padding: 0.5rem 1rem;
   border: 2px solid #ddd;
   background: white;
+  color: #333;
   border-radius: 0.5rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -38,6 +39,7 @@
 .snapshot-filters button:hover {
   border-color: #4CAF50;
   background: #f0f9f0;
+  color: #333;
 }
 
 .snapshot-filters button.active {
@@ -126,25 +128,26 @@
 }
 
 .snapshot-info {
-  padding: 0.75rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.snapshot-meta {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .snapshot-camera {
   font-weight: 600;
   color: #333;
+  font-size: 0.875rem;
 }
 
 .snapshot-time {
-  font-size: 0.875rem;
-  color: #666;
-}
-
-.snapshot-size {
   font-size: 0.75rem;
-  color: #999;
+  color: #666;
 }
 
 .snapshot-detail {
