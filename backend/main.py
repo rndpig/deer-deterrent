@@ -372,23 +372,25 @@ async def rerun_snapshot_detection(event_id: int, threshold: float = 0.15):
         if img is None:
             raise HTTPException(status_code=400, detail="Failed to load image")
         
-        # Run detection
-        results = detector_obj.predict(img, confidence_threshold=threshold)
+        # Run detection with specified threshold
+        # Temporarily adjust detector threshold
+        original_threshold = detector_obj.conf_threshold
+        detector_obj.conf_threshold = threshold
+        
+        detections_list, _ = detector_obj.detect(img, return_annotated=False)
+        
+        # Restore original threshold
+        detector_obj.conf_threshold = original_threshold
         
         # Format results
         detections = []
         max_confidence = 0.0
         
-        for det in results:
-            confidence = float(det.confidence)
+        for det in detections_list:
+            confidence = det['confidence']
             detections.append({
                 "confidence": confidence,
-                "bbox": {
-                    "x1": float(det.bbox.x1),
-                    "y1": float(det.bbox.y1),
-                    "x2": float(det.bbox.x2),
-                    "y2": float(det.bbox.y2)
-                }
+                "bbox": det['bbox']
             })
             if confidence > max_confidence:
                 max_confidence = confidence
