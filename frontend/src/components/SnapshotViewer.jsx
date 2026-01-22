@@ -177,13 +177,15 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
                 alt={`Snapshot ${snapshot.id}`}
                 loading="lazy"
               />
-              {snapshot.deer_detected && (
+              {!!snapshot.deer_detected && (
                 <div className="deer-badge">🦌 Deer</div>
               )}
             </div>
             <div className="snapshot-info">
               <div className="snapshot-meta">
-                <span className="snapshot-camera">{formatCameraName(snapshot.camera_id)}</span>
+                <span className="snapshot-camera">
+                  {formatCameraName(snapshot.camera_id)}
+                </span>
                 <span className="snapshot-time">{formatTimestamp(snapshot.timestamp)}</span>
                 {snapshot.detection_confidence !== null && snapshot.detection_confidence !== undefined && (
                   <span className="snapshot-confidence">
