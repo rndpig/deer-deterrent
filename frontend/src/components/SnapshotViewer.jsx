@@ -123,7 +123,6 @@ function SnapshotViewer() {
   return (
     <div className="snapshot-viewer">
       <div className="snapshot-header">
-        <h2>📸 Ring Snapshots ({snapshots.length})</h2>
         <div className="snapshot-filters">
           <button
             className={filter === 'all' ? 'active' : ''}

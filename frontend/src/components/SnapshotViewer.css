@@ -7,17 +7,12 @@
 
 .snapshot-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.75rem;
   margin-bottom: 0;
   padding: 0.5rem 1rem;
-}
-
-.snapshot-header h2 {
-  margin: 0;
-  font-size: 1.5rem;
 }
 
 .snapshot-filters {

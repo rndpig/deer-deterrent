@@ -13,7 +13,7 @@
 
 .archive-header h1 {
   margin: 0;
-  color: #1f2937;
+  color: inherit;
   font-size: 1.75rem;
 }
 
@@ -38,7 +38,7 @@
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1.5rem;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
 }
 
 .tab-button {
@@ -46,7 +46,7 @@
   background: none;
   border: none;
   border-bottom: 3px solid transparent;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.6);
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
@@ -54,13 +54,13 @@
 }
 
 .tab-button:hover {
-  color: #374151;
-  background: #f9fafb;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .tab-button.active {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
+  color: #60a5fa;
+  border-bottom-color: #60a5fa;
 }
 
 .archive-content {
@@ -70,10 +70,10 @@
 .empty-archive {
   text-align: center;
   padding: 4rem 2rem;
-  color: #6b7280;
-  background: #f9fafb;
+  color: rgba(255, 255, 255, 0.5);
+  background: transparent;
   border-radius: 8px;
-  border: 2px dashed #d1d5db;
+  border: 2px dashed rgba(255, 255, 255, 0.2);
 }
 
 .empty-archive p {
@@ -84,15 +84,15 @@
 .loading-message {
   text-align: center;
   padding: 3rem;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.5);
   font-size: 1.1rem;
 }
 
 .archive-table-container {
   overflow-x: auto;
-  background: white;
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .archive-table {
@@ -101,8 +101,8 @@
 }
 
 .archive-table thead {
-  background: #f9fafb;
-  border-bottom: 2px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
 }
 
 .archive-table th {
@@ -110,23 +110,23 @@
   text-align: left;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #374151;
+  color: rgba(255, 255, 255, 0.7);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .archive-table tbody tr {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   transition: background-color 0.15s;
 }
 
 .archive-table tbody tr:hover {
-  background: #f9fafb;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .archive-table td {
   padding: 0.875rem 1rem;
-  color: #1f2937;
+  color: inherit;
 }
 
 .number-cell {
@@ -142,13 +142,13 @@
 
 .btn-table-action {
   padding: 0.375rem 0.75rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 4px;
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
-  background: white;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .btn-annotate {
