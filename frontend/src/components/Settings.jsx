@@ -39,6 +39,21 @@ function Settings({ settings, setSettings }) {
   const [testingIrrigation, setTestingIrrigation] = useState(false)
   const [testMessage, setTestMessage] = useState('')
   const [coordinatorStats, setCoordinatorStats] = useState(null)
+  const [showEventLog, setShowEventLog] = useState(false)
+  const [events, setEvents] = useState([])
+  const [loadingEvents, setLoadingEvents] = useState(false)
+
+  // Camera name mapping
+  const CAMERA_NAMES = {
+    '587a624d3fae': 'Driveway',
+    '4439c4de7a79': 'Front Door',
+    'f045dae9383a': 'Back',
+    '10cea9e4511f': 'Side'
+  }
+
+  const formatCameraName = (cameraId) => {
+    return CAMERA_NAMES[cameraId] || cameraId
+  }
   // Fetch Rainbird zones on component mount
   useEffect(() => {
     const fetchRainbirdZones = async () => {
@@ -233,9 +248,24 @@ function Settings({ settings, setSettings }) {
     }
   }
 
-  const viewRecentEvents = () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    window.open(`${apiUrl}/api/ring-events?hours=24`, '_blank')
+  const viewRecentEvents = async () => {
+    setLoadingEvents(true)
+    setShowEventLog(true)
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+      const response = await fetch(`${apiUrl}/api/ring-events?hours=24`)
+      const data = await response.json()
+      setEvents(data.events || [])
+    } catch (error) {
+      console.error('Error fetching events:', error)
+      setEvents([])
+    } finally {
+      setLoadingEvents(false)
+    }
+  }
+
+  const formatTimestamp = (timestamp) => {
+    return new Date(timestamp).toLocaleString()
   }
 
   return (
@@ -539,6 +569,62 @@ function Settings({ settings, setSettings }) {
           </div>
         </div>
       </div>
+
+      {/* Event Log Modal */}
+      {showEventLog && (
+        <div className="modal-overlay" onClick={() => setShowEventLog(false)}>
+          <div className="event-log-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>📜 Recent Events (Last 24 Hours)</h2>
+              <button className="btn-close" onClick={() => setShowEventLog(false)}>✕</button>
+            </div>
+            <div className="modal-content">
+              {loadingEvents ? (
+                <div className="loading-message">Loading events...</div>
+              ) : events.length === 0 ? (
+                <div className="empty-message">No events found in the last 24 hours</div>
+              ) : (
+                <table className="event-log-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Camera</th>
+                      <th>Type</th>
+                      <th>Deer</th>
+                      <th>Confidence</th>
+                      <th>Snapshot</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {events.map((event) => (
+                      <tr key={event.id}>
+                        <td>{formatTimestamp(event.timestamp)}</td>
+                        <td>{formatCameraName(event.camera_id)}</td>
+                        <td>{event.event_type}</td>
+                        <td className={event.deer_detected ? 'detected' : 'not-detected'}>
+                          {event.deer_detected ? '✓ Yes' : '✗ No'}
+                        </td>
+                        <td>
+                          {event.detection_confidence !== null && event.detection_confidence !== undefined
+                            ? `${(event.detection_confidence * 100).toFixed(1)}%`
+                            : '—'}
+                        </td>
+                        <td className="text-center">
+                          {event.snapshot_available ? '📸' : '—'}
+                        </td>
+                        <td>
+                          {event.archived ? '📦 Archived' : event.processed ? '✓ Processed' : '⏳ Pending'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

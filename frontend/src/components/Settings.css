@@ -792,3 +792,137 @@
   white-space: pre-wrap;
   word-wrap: break-word;
 }
+
+/* Event Log Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 2rem;
+}
+
+.event-log-modal {
+  background: #1a1a1a;
+  border-radius: 12px;
+  width: 95%;
+  max-width: 1400px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #404040;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.event-log-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid #404040;
+}
+
+.event-log-modal .modal-header h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.event-log-modal .btn-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.event-log-modal .btn-close:hover {
+  color: #ffffff;
+}
+
+.event-log-modal .modal-content {
+  padding: 1.5rem 2rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.event-log-modal .loading-message,
+.event-log-modal .empty-message {
+  text-align: center;
+  padding: 3rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1.1rem;
+}
+
+.event-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(40, 40, 40, 0.5);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.event-log-table thead {
+  background: rgba(60, 60, 60, 0.8);
+}
+
+.event-log-table th {
+  padding: 1rem;
+  text-align: left;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #404040;
+}
+
+.event-log-table tbody tr {
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+  transition: background 0.2s;
+}
+
+.event-log-table tbody tr:hover {
+  background: rgba(60, 60, 60, 0.4);
+}
+
+.event-log-table td {
+  padding: 0.875rem 1rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.9rem;
+}
+
+.event-log-table td.text-center {
+  text-align: center;
+}
+
+.event-log-table td.detected {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.event-log-table td.not-detected {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Responsive table */
+@media (max-width: 1200px) {
+  .event-log-table {
+    font-size: 0.85rem;
+  }
+  
+  .event-log-table th,
+  .event-log-table td {
+    padding: 0.75rem 0.5rem;
+  }
+}
