@@ -684,7 +684,7 @@ function Training({ initialVideoId, onViewArchive }) {
     return (
       <div className="training-container">
         <div className="snapshot-header-nav">
-          <h1>📸 Ring Snapshots</h1>
+          <h1>📸 Snapshots</h1>
           <div className="nav-buttons">
             <button 
               className="btn-nav"

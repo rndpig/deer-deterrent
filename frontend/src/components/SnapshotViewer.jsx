@@ -123,6 +123,7 @@ function SnapshotViewer() {
   return (
     <div className="snapshot-viewer">
       <div className="snapshot-header">
+        <div className="snapshot-count">({snapshots.length})</div>
         <div className="snapshot-filters">
           <button
             className={filter === 'all' ? 'active' : ''}
