@@ -145,6 +145,15 @@ def init_database():
         print("✓ Added 'archived' column to videos table")
         logger.info("Added 'archived' column to videos table")
     
+    # Migration: Add archived column to ring_events if it doesn't exist
+    cursor.execute("PRAGMA table_info(ring_events)")
+    ring_columns = [row[1] for row in cursor.fetchall()]
+    
+    if 'archived' not in ring_columns:
+        cursor.execute("ALTER TABLE ring_events ADD COLUMN archived BOOLEAN DEFAULT 0")
+        print("✓ Added 'archived' column to ring_events table")
+        logger.info("Added 'archived' column to ring_events table")
+    
     conn.commit()
     conn.close()
     
@@ -783,11 +792,11 @@ def get_ring_events(hours: int = 24, camera_id: str = None) -> List[Dict]:
 
 
 def get_ring_events_with_snapshots(limit: int = 100, with_deer: bool = None) -> List[Dict]:
-    """Get Ring events that have saved snapshots."""
+    """Get Ring events that have saved snapshots (non-archived only)."""
     conn = get_connection()
     cursor = conn.cursor()
     
-    query = "SELECT * FROM ring_events WHERE snapshot_path IS NOT NULL"
+    query = "SELECT * FROM ring_events WHERE snapshot_path IS NOT NULL AND (archived = 0 OR archived IS NULL)"
     
     if with_deer is not None:
         if with_deer:
@@ -802,6 +811,78 @@ def get_ring_events_with_snapshots(limit: int = 100, with_deer: bool = None) -> 
     
     conn.close()
     return events
+
+
+def get_archived_ring_snapshots(limit: int = 1000) -> List[Dict]:
+    """Get archived Ring snapshots."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    query = """
+        SELECT id as event_id, camera_id, timestamp as event_time, 
+               snapshot_path, deer_detected, detection_confidence as confidence_score
+        FROM ring_events 
+        WHERE snapshot_path IS NOT NULL AND archived = 1
+        ORDER BY timestamp DESC LIMIT ?
+    """
+    
+    cursor.execute(query, (limit,))
+    events = [dict(row) for row in cursor.fetchall()]
+    
+    conn.close()
+    return events
+
+
+def archive_ring_snapshot(event_id: int) -> bool:
+    """Archive a Ring snapshot."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("UPDATE ring_events SET archived = 1 WHERE id = ?", (event_id,))
+    success = cursor.rowcount > 0
+    
+    conn.commit()
+    conn.close()
+    
+    return success
+
+
+def unarchive_ring_snapshot(event_id: int) -> bool:
+    """Unarchive a Ring snapshot."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("UPDATE ring_events SET archived = 0 WHERE id = ?", (event_id,))
+    success = cursor.rowcount > 0
+    
+    conn.commit()
+    conn.close()
+    
+    return success
+
+
+def auto_archive_old_snapshots(days: int = 3) -> int:
+    """Archive snapshots older than specified days. Returns count of archived snapshots."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Archive snapshots older than X days
+    query = """
+        UPDATE ring_events 
+        SET archived = 1 
+        WHERE snapshot_path IS NOT NULL 
+        AND archived = 0 
+        AND datetime(timestamp) < datetime('now', '-' || ? || ' days')
+    """
+    
+    cursor.execute(query, (days,))
+    count = cursor.rowcount
+    
+    conn.commit()
+    conn.close()
+    
+    logger.info(f"Auto-archived {count} snapshots older than {days} days")
+    return count
 
 
 def get_ring_event_by_id(event_id: int) -> Optional[Dict]:

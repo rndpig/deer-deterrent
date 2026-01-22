@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './Settings.css'
 
-function Settings({ settings, setSettings, onViewArchive }) {
+function Settings({ settings, setSettings }) {
   // Default settings that match backend defaults
   const defaultSettings = {
     confidence_threshold: 0.6,
@@ -13,7 +13,8 @@ function Settings({ settings, setSettings, onViewArchive }) {
     irrigation_duration: 30,
     zone_cooldown: 300,
     dry_run: true,
-    default_sampling_rate: 1.0  // frames per second
+    default_sampling_rate: 1.0,  // frames per second
+    snapshot_archive_days: 3  // days before auto-archiving
   }
 
   // Initialize from localStorage or defaults
@@ -250,13 +251,6 @@ function Settings({ settings, setSettings, onViewArchive }) {
           >
             {saving ? '⏳ Saving...' : '💾 Save Settings'}
           </button>
-          <button 
-            className="btn-view-archive"
-            onClick={onViewArchive}
-            title="View archived videos"
-          >
-            📦 Video Archive
-          </button>
         </div>
       </div>
       
@@ -314,6 +308,27 @@ function Settings({ settings, setSettings, onViewArchive }) {
                 <span className="unit-label">frames/sec</span>
               </div>
               <p className="setting-hint">Number of frames to extract per second for annotation (default: 1.0)</p>
+            </div>
+          </div>
+
+          <div className="settings-card">
+            <h3>Snapshot Archive</h3>
+            <div className="card-content">
+              <label htmlFor="archive-days">Auto-Archive After</label>
+              <div className="input-with-unit">
+                <input
+                  id="archive-days"
+                  type="number"
+                  min="1"
+                  max="30"
+                  step="1"
+                  value={localSettings.snapshot_archive_days || 3}
+                  onChange={(e) => handleChange('snapshot_archive_days', parseInt(e.target.value))}
+                  className="value-input"
+                />
+                <span className="unit-label">days</span>
+              </div>
+              <p className="setting-hint">Snapshots older than this will be automatically archived</p>
             </div>
           </div>
 

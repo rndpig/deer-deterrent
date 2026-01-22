@@ -7,7 +7,7 @@ function SnapshotViewer() {
   const [filter, setFilter] = useState('all') // 'all', 'with_deer', 'without_deer'
   const [selectedSnapshot, setSelectedSnapshot] = useState(null)
   const [detectionRunning, setDetectionRunning] = useState(false)
-  const [threshold, setThreshold] = useState(0.15)
+  const [threshold, setThreshold] = useState(0.60)
 
   const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
 
@@ -146,130 +146,130 @@ function SnapshotViewer() {
         </div>
       </div>
 
-      <div className="snapshot-content">
-        <div className="snapshot-grid">
-          {snapshots.map((snapshot) => (
-            <div
-              key={snapshot.id}
-              className={`snapshot-card ${selectedSnapshot?.id === snapshot.id ? 'selected' : ''} ${snapshot.deer_detected ? 'with-deer' : ''}`}
-              onClick={() => selectSnapshot(snapshot)}
-            >
-              <div className="snapshot-thumbnail">
-                <img
-                  src={`${apiUrl}/api/ring-snapshots/${snapshot.id}/image`}
-                  alt={`Snapshot ${snapshot.id}`}
-                  loading="lazy"
-                />
-                {snapshot.deer_detected && (
-                  <div className="deer-badge">🦌 Deer</div>
-                )}
-                {snapshot.detection_confidence && (
-                  <div className="confidence-badge">
-                    {(snapshot.detection_confidence * 100).toFixed(0)}%
-                  </div>
-                )}
-              </div>
-              <div className="snapshot-info">
-                <div className="snapshot-meta">
-                  <span className="snapshot-camera">{formatCameraName(snapshot.camera_id)}</span>
-                  <span className="snapshot-time">{formatTimestamp(snapshot.timestamp)}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {selectedSnapshot && (
-          <div className="snapshot-detail">
-            <div className="detail-header">
-              <h3>Snapshot Details</h3>
-              <button onClick={() => setSelectedSnapshot(null)} className="btn-close">
-                ✕
-              </button>
-            </div>
-
-            <div className="detail-image">
+      <div className="snapshot-grid">
+        {snapshots.map((snapshot) => (
+          <div
+            key={snapshot.id}
+            className={`snapshot-card ${selectedSnapshot?.id === snapshot.id ? 'selected' : ''} ${snapshot.deer_detected ? 'with-deer' : ''}`}
+            onClick={() => selectSnapshot(snapshot)}
+          >
+            <div className="snapshot-thumbnail">
               <img
-                src={`${apiUrl}/api/ring-snapshots/${selectedSnapshot.id}/image`}
-                alt={`Snapshot ${selectedSnapshot.id}`}
+                src={`${apiUrl}/api/ring-snapshots/${snapshot.id}/image`}
+                alt={`Snapshot ${snapshot.id}`}
+                loading="lazy"
               />
-              {selectedSnapshot.detection_result?.detections?.map((det, idx) => (
-                <div
-                  key={idx}
-                  className="detection-box"
-                  style={{
-                    left: `${det.bbox.x1}px`,
-                    top: `${det.bbox.y1}px`,
-                    width: `${det.bbox.x2 - det.bbox.x1}px`,
-                    height: `${det.bbox.y2 - det.bbox.y1}px`
-                  }}
-                >
-                  <span className="detection-label">
-                    {(det.confidence * 100).toFixed(0)}%
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="detail-info">
-              <div className="info-row">
-                <span className="label">Event ID:</span>
-                <span className="value">#{selectedSnapshot.id}</span>
-              </div>
-              <div className="info-row">
-                <span className="label">Camera:</span>
-                <span className="value">{selectedSnapshot.camera_id}</span>
-              </div>
-              <div className="info-row">
-                <span className="label">Timestamp:</span>
-                <span className="value">{formatTimestamp(selectedSnapshot.timestamp)}</span>
-              </div>
-              <div className="info-row">
-                <span className="label">Deer Detected:</span>
-                <span className={`value ${selectedSnapshot.deer_detected ? 'detected' : 'not-detected'}`}>
-                  {selectedSnapshot.deer_detected ? '✓ Yes' : '✗ No'}
-                </span>
-              </div>
-              {selectedSnapshot.detection_confidence && (
-                <div className="info-row">
-                  <span className="label">Confidence:</span>
-                  <span className="value">{(selectedSnapshot.detection_confidence * 100).toFixed(1)}%</span>
+              {snapshot.deer_detected && (
+                <div className="deer-badge">🦌 Deer</div>
+              )}
+              {snapshot.detection_confidence !== null && snapshot.detection_confidence !== undefined && (
+                <div className="confidence-badge">
+                  {(snapshot.detection_confidence * 100).toFixed(0)}%
                 </div>
               )}
-              <div className="info-row">
-                <span className="label">File Size:</span>
-                <span className="value">
-                  {selectedSnapshot.snapshot_size ? `${(selectedSnapshot.snapshot_size / 1024).toFixed(1)} KB` : 'Unknown'}
-                </span>
-              </div>
             </div>
+            <div className="snapshot-info">
+              <div className="snapshot-meta">
+                <span className="snapshot-camera">{formatCameraName(snapshot.camera_id)}</span>
+                <span className="snapshot-time">{formatTimestamp(snapshot.timestamp)}</span>
+              </div>
+              {snapshot.detection_confidence !== null && snapshot.detection_confidence !== undefined && (
+                <div className="snapshot-confidence">
+                  Confidence: {(snapshot.detection_confidence * 100).toFixed(0)}%
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
 
-            <div className="detail-actions">
-              <h4>Re-run Detection</h4>
-              <div className="threshold-control">
-                <label>
-                  Confidence Threshold: {threshold.toFixed(2)}
+      {/* Snapshot Detail Modal */}
+      {selectedSnapshot && (
+        <div className="dialog-overlay" onClick={() => setSelectedSnapshot(null)}>
+          <div className="snapshot-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <button 
+              onClick={() => setSelectedSnapshot(null)} 
+              className="btn-close-modal"
+            >
+              ✕
+            </button>
+
+            <div className="modal-content">
+              <div className="detail-image">
+                <img
+                  src={`${apiUrl}/api/ring-snapshots/${selectedSnapshot.id}/image`}
+                  alt={`Snapshot ${selectedSnapshot.id}`}
+                />
+                {selectedSnapshot.detection_result?.detections?.map((det, idx) => (
+                  <div
+                    key={idx}
+                    className="detection-box"
+                    style={{
+                      left: `${det.bbox.x1}px`,
+                      top: `${det.bbox.y1}px`,
+                      width: `${det.bbox.x2 - det.bbox.x1}px`,
+                      height: `${det.bbox.y2 - det.bbox.y1}px`
+                    }}
+                  >
+                    <span className="detection-label">
+                      {(det.confidence * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="detail-info-compact">
+                <div className="info-grid">
+                  <div className="info-item">
+                    <span className="label">Camera:</span>
+                    <span className="value">{formatCameraName(selectedSnapshot.camera_id)}</span>
+                  </div>
+                  <div className="info-item">
+                    <span className="label">Time:</span>
+                    <span className="value">{formatTimestamp(selectedSnapshot.timestamp)}</span>
+                  </div>
+                  <div className="info-item">
+                    <span className="label">Deer:</span>
+                    <span className={`value ${selectedSnapshot.deer_detected ? 'detected' : 'not-detected'}`}>
+                      {selectedSnapshot.deer_detected ? '✓ Yes' : '✗ No'}
+                    </span>
+                  </div>
+                  <div className="info-item">
+                    <span className="label">Confidence:</span>
+                    <span className="value">
+                      {selectedSnapshot.detection_confidence !== null && selectedSnapshot.detection_confidence !== undefined
+                        ? `${(selectedSnapshot.detection_confidence * 100).toFixed(1)}%`
+                        : '0.0%'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="detection-controls">
+                  <label className="threshold-label">
+                    Confidence Threshold: {(threshold * 100).toFixed(0)}%
+                  </label>
                   <input
                     type="range"
-                    min="0.10"
-                    max="0.50"
+                    min="0.30"
+                    max="0.95"
                     step="0.05"
                     value={threshold}
                     onChange={(e) => setThreshold(parseFloat(e.target.value))}
+                    className="threshold-slider"
                   />
-                </label>
+                  <button
+                    onClick={rerunDetection}
+                    disabled={detectionRunning}
+                    className="btn-rerun"
+                  >
+                    {detectionRunning ? '⏳ Running...' : '🔍 Re-Detect'}
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={rerunDetection}
-                disabled={detectionRunning}
-                className="btn-rerun"
-              >
-                {detectionRunning ? '⏳ Running...' : '🔍 Run Detection'}
-              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

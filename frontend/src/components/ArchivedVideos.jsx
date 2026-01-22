@@ -5,6 +5,15 @@ function ArchivedVideos({ onBack, onAnnotate }) {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
 
+  // Camera ID to name mapping
+  const CAMERA_NAMES = {
+    '587a624d3fae': 'Driveway',
+    '4439c4de7a79': 'Front Door',
+    'f045dae9383a': 'Back',
+    '10cea9e4511f': 'Side',
+    'gml.27c3cea0rmpl.ab1ef9f8': 'Side' // Legacy ID format
+  }
+
   useEffect(() => {
     loadArchivedVideos()
   }, [])
@@ -60,6 +69,11 @@ function ArchivedVideos({ onBack, onAnnotate }) {
   }
 
   const formatCameraName = (video) => {
+    // Check if camera is a camera ID and map it
+    if (video.camera && CAMERA_NAMES[video.camera]) {
+      return CAMERA_NAMES[video.camera]
+    }
+    // Otherwise capitalize camera name
     if (video.camera) return video.camera.charAt(0).toUpperCase() + video.camera.slice(1)
     if (video.camera_name) return video.camera_name
     return 'Unknown'
@@ -98,7 +112,6 @@ function ArchivedVideos({ onBack, onAnnotate }) {
           <table className="archived-table">
             <thead>
               <tr>
-                <th>Filename</th>
                 <th>Camera</th>
                 <th>Date/Time</th>
                 <th>Frames</th>
@@ -110,7 +123,6 @@ function ArchivedVideos({ onBack, onAnnotate }) {
             <tbody>
               {videos.map((video) => (
                 <tr key={video.id}>
-                  <td className="filename-cell">{video.filename}</td>
                   <td>{formatCameraName(video)}</td>
                   <td>{formatDate(video.captured_at || video.upload_date)}</td>
                   <td className="number-cell">{video.frame_count}</td>

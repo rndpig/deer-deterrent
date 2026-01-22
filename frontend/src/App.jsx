@@ -5,7 +5,7 @@ import Dashboard from './components/Dashboard'
 import Training from './components/Training'
 import Settings from './components/Settings'
 import AuthButton from './components/AuthButton'
-import ArchivedVideos from './components/ArchivedVideos'
+import CombinedArchive from './components/CombinedArchive'
 import { useAuth } from './hooks/useAuth'
 
 function App() {
@@ -14,6 +14,7 @@ function App() {
   const [settings, setSettings] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
   const [showArchive, setShowArchive] = useState(false)
+  const [selectedVideoFromArchive, setSelectedVideoFromArchive] = useState(null)
   const [ws, setWs] = useState(null)
 
   // Connect to WebSocket
@@ -129,16 +130,21 @@ function App() {
 
       <main className="app-content">
         {activeTab === 'dashboard' && <Dashboard stats={stats} settings={settings} />}
-        {activeTab === 'training' && <Training />}
-        {activeTab === 'settings' && !showArchive && (
-          <Settings 
-            settings={settings} 
-            setSettings={setSettings} 
-            onViewArchive={() => setShowArchive(true)}
+        {activeTab === 'training' && !showArchive && <Training initialVideoId={selectedVideoFromArchive} onViewArchive={() => setShowArchive(true)} />}
+        {activeTab === 'training' && showArchive && (
+          <CombinedArchive 
+            onBack={() => setShowArchive(false)} 
+            onAnnotate={(videoId) => {
+              setSelectedVideoFromArchive(videoId)
+              setShowArchive(false)
+            }}
           />
         )}
-        {activeTab === 'settings' && showArchive && (
-          <ArchivedVideos onBack={() => setShowArchive(false)} />
+        {activeTab === 'settings' && (
+          <Settings 
+            settings={settings} 
+            setSettings={setSettings}
+          />
         )}
       </main>
     </div>

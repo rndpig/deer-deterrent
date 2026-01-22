@@ -1,0 +1,271 @@
+import { useState, useEffect } from 'react'
+import './CombinedArchive.css'
+
+function CombinedArchive({ onBack, onAnnotate }) {
+  const [activeTab, setActiveTab] = useState('snapshots') // 'snapshots' or 'videos'
+  const [snapshots, setSnapshots] = useState([])
+  const [videos, setVideos] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  // Camera ID to name mapping
+  const CAMERA_NAMES = {
+    '587a624d3fae': 'Driveway',
+    '4439c4de7a79': 'Front Door',
+    'f045dae9383a': 'Back',
+    '10cea9e4511f': 'Side',
+    'gml.27c3cea0rmpl.ab1ef9f8': 'Side' // Legacy ID format
+  }
+
+  useEffect(() => {
+    loadArchived()
+  }, [])
+
+  const loadArchived = async () => {
+    setLoading(true)
+    await Promise.all([
+      loadArchivedSnapshots(),
+      loadArchivedVideos()
+    ])
+    setLoading(false)
+  }
+
+  const loadArchivedSnapshots = async () => {
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/ring-snapshots/archived`)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      
+      const data = await response.json()
+      setSnapshots(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Error loading archived snapshots:', error)
+      setSnapshots([])
+    }
+  }
+
+  const loadArchivedVideos = async () => {
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/videos/archived`)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      
+      const data = await response.json()
+      setVideos(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Error loading archived videos:', error)
+      setVideos([])
+    }
+  }
+
+  const unarchiveSnapshot = async (eventId) => {
+    if (!confirm('Restore this snapshot to main gallery?')) {
+      return
+    }
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/ring-snapshots/${eventId}/unarchive`, {
+        method: 'POST'
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      
+      await loadArchivedSnapshots()
+    } catch (error) {
+      console.error('Error unarchiving snapshot:', error)
+      alert('Failed to restore snapshot')
+    }
+  }
+
+  const unarchiveVideo = async (videoId, filename) => {
+    if (!confirm(`Restore "${filename}" to main gallery?`)) {
+      return
+    }
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/videos/${videoId}/unarchive`, {
+        method: 'POST'
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      
+      await loadArchivedVideos()
+    } catch (error) {
+      console.error('Error unarchiving video:', error)
+      alert('Failed to restore video')
+    }
+  }
+
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
+  }
+
+  const formatCameraName = (item) => {
+    const cameraId = item.camera_id || item.camera
+    if (cameraId && CAMERA_NAMES[cameraId.toLowerCase()]) {
+      return CAMERA_NAMES[cameraId.toLowerCase()]
+    }
+    if (item.camera_name) return item.camera_name
+    if (item.camera) return item.camera.charAt(0).toUpperCase() + item.camera.slice(1)
+    return 'Unknown'
+  }
+
+  if (loading) {
+    return (
+      <div className="combined-archive-container">
+        <div className="archive-header">
+          <button className="btn-back" onClick={onBack}>
+            ← Back
+          </button>
+          <h1>📦 Archive</h1>
+        </div>
+        <div className="loading-message">Loading archive...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="combined-archive-container">
+      <div className="archive-header">
+        <button className="btn-back" onClick={onBack}>
+          ← Back
+        </button>
+        <h1>📦 Archive</h1>
+      </div>
+
+      <div className="archive-tabs">
+        <button 
+          className={`tab-button ${activeTab === 'snapshots' ? 'active' : ''}`}
+          onClick={() => setActiveTab('snapshots')}
+        >
+          📸 Snapshots ({snapshots.length})
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'videos' ? 'active' : ''}`}
+          onClick={() => setActiveTab('videos')}
+        >
+          🎬 Videos ({videos.length})
+        </button>
+      </div>
+
+      {activeTab === 'snapshots' ? (
+        <div className="archive-content">
+          {snapshots.length === 0 ? (
+            <div className="empty-archive">
+              <p>No archived snapshots</p>
+            </div>
+          ) : (
+            <div className="archive-table-container">
+              <table className="archive-table">
+                <thead>
+                  <tr>
+                    <th>Camera</th>
+                    <th>Date/Time</th>
+                    <th>Confidence</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {snapshots.map((snapshot) => (
+                    <tr key={snapshot.event_id}>
+                      <td>{formatCameraName(snapshot)}</td>
+                      <td>{formatDate(snapshot.event_time)}</td>
+                      <td className="number-cell">
+                        {snapshot.confidence_score 
+                          ? `${Math.round(snapshot.confidence_score * 100)}%`
+                          : '—'}
+                      </td>
+                      <td className="actions-cell">
+                        <button 
+                          className="btn-table-action btn-restore"
+                          onClick={() => unarchiveSnapshot(snapshot.event_id)}
+                          title="Restore to main gallery"
+                        >
+                          ↩️ Restore
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="archive-content">
+          {videos.length === 0 ? (
+            <div className="empty-archive">
+              <p>No archived videos</p>
+            </div>
+          ) : (
+            <div className="archive-table-container">
+              <table className="archive-table">
+                <thead>
+                  <tr>
+                    <th>Camera</th>
+                    <th>Date/Time</th>
+                    <th>Frames</th>
+                    <th>Detections</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {videos.map((video) => (
+                    <tr key={video.id}>
+                      <td>{formatCameraName(video)}</td>
+                      <td>{formatDate(video.captured_at || video.upload_date)}</td>
+                      <td className="number-cell">{video.frame_count}</td>
+                      <td className="number-cell">{video.detection_count}</td>
+                      <td>
+                        {video.fully_annotated ? (
+                          <span className="status-badge complete">✓ Complete</span>
+                        ) : video.has_annotations ? (
+                          <span className="status-badge partial">⚠ Partial</span>
+                        ) : (
+                          <span className="status-badge none">—</span>
+                        )}
+                      </td>
+                      <td className="actions-cell">
+                        <button 
+                          className="btn-table-action btn-annotate"
+                          onClick={() => onAnnotate(video.id)}
+                          title="View/annotate frames"
+                        >
+                          ✏️ Annotate
+                        </button>
+                        <button 
+                          className="btn-table-action btn-restore"
+                          onClick={() => unarchiveVideo(video.id, video.filename)}
+                          title="Restore to main gallery"
+                        >
+                          ↩️ Restore
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default CombinedArchive

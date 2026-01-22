@@ -170,6 +170,7 @@ class SystemSettings(BaseModel):
     irrigation_duration: int = 30
     zone_cooldown: int = 300
     dry_run: bool = True
+    snapshot_archive_days: int = 3
 
 class ZoneConfig(BaseModel):
     name: str
@@ -214,11 +215,30 @@ stats = {
 }
 
 
+async def auto_archive_task():
+    """Background task to periodically archive old snapshots."""
+    while True:
+        try:
+            # Wait 1 hour before first run, then every hour
+            await asyncio.sleep(3600)
+            
+            # Archive snapshots older than configured days
+            count = db.auto_archive_old_snapshots(days=settings.snapshot_archive_days)
+            
+            if count > 0:
+                logger.info(f"Auto-archived {count} snapshots older than {settings.snapshot_archive_days} days")
+        except Exception as e:
+            logger.error(f"Error in auto-archive task: {e}")
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize detector on startup."""
     # Detector loaded lazily when first needed
     print("✓ Backend started - detector will load on first use")
+    # Start background task for auto-archiving snapshots
+    asyncio.create_task(auto_archive_task())
+    print("✓ Auto-archive task started")
 
 
 @app.get("/")
@@ -421,6 +441,52 @@ async def rerun_snapshot_detection(event_id: int, threshold: float = 0.15):
     except Exception as e:
         logger.error(f"Detection error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ring-snapshots/archived")
+async def get_archived_snapshots(limit: int = 1000):
+    """Get archived Ring snapshots."""
+    events = db.get_archived_ring_snapshots(limit=limit)
+    
+    return {
+        "snapshots": events,
+        "total_count": len(events),
+        "limit": limit
+    }
+
+
+@app.post("/api/ring-snapshots/{event_id}/archive")
+async def archive_snapshot(event_id: int):
+    """Archive a Ring snapshot."""
+    success = db.archive_ring_snapshot(event_id)
+    
+    if not success:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    return {"success": True, "event_id": event_id, "archived": True}
+
+
+@app.post("/api/ring-snapshots/{event_id}/unarchive")
+async def unarchive_snapshot(event_id: int):
+    """Unarchive a Ring snapshot."""
+    success = db.unarchive_ring_snapshot(event_id)
+    
+    if not success:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    return {"success": True, "event_id": event_id, "archived": False}
+
+
+@app.post("/api/ring-snapshots/auto-archive")
+async def auto_archive_snapshots(days: int = 3):
+    """Auto-archive snapshots older than specified days."""
+    count = db.auto_archive_old_snapshots(days=days)
+    
+    return {
+        "success": True,
+        "archived_count": count,
+        "days_threshold": days
+    }
 
 
 @app.get("/api/coordinator/stats")

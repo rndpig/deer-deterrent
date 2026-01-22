@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import './VideoLibrary.css'
 
-function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnapshots }) {
+function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnapshots, onViewArchive, hideSnapshotsButton = false }) {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
   const [trainingStatus, setTrainingStatus] = useState(null)
@@ -534,17 +534,20 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       <div className="library-header">
         <div className="header-left">
           <h1>📹 Video Library</h1>
-          <p className="library-subtitle">Collect videos for model training</p>
         </div>
         
         <div className="header-right">
-          <button 
-            className="btn-view-snapshots"
-            onClick={onViewSnapshots}
-            title="View Ring snapshot collection"
-          >
-            📸 View Snapshots
-          </button>
+          {!hideSnapshotsButton && (
+            <>
+              <button 
+                className="btn-view-snapshots"
+                onClick={onViewSnapshots}
+                title="View Ring snapshot collection"
+              >
+                📸 Snapshots
+              </button>
+            </>
+          )}
           
           <button 
             className="btn-upload-video"
@@ -553,6 +556,16 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
           >
             {uploading ? '⏳ Uploading...' : '📤 Upload Video'}
           </button>
+          
+          {!hideSnapshotsButton && (
+            <button 
+              className="btn-view-archive"
+              onClick={onViewArchive}
+              title="View archived videos"
+            >
+              📦 Archive
+            </button>
+          )}
           
           <button 
             className="btn-reanalyze"

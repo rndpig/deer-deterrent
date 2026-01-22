@@ -6,8 +6,8 @@ import VideoSelector from './VideoSelector'
 import EarlyReview from './EarlyReview'
 import SnapshotViewer from './SnapshotViewer'
 
-function Training() {
-  const [viewMode, setViewMode] = useState('library') // 'library', 'selector', 'review', or 'snapshots'
+function Training({ initialVideoId, onViewArchive }) {
+  const [viewMode, setViewMode] = useState('snapshots') // 'snapshots', 'library', 'selector', 'review'
   const [selectedVideo, setSelectedVideo] = useState(null)
   const [detections, setDetections] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -131,6 +131,27 @@ function Training() {
     loadDetections()
     loadTrainingStats()
   }, [filter])
+
+  // Handle initialVideoId from archived videos
+  useEffect(() => {
+    if (initialVideoId) {
+      selectVideoForReview(initialVideoId)
+    }
+  }, [initialVideoId])
+
+  const selectVideoForReview = async (videoId) => {
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+    try {
+      const response = await fetch(`${apiUrl}/api/videos/${videoId}`)
+      if (response.ok) {
+        const video = await response.json()
+        setSelectedVideo(video)
+        setViewMode('review')
+      }
+    } catch (error) {
+      console.error('Error loading video:', error)
+    }
+  }
 
   const loadDetections = async () => {
     const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
@@ -621,15 +642,27 @@ function Training() {
     }
   }
 
-  // Show library view
+  // Show library view (videos)
   if (viewMode === 'library') {
     return (
       <div className="training-container">
+        <div className="video-header-nav">
+          <button 
+            className="btn-back-nav"
+            onClick={() => setViewMode('snapshots')}
+            title="Back to Snapshots"
+          >
+            ← Back to Snapshots
+          </button>
+          <h1>🎬 Training Videos</h1>
+        </div>
         <VideoLibrary 
           onStartReview={handleStartReview}
           onTrainModel={handleTrainModel}
-          onViewSnapshots={handleViewSnapshots}
+          onViewSnapshots={() => setViewMode('snapshots')}
+          onViewArchive={onViewArchive}
           syncing={syncing}
+          hideSnapshotsButton={true}
         />
       </div>
     )
@@ -646,18 +679,28 @@ function Training() {
     )
   }
 
-  // Show snapshot viewer
+  // Show snapshot viewer (default view)
   if (viewMode === 'snapshots') {
     return (
       <div className="training-container">
         <div className="snapshot-header-nav">
-          <button 
-            className="btn-back-to-library"
-            onClick={handleBackToLibrary}
-            title="Back to Video Library"
-          >
-            ← Back to Library
-          </button>
+          <h1>📸 Ring Snapshots</h1>
+          <div className="nav-buttons">
+            <button 
+              className="btn-nav"
+              onClick={() => setViewMode('library')}
+              title="View uploaded videos"
+            >
+              🎬 Videos
+            </button>
+            <button 
+              className="btn-nav"
+              onClick={onViewArchive}
+              title="View archive"
+            >
+              📦 Archive
+            </button>
+          </div>
         </div>
         <SnapshotViewer />
       </div>
