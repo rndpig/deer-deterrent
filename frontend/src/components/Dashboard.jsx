@@ -6,17 +6,48 @@ function Dashboard({ stats, settings }) {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('last24h') // last24h, last7d, all
 
+  // Camera ID to name mapping
+  const CAMERA_NAMES = {
+    '587a624d3fae': 'Driveway',
+    '4439c4de7a79': 'Front Door',
+    'f045dae9383a': 'Back',
+    '10cea9e4511f': 'Side'
+  }
+
+  const formatCameraName = (cameraId) => {
+    return CAMERA_NAMES[cameraId] || cameraId
+  }
+
   useEffect(() => {
     const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
-    const endpoint = filter === 'all' 
-      ? `${apiUrl}/api/detections?limit=100`
-      : `${apiUrl}/api/detections/recent?hours=${filter === 'last24h' ? 24 : 168}`
+    // Fetch snapshots with deer detections instead of video detections
+    const limit = filter === 'all' ? 100 : (filter === 'last24h' ? 50 : 100)
     
-    fetch(endpoint)
+    fetch(`${apiUrl}/api/ring-snapshots?limit=${limit}&with_deer=true`)
       .then(res => res.json())
       .then(data => {
-        setDetections(data)
+        // Convert snapshots to detection format
+        const snapshotDetections = (data.snapshots || []).map(snapshot => ({
+          timestamp: snapshot.timestamp,
+          camera_id: snapshot.camera_id,
+          camera_name: formatCameraName(snapshot.camera_id),
+          deer_count: 1, // We know deer was detected
+          max_confidence: snapshot.detection_confidence || 0,
+          image_path: `/api/ring-snapshots/${snapshot.id}/image`,
+          snapshot_id: snapshot.id,
+          event_id: snapshot.id
+        }))
+        
+        // Filter by time if needed
+        if (filter !== 'all') {
+          const hours = filter === 'last24h' ? 24 : 168
+          const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
+          setDetections(snapshotDetections.filter(d => new Date(d.timestamp) > cutoff))
+        } else {
+          setDetections(snapshotDetections)
+        }
+        
         setLoading(false)
       })
       .catch(err => {
@@ -89,12 +120,8 @@ function Dashboard({ stats, settings }) {
                 <tr>
                   <th>Timestamp</th>
                   <th>Camera</th>
-                  <th>Zone</th>
-                  <th>Deer Count</th>
                   <th>Confidence</th>
-                  <th>Action</th>
-                  <th>Image</th>
-                  <th>Review</th>
+                  <th>Snapshot</th>
                 </tr>
               </thead>
               <tbody>
@@ -102,15 +129,8 @@ function Dashboard({ stats, settings }) {
                   <tr key={index}>
                     <td>{new Date(detection.timestamp).toLocaleString()}</td>
                     <td>{detection.camera_name}</td>
-                    <td>{detection.zone_name}</td>
-                    <td className="deer-count">🦌 {detection.deer_count}</td>
                     <td className="confidence">
-                      {(detection.max_confidence * 100).toFixed(1)}%
-                    </td>
-                    <td className="action">
-                      <td>
-                      {detection.irrigation_activated ? '💦 Activated' : '🧪 Demo'}
-                    </td>
+                      {(detection.max_confidence * 100).toFixed(0)}%
                     </td>
                     <td>
                       {detection.image_path ? (
@@ -124,18 +144,6 @@ function Dashboard({ stats, settings }) {
                         </a>
                       ) : (
                         <span className="no-image">—</span>
-                      )}
-                    </td>
-                    <td className="review-cell">
-                      {detection.reviewed ? (
-                        <span className="reviewed-badge">
-                          {detection.review_type === 'correct' && '✓ Correct'}
-                          {detection.review_type === 'false_positive' && '✗ False'}
-                          {detection.review_type === 'incorrect_count' && '# Adjusted'}
-                          {detection.review_type === 'missed_deer' && '+ Missed'}
-                        </span>
-                      ) : (
-                        <span className="not-reviewed">—</span>
                       )}
                     </td>
                   </tr>

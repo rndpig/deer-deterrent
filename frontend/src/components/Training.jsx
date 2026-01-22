@@ -37,6 +37,20 @@ function Training({ initialVideoId, onViewArchive }) {
   const canvasRef = useRef(null)
   const imageRef = useRef(null)
 
+  // Listen for navigation events from SnapshotViewer
+  useEffect(() => {
+    const handleNavigateToVideos = () => setViewMode('library')
+    const handleNavigateToArchive = () => onViewArchive && onViewArchive()
+    
+    window.addEventListener('navigate-to-videos', handleNavigateToVideos)
+    window.addEventListener('navigate-to-archive', handleNavigateToArchive)
+    
+    return () => {
+      window.removeEventListener('navigate-to-videos', handleNavigateToVideos)
+      window.removeEventListener('navigate-to-archive', handleNavigateToArchive)
+    }
+  }, [onViewArchive])
+
   // Current detection
   const currentDetection = detections[currentIndex]
 
@@ -683,25 +697,6 @@ function Training({ initialVideoId, onViewArchive }) {
   if (viewMode === 'snapshots') {
     return (
       <div className="training-container">
-        <div className="snapshot-header-nav">
-          <h1>📸 Snapshots</h1>
-          <div className="nav-buttons">
-            <button 
-              className="btn-nav"
-              onClick={() => setViewMode('library')}
-              title="View uploaded videos"
-            >
-              🎬 Videos
-            </button>
-            <button 
-              className="btn-nav"
-              onClick={onViewArchive}
-              title="View archive"
-            >
-              📦 Archive
-            </button>
-          </div>
-        </div>
         <SnapshotViewer />
       </div>
     )

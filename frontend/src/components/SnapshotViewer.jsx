@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './SnapshotViewer.css'
 
-function SnapshotViewer() {
+function SnapshotViewer({ onViewVideos, onViewArchive }) {
   const [snapshots, setSnapshots] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all') // 'all', 'with_deer', 'without_deer'
@@ -122,8 +122,26 @@ function SnapshotViewer() {
 
   return (
     <div className="snapshot-viewer">
+      <div className="snapshot-header-nav">
+        <h1>📸 Snapshots ({snapshots.length})</h1>
+        <div className="nav-buttons">
+          <button 
+            className="btn-nav"
+            onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-videos'))}
+            title="View uploaded videos"
+          >
+            🎬 Videos
+          </button>
+          <button 
+            className="btn-nav"
+            onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-archive'))}
+            title="View archive"
+          >
+            📦 Archive
+          </button>
+        </div>
+      </div>
       <div className="snapshot-header">
-        <div className="snapshot-count">({snapshots.length})</div>
         <div className="snapshot-filters">
           <button
             className={filter === 'all' ? 'active' : ''}
