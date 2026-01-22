@@ -190,12 +190,12 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
               <div className="snapshot-meta">
                 <span className="snapshot-camera">{formatCameraName(snapshot.camera_id)}</span>
                 <span className="snapshot-time">{formatTimestamp(snapshot.timestamp)}</span>
+                {snapshot.detection_confidence !== null && snapshot.detection_confidence !== undefined && (
+                  <span className="snapshot-confidence">
+                    {(snapshot.detection_confidence * 100).toFixed(0)}%
+                  </span>
+                )}
               </div>
-              {snapshot.detection_confidence !== null && snapshot.detection_confidence !== undefined && (
-                <div className="snapshot-confidence">
-                  Confidence: {(snapshot.detection_confidence * 100).toFixed(0)}%
-                </div>
-              )}
             </div>
           </div>
         ))}
