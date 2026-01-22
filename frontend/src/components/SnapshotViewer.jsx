@@ -180,11 +180,6 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
               {snapshot.deer_detected && (
                 <div className="deer-badge">🦌 Deer</div>
               )}
-              {snapshot.detection_confidence !== null && snapshot.detection_confidence !== undefined && (
-                <div className="confidence-badge">
-                  {(snapshot.detection_confidence * 100).toFixed(0)}%
-                </div>
-              )}
             </div>
             <div className="snapshot-info">
               <div className="snapshot-meta">
