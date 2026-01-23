@@ -19,7 +19,8 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
     '587a624d3fae': 'Driveway',
     '4439c4de7a79': 'Front Door',
     'f045dae9383a': 'Back',
-    '10cea9e4511f': 'Side'
+    '10cea9e4511f': 'Side',
+    'manual_upload': 'Manual Upload'
   }
 
   const formatCameraName = (cameraId) => {

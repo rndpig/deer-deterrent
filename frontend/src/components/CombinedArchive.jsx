@@ -13,6 +13,7 @@ function CombinedArchive({ onBack, onAnnotate }) {
     '4439c4de7a79': 'Front Door',
     'f045dae9383a': 'Back',
     '10cea9e4511f': 'Side',
+    'manual_upload': 'Manual Upload',
     'gml.27c3cea0rmpl.ab1ef9f8': 'Side' // Legacy ID format
   }
 
@@ -39,7 +40,7 @@ function CombinedArchive({ onBack, onAnnotate }) {
       }
       
       const data = await response.json()
-      setSnapshots(Array.isArray(data) ? data : [])
+      setSnapshots(data.snapshots || [])
     } catch (error) {
       console.error('Error loading archived snapshots:', error)
       setSnapshots([])

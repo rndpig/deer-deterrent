@@ -2,7 +2,7 @@
 FastAPI backend for Deer Deterrent System.
 Provides REST API and WebSocket for real-time updates.
 """
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -492,13 +492,16 @@ async def auto_archive_snapshots(days: int = 3):
 @app.post("/api/test-detection")
 async def test_detection(
     image: UploadFile = File(...), 
-    threshold: float = 0.6,
-    save_to_database: bool = False
+    threshold: float = Form(0.6),
+    save_to_database: bool = Form(False)
 ):
     """Test deer detection on an uploaded image and optionally save to database."""
     detector_obj = load_detector()
     if not detector_obj:
         raise HTTPException(status_code=503, detail="Detector not initialized")
+    
+    # Log parameters for debugging
+    logger.info(f"test_detection called with threshold={threshold}, save_to_database={save_to_database}")
     
     # Validate file type
     if not image.content_type.startswith('image/'):
