@@ -42,8 +42,6 @@ function Settings({ settings, setSettings }) {
   const [showEventLog, setShowEventLog] = useState(false)
   const [events, setEvents] = useState([])
   const [loadingEvents, setLoadingEvents] = useState(false)
-  const [uploadingImage, setUploadingImage] = useState(false)
-  const [uploadResult, setUploadResult] = useState(null)
 
   // Camera name mapping
   const CAMERA_NAMES = {
@@ -268,53 +266,6 @@ function Settings({ settings, setSettings }) {
 
   const formatTimestamp = (timestamp) => {
     return new Date(timestamp).toLocaleString()
-  }
-
-  const handleImageUpload = async (event) => {
-    const file = event.target.files[0]
-    if (!file) return
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      setUploadResult({ success: false, message: 'Please select an image file' })
-      return
-    }
-
-    setUploadingImage(true)
-    setUploadResult(null)
-
-    try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-      const formData = new FormData()
-      formData.append('image', file)
-      formData.append('threshold', localSettings.confidence_threshold || 0.6)
-
-      const response = await fetch(`${apiUrl}/api/test-detection`, {
-        method: 'POST',
-        body: formData
-      })
-
-      if (!response.ok) {
-        throw new Error('Detection failed')
-      }
-
-      const result = await response.json()
-      setUploadResult({
-        success: true,
-        deerDetected: result.deer_detected,
-        confidence: result.max_confidence,
-        detectionCount: result.detections?.length || 0,
-        message: result.deer_detected 
-          ? `✅ Deer detected! Confidence: ${(result.max_confidence * 100).toFixed(1)}%`
-          : `❌ No deer detected (max confidence: ${(result.max_confidence * 100).toFixed(1)}%)`
-      })
-    } catch (error) {
-      console.error('Error testing image:', error)
-      setUploadResult({ success: false, message: '❌ Error: ' + error.message })
-    } finally {
-      setUploadingImage(false)
-      event.target.value = '' // Reset input
-    }
   }
 
   return (
@@ -614,39 +565,6 @@ function Settings({ settings, setSettings }) {
               >
                 🔗 Open Event Log
               </button>
-            </div>
-
-            {/* Manual Image Test */}
-            <div className="test-card">
-              <h4>🖼️ Test Detection</h4>
-              <p>Upload an image to test deer detection model</p>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                disabled={uploadingImage}
-                style={{ display: 'none' }}
-                id="image-upload-input"
-              />
-              <label htmlFor="image-upload-input">
-                <button 
-                  className="btn-test"
-                  disabled={uploadingImage}
-                  onClick={() => document.getElementById('image-upload-input').click()}
-                >
-                  {uploadingImage ? '⏳ Testing...' : '📤 Upload Image'}
-                </button>
-              </label>
-              {uploadResult && (
-                <div className={`upload-result ${uploadResult.success ? 'success' : 'error'}`}>
-                  <p>{uploadResult.message}</p>
-                  {uploadResult.success && uploadResult.detectionCount > 0 && (
-                    <p className="detection-details">
-                      Found {uploadResult.detectionCount} detection{uploadResult.detectionCount !== 1 ? 's' : ''}
-                    </p>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </div>

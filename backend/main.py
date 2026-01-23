@@ -490,8 +490,12 @@ async def auto_archive_snapshots(days: int = 3):
 
 
 @app.post("/api/test-detection")
-async def test_detection(image: UploadFile = File(...), threshold: float = 0.6):
-    """Test deer detection on an uploaded image."""
+async def test_detection(
+    image: UploadFile = File(...), 
+    threshold: float = 0.6,
+    save_to_database: bool = False
+):
+    """Test deer detection on an uploaded image and optionally save to database."""
     detector_obj = load_detector()
     if not detector_obj:
         raise HTTPException(status_code=503, detail="Detector not initialized")
@@ -503,6 +507,7 @@ async def test_detection(image: UploadFile = File(...), threshold: float = 0.6):
     try:
         import cv2
         import numpy as np
+        from datetime import datetime
         
         # Read image bytes
         contents = await image.read()
@@ -536,13 +541,45 @@ async def test_detection(image: UploadFile = File(...), threshold: float = 0.6):
                 max_confidence = confidence
         
         deer_detected = len(detections) > 0
+        saved_event_id = None
+        
+        # Save to database if requested
+        if save_to_database:
+            # Save image to snapshots directory
+            snapshot_dir = Path("/app/data/snapshots")
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            
+            timestamp = datetime.now()
+            filename = f"manual_upload_{timestamp.strftime('%Y%m%d_%H%M%S')}.jpg"
+            snapshot_path = snapshot_dir / filename
+            
+            # Save the image
+            cv2.imwrite(str(snapshot_path), img)
+            
+            # Create database entry
+            event_data = {
+                'camera_id': 'manual_upload',
+                'event_type': 'manual_upload',
+                'timestamp': timestamp.isoformat(),
+                'snapshot_available': 1,
+                'snapshot_size': len(contents),
+                'snapshot_path': f"snapshots/{filename}",
+                'processed': 1,
+                'deer_detected': 1 if deer_detected else 0,
+                'detection_confidence': max_confidence,
+                'archived': 0
+            }
+            
+            saved_event_id = db.create_ring_event(event_data)
+            logger.info(f"Saved manual upload to database as event {saved_event_id}")
         
         return {
             "deer_detected": deer_detected,
             "max_confidence": max_confidence,
             "detections": detections,
             "detection_count": len(detections),
-            "threshold_used": threshold
+            "threshold_used": threshold,
+            "saved_event_id": saved_event_id
         }
         
     except Exception as e:

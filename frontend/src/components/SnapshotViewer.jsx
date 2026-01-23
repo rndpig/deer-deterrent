@@ -8,6 +8,9 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
   const [selectedSnapshot, setSelectedSnapshot] = useState(null)
   const [detectionRunning, setDetectionRunning] = useState(false)
   const [threshold, setThreshold] = useState(0.60)
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [uploadResult, setUploadResult] = useState(null)
 
   const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
 
@@ -97,6 +100,58 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
     return date.toLocaleString()
   }
 
+  const handleImageUpload = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setUploadResult({ success: false, message: 'Please select an image file' })
+      return
+    }
+
+    setUploadingImage(true)
+    setUploadResult(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('image', file)
+      formData.append('threshold', threshold)
+      formData.append('save_to_database', 'true')
+
+      const response = await fetch(`${apiUrl}/api/test-detection`, {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        throw new Error('Detection failed')
+      }
+
+      const result = await response.json()
+      setUploadResult({
+        success: true,
+        deerDetected: result.deer_detected,
+        confidence: result.max_confidence,
+        detectionCount: result.detections?.length || 0,
+        message: result.deer_detected 
+          ? `✅ Deer detected! Confidence: ${(result.max_confidence * 100).toFixed(1)}%`
+          : `❌ No deer detected (max confidence: ${(result.max_confidence * 100).toFixed(1)}%)`
+      })
+
+      // Reload snapshots to show the newly uploaded image
+      if (result.saved_event_id) {
+        await loadSnapshots()
+      }
+    } catch (error) {
+      console.error('Error testing image:', error)
+      setUploadResult({ success: false, message: '❌ Error: ' + error.message })
+    } finally {
+      setUploadingImage(false)
+      event.target.value = '' // Reset input
+    }
+  }
+
   if (loading) {
     return (
       <div className="snapshot-viewer">
@@ -125,6 +180,13 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
       <div className="snapshot-header-nav">
         <h1>📸 Snapshots ({snapshots.length})</h1>
         <div className="nav-buttons">
+          <button 
+            className="btn-nav"
+            onClick={() => setShowUploadModal(true)}
+            title="Upload and test an image"
+          >
+            📤 Upload Image
+          </button>
           <button 
             className="btn-nav"
             onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-videos'))}
@@ -281,6 +343,53 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Image Modal */}
+      {showUploadModal && (
+        <div className="modal-overlay" onClick={() => setShowUploadModal(false)}>
+          <div className="upload-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>🖼️ Upload & Test Image</h2>
+              <button className="btn-close" onClick={() => setShowUploadModal(false)}>✕</button>
+            </div>
+            <div className="modal-content">
+              <p className="upload-description">
+                Upload an image to test deer detection. The image will be analyzed and saved to your snapshot gallery.
+              </p>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                disabled={uploadingImage}
+                style={{ display: 'none' }}
+                id="snapshot-upload-input"
+              />
+              <label htmlFor="snapshot-upload-input" style={{ width: '100%' }}>
+                <button 
+                  className="btn-upload-large"
+                  disabled={uploadingImage}
+                  onClick={() => document.getElementById('snapshot-upload-input').click()}
+                >
+                  {uploadingImage ? '⏳ Testing...' : '📤 Select Image'}
+                </button>
+              </label>
+              {uploadResult && (
+                <div className={`upload-result ${uploadResult.success ? 'success' : 'error'}`}>
+                  <p className="result-message">{uploadResult.message}</p>
+                  {uploadResult.success && uploadResult.detectionCount > 0 && (
+                    <p className="detection-details">
+                      Found {uploadResult.detectionCount} detection{uploadResult.detectionCount !== 1 ? 's' : ''}
+                    </p>
+                  )}
+                  {uploadResult.success && (
+                    <p className="save-info">✓ Image saved to snapshot gallery</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
