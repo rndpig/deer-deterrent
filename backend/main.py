@@ -489,6 +489,67 @@ async def auto_archive_snapshots(days: int = 3):
     }
 
 
+@app.post("/api/test-detection")
+async def test_detection(image: UploadFile = File(...), threshold: float = 0.6):
+    """Test deer detection on an uploaded image."""
+    detector_obj = load_detector()
+    if not detector_obj:
+        raise HTTPException(status_code=503, detail="Detector not initialized")
+    
+    # Validate file type
+    if not image.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    try:
+        import cv2
+        import numpy as np
+        
+        # Read image bytes
+        contents = await image.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is None:
+            raise HTTPException(status_code=400, detail="Failed to decode image")
+        
+        # Run detection with specified threshold
+        original_threshold = detector_obj.conf_threshold
+        detector_obj.conf_threshold = threshold
+        
+        detections_list, _ = detector_obj.detect(img, return_annotated=False)
+        
+        # Restore original threshold
+        detector_obj.conf_threshold = original_threshold
+        
+        # Format results
+        detections = []
+        max_confidence = 0.0
+        
+        for det in detections_list:
+            confidence = det['confidence']
+            detections.append({
+                "confidence": confidence,
+                "bbox": det['bbox'],
+                "class_name": det.get('class_name', 'deer')
+            })
+            if confidence > max_confidence:
+                max_confidence = confidence
+        
+        deer_detected = len(detections) > 0
+        
+        return {
+            "deer_detected": deer_detected,
+            "max_confidence": max_confidence,
+            "detections": detections,
+            "detection_count": len(detections),
+            "threshold_used": threshold
+        }
+        
+    except Exception as e:
+        logger.error(f"Error testing detection: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/coordinator/stats")
 async def get_coordinator_stats():
     """Proxy coordinator stats to avoid CORS issues."""
