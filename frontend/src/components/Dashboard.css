@@ -36,6 +36,13 @@
   font-size: 1.25rem;
 }
 
+.stat-period {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.7rem;
+  opacity: 0.7;
+  font-style: italic;
+}
+
 /* Training Stats Banner */
 .training-stats-banner {
   background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);

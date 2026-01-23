@@ -63,15 +63,18 @@ function Dashboard({ stats, settings }) {
       <div className="stats-grid">
         <div className="stat-card">
           <h3>Total Detections</h3>
-          <p className="stat-value">{stats?.total_detections || 0}</p>
+          <p className="stat-value">{detections.length}</p>
+          <p className="stat-period">{filter === 'last24h' ? 'Last 24 Hours' : filter === 'last7d' ? 'Last 7 Days' : 'All Time'}</p>
         </div>
         <div className="stat-card">
           <h3>Total Deer</h3>
-          <p className="stat-value">{stats?.total_deer || 0}</p>
+          <p className="stat-value">{detections.length}</p>
+          <p className="stat-period">{filter === 'last24h' ? 'Last 24 Hours' : filter === 'last7d' ? 'Last 7 Days' : 'All Time'}</p>
         </div>
         <div className="stat-card">
           <h3>Irrigation Zone Activations</h3>
           <p className="stat-value">{stats?.irrigation_activated || 0}</p>
+          <p className="stat-period">All Time</p>
         </div>
         <div className="stat-card">
           <h3>Season Status</h3>
