@@ -5,13 +5,15 @@ function Dashboard({ stats, settings }) {
   const [detections, setDetections] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('last24h') // last24h, last7d, all
+  const [selectedImage, setSelectedImage] = useState(null)
 
   // Camera ID to name mapping
   const CAMERA_NAMES = {
     '587a624d3fae': 'Driveway',
     '4439c4de7a79': 'Front Door',
     'f045dae9383a': 'Back',
-    '10cea9e4511f': 'Side'
+    '10cea9e4511f': 'Side',
+    'manual_upload': 'Manual Upload'
   }
 
   const formatCameraName = (cameraId) => {
@@ -134,14 +136,15 @@ function Dashboard({ stats, settings }) {
                     </td>
                     <td>
                       {detection.image_path ? (
-                        <a 
-                          href={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}${detection.image_path}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="view-image-link"
+                        <button 
+                          onClick={() => setSelectedImage({
+                            url: `${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}${detection.image_path}`,
+                            ...detection
+                          })}
+                          className="view-image-button"
                         >
                           📷 View
-                        </a>
+                        </button>
                       ) : (
                         <span className="no-image">—</span>
                       )}
@@ -153,6 +156,40 @@ function Dashboard({ stats, settings }) {
           </div>
         )}
       </div>
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div className="modal-overlay" onClick={() => setSelectedImage(null)}>
+          <div className="image-modal" onClick={(e) => e.stopPropagation()}>
+            <button 
+              onClick={() => setSelectedImage(null)} 
+              className="btn-close-modal"
+            >
+              ✕
+            </button>
+            <div className="modal-content">
+              <img 
+                src={selectedImage.url} 
+                alt="Detection snapshot"
+              />
+              <div className="image-info">
+                <div className="info-row">
+                  <span className="label">Camera:</span>
+                  <span className="value">{selectedImage.camera_name}</span>
+                </div>
+                <div className="info-row">
+                  <span className="label">Time:</span>
+                  <span className="value">{new Date(selectedImage.timestamp).toLocaleString()}</span>
+                </div>
+                <div className="info-row">
+                  <span className="label">Confidence:</span>
+                  <span className="value">{(selectedImage.max_confidence * 100).toFixed(0)}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
