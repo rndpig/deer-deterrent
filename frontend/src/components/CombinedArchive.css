@@ -115,6 +115,22 @@
   letter-spacing: 0.05em;
 }
 
+.archive-table th:nth-child(1) {
+  width: 20%;
+}
+
+.archive-table th:nth-child(2) {
+  width: 40%;
+}
+
+.archive-table th:nth-child(3) {
+  width: 15%;
+}
+
+.archive-table th:nth-child(4) {
+  width: 25%;
+}
+
 .archive-table tbody tr {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   transition: background-color 0.15s;
@@ -135,9 +151,7 @@
 }
 
 .actions-cell {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
+  text-align: left;
 }
 
 .btn-table-action {

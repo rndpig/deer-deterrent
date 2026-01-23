@@ -188,7 +188,7 @@ function CombinedArchive({ onBack, onAnnotate }) {
                       <td className="number-cell">
                         {snapshot.confidence_score 
                           ? `${Math.round(snapshot.confidence_score * 100)}%`
-                          : '—'}
+                          : '0%'}
                       </td>
                       <td className="actions-cell">
                         <button 
