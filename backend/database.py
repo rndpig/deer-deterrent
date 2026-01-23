@@ -736,6 +736,38 @@ def log_ring_event(camera_id: str, event_type: str, timestamp: str,
     return event_id
 
 
+def create_ring_event(event_data: dict) -> int:
+    """Create a Ring event from a dictionary of event data."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        INSERT INTO ring_events (camera_id, event_type, timestamp, snapshot_available,
+                                snapshot_size, snapshot_path, recording_url, processed,
+                                deer_detected, detection_confidence, archived)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        event_data.get('camera_id'),
+        event_data.get('event_type'),
+        event_data.get('timestamp'),
+        event_data.get('snapshot_available', 0),
+        event_data.get('snapshot_size'),
+        event_data.get('snapshot_path'),
+        event_data.get('recording_url'),
+        event_data.get('processed', 0),
+        event_data.get('deer_detected'),
+        event_data.get('detection_confidence'),
+        event_data.get('archived', 0)
+    ))
+    
+    event_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    logger.info(f"Created ring event {event_id} for camera {event_data.get('camera_id')}")
+    return event_id
+
+
 def update_ring_event_result(event_id: int, processed: bool = True, 
                              deer_detected: bool = None, confidence: float = None,
                              error_message: str = None):
@@ -863,8 +895,13 @@ def unarchive_ring_snapshot(event_id: int) -> bool:
 
 def auto_archive_old_snapshots(days: int = 3) -> int:
     """Archive snapshots older than specified days. Returns count of archived snapshots."""
+    from datetime import datetime, timedelta
+    
     conn = get_connection()
     cursor = conn.cursor()
+    
+    # Calculate cutoff timestamp in local time
+    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
     
     # Archive snapshots older than X days
     query = """
@@ -872,16 +909,16 @@ def auto_archive_old_snapshots(days: int = 3) -> int:
         SET archived = 1 
         WHERE snapshot_path IS NOT NULL 
         AND archived = 0 
-        AND datetime(timestamp) < datetime('now', '-' || ? || ' days')
+        AND timestamp < ?
     """
     
-    cursor.execute(query, (days,))
+    cursor.execute(query, (cutoff,))
     count = cursor.rowcount
     
     conn.commit()
     conn.close()
     
-    logger.info(f"Auto-archived {count} snapshots older than {days} days")
+    logger.info(f"Auto-archived {count} snapshots older than {days} days (cutoff: {cutoff})")
     return count
 
 
