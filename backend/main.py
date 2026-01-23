@@ -548,8 +548,8 @@ async def test_detection(
         
         # Save to database if requested
         if save_to_database:
-            # Save image to snapshots directory
-            snapshot_dir = Path("/app/data/snapshots")
+            # Save image to snapshots directory (same as coordinator snapshots)
+            snapshot_dir = Path("/app/snapshots")
             snapshot_dir.mkdir(parents=True, exist_ok=True)
             
             timestamp = datetime.now()
