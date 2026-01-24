@@ -89,13 +89,19 @@ CONFIG = {
     "ENABLE_IRRIGATION": os.getenv("ENABLE_IRRIGATION", "true").lower() == "true",
     "ACTIVE_HOURS_START": int(os.getenv("ACTIVE_HOURS_START", "0")),
     "ACTIVE_HOURS_END": int(os.getenv("ACTIVE_HOURS_END", "24")),
+    # Periodic snapshot polling configuration
+    "ENABLE_PERIODIC_SNAPSHOTS": os.getenv("ENABLE_PERIODIC_SNAPSHOTS", "false").lower() == "true",
+    "PERIODIC_SNAPSHOT_INTERVAL": int(os.getenv("PERIODIC_SNAPSHOT_INTERVAL", "60")),
+    "PERIODIC_SNAPSHOT_CAMERAS": os.getenv("PERIODIC_SNAPSHOT_CAMERAS", "10cea9e4511f").split(","),
+    "RING_LOCATION_ID": os.getenv("RING_LOCATION_ID", ""),  # Needed for MQTT topics
 }
 
 # State tracking
 last_activation_time: Optional[datetime] = None
 mqtt_client: Optional[mqtt.Client] = None
-event_queue: queue.Queue = queue.Queue()  # Thread-safe queue for MQTT events
+event_queue: queue.PriorityQueue = queue.PriorityQueue()  # Priority queue: motion > periodic
 camera_snapshots: Dict[str, bytes] = {}  # Store latest snapshot for each camera
+last_periodic_snapshot_time: Dict[str, datetime] = {}  # Track last periodic snapshot per camera
 
 
 def is_active_hours() -> bool:
@@ -432,6 +438,11 @@ def on_mqtt_message(client, userdata, msg):
         topic = msg.topic
         parts = topic.split('/')
         
+        # Extract location_id from topic if not yet configured
+        if not CONFIG["RING_LOCATION_ID"] and len(parts) >= 2 and parts[0] == "ring":
+            CONFIG["RING_LOCATION_ID"] = parts[1]
+            logger.info(f"Detected Ring location ID: {CONFIG['RING_LOCATION_ID']}")
+        
         # Handle binary snapshot images - store them for instant access
         if len(parts) >= 6 and parts[0] == "ring" and parts[2] == "camera" and parts[4] == "snapshot" and parts[5] == "image":
             camera_id = parts[3]
@@ -492,13 +503,13 @@ def on_mqtt_message(client, userdata, msg):
                 # Use instant snapshot for real-time detection (low-res but fast)
                 if camera_id in camera_snapshots:
                     logger.info(f"✓ Using instant snapshot for real-time detection")
-                    event_queue.put({
+                    event_queue.put((0, {  # Priority 0 = highest (motion events)
                         "camera_id": camera_id,
                         "snapshot_bytes": camera_snapshots[camera_id],
                         "timestamp": datetime.now().isoformat(),
                         "source": "instant_snapshot",
                         "ring_event_id": ring_event_id
-                    })
+                    }))
                 else:
                     logger.warning(f"No cached snapshot available for {camera_id}")
             return
@@ -543,8 +554,9 @@ async def process_event_queue():
         try:
             # Check queue for events (non-blocking)
             try:
-                event = event_queue.get_nowait()
-                logger.info(f"Processing queued event for camera {event['camera_id']}")
+                priority, event = event_queue.get_nowait()  # Get tuple (priority, event)
+                source = event.get("source", "unknown")
+                logger.info(f"Processing queued event for camera {event['camera_id']} (priority={priority}, source={source})")
                 
                 # Process the event with either cached snapshot or URL
                 await process_camera_event(
@@ -568,6 +580,121 @@ async def process_event_queue():
             await asyncio.sleep(1)
 
 
+async def periodic_snapshot_poller():
+    """Request snapshots from configured cameras at regular intervals"""
+    logger.info("Periodic snapshot poller started")
+    
+    if not CONFIG["ENABLE_PERIODIC_SNAPSHOTS"]:
+        logger.info("Periodic snapshots disabled, poller exiting")
+        return
+    
+    if not CONFIG["RING_LOCATION_ID"]:
+        logger.error("RING_LOCATION_ID not configured, periodic snapshots disabled")
+        return
+    
+    logger.info(f"Periodic snapshots enabled: cameras={CONFIG['PERIODIC_SNAPSHOT_CAMERAS']}, interval={CONFIG['PERIODIC_SNAPSHOT_INTERVAL']}s")
+    
+    # Subscribe to snapshot response topics
+    for camera_id in CONFIG["PERIODIC_SNAPSHOT_CAMERAS"]:
+        topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{camera_id}/snapshot/image"
+        mqtt_client.subscribe(topic)
+        logger.info(f"Subscribed to periodic snapshots: {topic}")
+    
+    while True:
+        try:
+            await asyncio.sleep(CONFIG["PERIODIC_SNAPSHOT_INTERVAL"])
+            
+            if not is_active_hours():
+                logger.debug("Outside active hours, skipping periodic snapshots")
+                continue
+            
+            for camera_id in CONFIG["PERIODIC_SNAPSHOT_CAMERAS"]:
+                # Request snapshot via MQTT
+                topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{camera_id}/snapshot/command"
+                mqtt_client.publish(topic, "")
+                logger.info(f"Requested periodic snapshot from camera {camera_id}")
+                
+                # Wait a bit for snapshot to arrive, then queue for processing
+                await asyncio.sleep(2)  # Give Ring-MQTT time to publish snapshot
+                
+                if camera_id in camera_snapshots:
+                    # Log Ring event (synchronous)
+                    snapshot_size = len(camera_snapshots[camera_id])
+                    
+                    # Save snapshot to disk
+                    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    snapshot_filename = f"periodic_{timestamp_str}_{camera_id}.jpg"
+                    snapshot_path_obj = Path(f"/app/data/snapshots/{snapshot_filename}")
+                    snapshot_path_obj.parent.mkdir(parents=True, exist_ok=True)
+                    snapshot_path_obj.write_bytes(camera_snapshots[camera_id])
+                    snapshot_path = f"data/snapshots/{snapshot_filename}"
+                    
+                    logger.info(f"✓ Saved periodic snapshot to {snapshot_path}")
+                    
+                    ring_event_id = log_ring_event(
+                        camera_id=camera_id,
+                        event_type="periodic_snapshot",
+                        snapshot_available=True,
+                        snapshot_size=snapshot_size,
+                        snapshot_path=snapshot_path
+                    )
+                    
+                    if ring_event_id:
+                        logger.info(f"Logged periodic snapshot event #{ring_event_id}")
+                    
+                    # Queue for ML detection (lower priority than motion events)
+                    event_queue.put((1, {  # Priority 1 = lower (periodic snapshots)
+                        "camera_id": camera_id,
+                        "snapshot_bytes": camera_snapshots[camera_id],
+                        "timestamp": datetime.now().isoformat(),
+                        "source": "periodic_snapshot",
+                        "ring_event_id": ring_event_id
+                    }))
+                    
+                    last_periodic_snapshot_time[camera_id] = datetime.now()
+                else:
+                    logger.warning(f"No snapshot received for periodic request from {camera_id}")
+        
+        except Exception as e:
+            logger.error(f"Error in periodic snapshot poller: {e}", exc_info=True)
+            await asyncio.sleep(60)
+
+
+async def cleanup_no_deer_snapshots():
+    """Delete snapshots older than 48h with no deer detection"""
+    logger.info("Snapshot cleanup task started")
+    
+    while True:
+        try:
+            # Run every hour
+            await asyncio.sleep(3600)
+            
+            # Calculate cutoff time (48 hours ago)
+            cutoff = datetime.now() - timedelta(hours=48)
+            
+            # Call backend API to delete old no-deer periodic snapshots
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{CONFIG['BACKEND_API_URL']}/api/cleanup-old-snapshots",
+                    json={
+                        "event_type": "periodic_snapshot",
+                        "deer_detected": False,
+                        "older_than": cutoff.isoformat()
+                    }
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    deleted_count = result.get("deleted", 0)
+                    if deleted_count > 0:
+                        logger.info(f"Cleaned up {deleted_count} old no-deer periodic snapshots")
+                else:
+                    logger.warning(f"Cleanup request failed: HTTP {response.status_code}")
+        
+        except Exception as e:
+            logger.error(f"Error in snapshot cleanup task: {e}", exc_info=True)
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize on startup"""
@@ -577,6 +704,12 @@ async def startup_event():
     
     # Start background task to process MQTT events
     asyncio.create_task(process_event_queue())
+    
+    # Start periodic snapshot polling if enabled
+    if CONFIG["ENABLE_PERIODIC_SNAPSHOTS"]:
+        asyncio.create_task(periodic_snapshot_poller())
+        asyncio.create_task(cleanup_no_deer_snapshots())
+        logger.info("Started periodic snapshot polling and cleanup tasks")
 
 
 @app.on_event("shutdown")

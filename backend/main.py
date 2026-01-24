@@ -489,6 +489,33 @@ async def auto_archive_snapshots(days: int = 3):
     }
 
 
+@app.post("/api/cleanup-old-snapshots")
+async def cleanup_old_snapshots(request: dict):
+    """Delete old snapshots based on criteria (event_type, deer_detected, age)."""
+    event_type = request.get("event_type")
+    deer_detected = request.get("deer_detected")
+    older_than = request.get("older_than")
+    
+    if not all([event_type, older_than is not None, deer_detected is not None]):
+        raise HTTPException(status_code=400, detail="Missing required parameters")
+    
+    deleted_count = db.cleanup_old_snapshots(
+        event_type=event_type,
+        deer_detected=deer_detected,
+        older_than=older_than
+    )
+    
+    return {
+        "success": True,
+        "deleted": deleted_count,
+        "criteria": {
+            "event_type": event_type,
+            "deer_detected": deer_detected,
+            "older_than": older_than
+        }
+    }
+
+
 @app.post("/api/test-detection")
 async def test_detection(
     image: UploadFile = File(...), 

@@ -922,6 +922,57 @@ def auto_archive_old_snapshots(days: int = 3) -> int:
     return count
 
 
+def cleanup_old_snapshots(event_type: str, deer_detected: bool, older_than: str) -> int:
+    """Delete old snapshots and their database entries based on criteria. Returns count of deleted snapshots."""
+    import os
+    from pathlib import Path
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Find snapshots matching criteria
+    query = """
+        SELECT id, snapshot_path 
+        FROM ring_events 
+        WHERE event_type = ? 
+        AND deer_detected = ? 
+        AND timestamp < ?
+        AND snapshot_path IS NOT NULL
+    """
+    
+    cursor.execute(query, (event_type, 1 if deer_detected else 0, older_than))
+    snapshots = cursor.fetchall()
+    
+    deleted_count = 0
+    for snapshot_id, snapshot_path in snapshots:
+        # Delete physical file if it exists
+        if snapshot_path:
+            # Try both absolute and relative paths
+            file_paths = [
+                Path(f"/app/{snapshot_path}"),
+                Path(snapshot_path)
+            ]
+            
+            for file_path in file_paths:
+                if file_path.exists():
+                    try:
+                        file_path.unlink()
+                        logger.debug(f"Deleted snapshot file: {file_path}")
+                        break
+                    except Exception as e:
+                        logger.warning(f"Failed to delete {file_path}: {e}")
+        
+        # Delete database entry
+        cursor.execute("DELETE FROM ring_events WHERE id = ?", (snapshot_id,))
+        deleted_count += 1
+    
+    conn.commit()
+    conn.close()
+    
+    logger.info(f"Cleaned up {deleted_count} snapshots (type={event_type}, deer={deer_detected}, older_than={older_than})")
+    return deleted_count
+
+
 def get_ring_event_by_id(event_id: int) -> Optional[Dict]:
     """Get a specific Ring event by ID."""
     conn = get_connection()
