@@ -6,6 +6,8 @@ function CombinedArchive({ onBack, onAnnotate }) {
   const [snapshots, setSnapshots] = useState([])
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
+  const [selectedSnapshot, setSelectedSnapshot] = useState(null)
+  const [selectedVideo, setSelectedVideo] = useState(null)
 
   // Camera ID to name mapping
   const CAMERA_NAMES = {
@@ -191,15 +193,13 @@ function CombinedArchive({ onBack, onAnnotate }) {
                       <td>{formatCameraName(snapshot)}</td>
                       <td>{formatDate(snapshot.event_time)}</td>
                       <td className="actions-cell">
-                        <a 
-                          href={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/ring-snapshots/${snapshot.event_id}/image`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button 
                           className="btn-table-action btn-view"
+                          onClick={() => setSelectedSnapshot(snapshot)}
                           title="View snapshot image"
                         >
                           👁️ View
-                        </a>
+                        </button>
                         <button 
                           className="btn-table-action btn-restore"
                           onClick={() => unarchiveSnapshot(snapshot.event_id)}
@@ -252,6 +252,13 @@ function CombinedArchive({ onBack, onAnnotate }) {
                       </td>
                       <td className="actions-cell">
                         <button 
+                          className="btn-table-action btn-view"
+                          onClick={() => setSelectedVideo(video)}
+                          title="Play video"
+                        >
+                          👁️ View
+                        </button>
+                        <button 
                           className="btn-table-action btn-annotate"
                           onClick={() => onAnnotate(video.id)}
                           title="View/annotate frames"
@@ -272,6 +279,88 @@ function CombinedArchive({ onBack, onAnnotate }) {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Snapshot Modal */}
+      {selectedSnapshot && (
+        <div className="modal-overlay" onClick={() => setSelectedSnapshot(null)}>
+          <div className="snapshot-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{formatCameraName(selectedSnapshot)} - {formatDate(selectedSnapshot.event_time)}</h3>
+              <button className="btn-close" onClick={() => setSelectedSnapshot(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <img 
+                src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/ring-snapshots/${selectedSnapshot.event_id}/image`}
+                alt="Archived snapshot"
+                className="modal-image"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Video Modal */}
+      {selectedVideo && (
+        <div className="modal-overlay" onClick={() => setSelectedVideo(null)}>
+          <div className="video-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{formatCameraName(selectedVideo)} - {formatDate(selectedVideo.captured_at || selectedVideo.upload_date)}</h3>
+              <button className="btn-close" onClick={() => setSelectedVideo(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <video 
+                controls
+                autoPlay
+                className="modal-video"
+                src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/videos/${selectedVideo.id}/stream`}
+              >
+                Your browser does not support video playback.
+              </video>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Snapshot Modal */}
+      {selectedSnapshot && (
+        <div className="modal-overlay" onClick={() => setSelectedSnapshot(null)}>
+          <div className="snapshot-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{formatCameraName(selectedSnapshot)} - {formatDate(selectedSnapshot.event_time)}</h3>
+              <button className="btn-close" onClick={() => setSelectedSnapshot(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <img 
+                src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/ring-snapshots/${selectedSnapshot.event_id}/image`}
+                alt="Archived snapshot"
+                className="modal-image"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Video Modal */}
+      {selectedVideo && (
+        <div className="modal-overlay" onClick={() => setSelectedVideo(null)}>
+          <div className="video-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{formatCameraName(selectedVideo)} - {formatDate(selectedVideo.captured_at || selectedVideo.upload_date)}</h3>
+              <button className="btn-close" onClick={() => setSelectedVideo(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <video 
+                controls
+                autoPlay
+                className="modal-video"
+                src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/videos/${selectedVideo.id}/stream`}
+              >
+                Your browser does not support video playback.
+              </video>
+            </div>
+          </div>
         </div>
       )}
     </div>
