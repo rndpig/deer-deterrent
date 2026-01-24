@@ -259,6 +259,7 @@ services:
     volumes:
       - ./dell-deployment/logs/coordinator:/app/logs
       - ./dell-deployment/data/snapshots:/app/snapshots
+      - ./backend/data:/app/data  # Shared with backend for periodic snapshots
     
     ports:
       - "5000:5000"
