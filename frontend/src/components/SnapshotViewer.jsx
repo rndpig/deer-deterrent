@@ -4,13 +4,19 @@ import './SnapshotViewer.css'
 function SnapshotViewer({ onViewVideos, onViewArchive }) {
   const [snapshots, setSnapshots] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('all') // 'all', 'with_deer', 'without_deer'
+  const [filter, setFilter] = useState('with_deer') // 'with_deer' or 'without_deer' - default to deer only
+  const [cameraFilter, setCameraFilter] = useState('all') // 'all', '10cea9e4511f' (Side), or '587a624d3fae' (Driveway)
   const [selectedSnapshot, setSelectedSnapshot] = useState(null)
   const [detectionRunning, setDetectionRunning] = useState(false)
   const [threshold, setThreshold] = useState(0.60)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
   const [uploadResult, setUploadResult] = useState(null)
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [selectedCamera, setSelectedCamera] = useState('side')
+  const [captureDateTime, setCaptureDateTime] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const snapshotsPerPage = 100
 
   const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
 
@@ -29,12 +35,14 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
 
   useEffect(() => {
     loadSnapshots()
-  }, [filter])
+    setCurrentPage(1) // Reset to page 1 when filter changes
+  }, [filter, cameraFilter])
 
   const loadSnapshots = async () => {
     setLoading(true)
     try {
-      let url = `${apiUrl}/api/ring-snapshots?limit=100`
+      let url = `${apiUrl}/api/ring-snapshots?limit=2000` // Load more for pagination
+      
       if (filter === 'with_deer') {
         url += '&with_deer=true'
       } else if (filter === 'without_deer') {
@@ -98,6 +106,8 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
 
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp)
+    // Adjust for EST to CST conversion (subtract 1 hour)
+    date.setHours(date.getHours() - 1)
     return date.toLocaleString()
   }
 
@@ -111,14 +121,31 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
       return
     }
 
+    // Set default datetime to now
+    const now = new Date()
+    const defaultDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16)
+    setCaptureDateTime(defaultDateTime)
+    
+    // Store the file for later upload
+    setSelectedFile(file)
+    setUploadResult(null)
+  }
+
+  const handleConfirmUpload = async () => {
+    if (!selectedFile) return
+
     setUploadingImage(true)
     setUploadResult(null)
 
     try {
       const formData = new FormData()
-      formData.append('image', file)
+      formData.append('image', selectedFile)
       formData.append('threshold', threshold)
       formData.append('save_to_database', 'true')
+      formData.append('camera_id', selectedCamera === 'side' ? '10cea9e4511f' : '587a624d3fae')
+      formData.append('captured_at', captureDateTime)
 
       const response = await fetch(`${apiUrl}/api/test-detection`, {
         method: 'POST',
@@ -143,14 +170,20 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
       // Reload snapshots to show the newly uploaded image
       if (result.saved_event_id) {
         await loadSnapshots()
+        // Clear the form
+        setSelectedFile(null)
       }
     } catch (error) {
       console.error('Error testing image:', error)
       setUploadResult({ success: false, message: '❌ Error: ' + error.message })
     } finally {
       setUploadingImage(false)
-      event.target.value = '' // Reset input
     }
+  }
+
+  const handleCancelUpload = () => {
+    setSelectedFile(null)
+    setUploadResult(null)
   }
 
   if (loading) {
@@ -161,25 +194,20 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
     )
   }
 
-  if (snapshots.length === 0) {
-    return (
-      <div className="snapshot-viewer">
-        <div className="empty-state">
-          <h3>📸 No Snapshots Found</h3>
-          <p>Snapshots will appear here as motion events are detected.</p>
-          <p>The coordinator must be running with snapshot-saving enabled.</p>
-          <button onClick={loadSnapshots} className="btn-reload">
-            🔄 Reload
-          </button>
-        </div>
-      </div>
-    )
-  }
+  // Calculate pagination
+  const filteredSnapshots = cameraFilter === 'all' 
+    ? snapshots 
+    : snapshots.filter(s => s.camera_id === cameraFilter)
+  
+  const totalPages = Math.ceil(filteredSnapshots.length / snapshotsPerPage)
+  const startIndex = (currentPage - 1) * snapshotsPerPage
+  const endIndex = startIndex + snapshotsPerPage
+  const paginatedSnapshots = filteredSnapshots.slice(startIndex, endIndex)
 
   return (
     <div className="snapshot-viewer">
       <div className="snapshot-header-nav">
-        <h1>📸 Snapshots ({snapshots.length})</h1>
+        <h1>📸 Snapshots ({filteredSnapshots.length}){filter === 'with_deer' && ' 🦌'}</h1>
         <div className="nav-buttons">
           <button 
             className="btn-nav"
@@ -205,61 +233,114 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
         </div>
       </div>
       <div className="snapshot-header">
-        <div className="snapshot-filters">
-          <button
-            className={filter === 'all' ? 'active' : ''}
-            onClick={() => setFilter('all')}
-          >
-            All
-          </button>
-          <button
-            className={filter === 'with_deer' ? 'active' : ''}
-            onClick={() => setFilter('with_deer')}
-          >
-            With Deer
-          </button>
-          <button
-            className={filter === 'without_deer' ? 'active' : ''}
-            onClick={() => setFilter('without_deer')}
-          >
-            No Deer
-          </button>
+        <div className="filter-section">
+          <label className="filter-label">Detection:</label>
+          <div className="snapshot-filters">
+            <button
+              className={filter === 'with_deer' ? 'active' : ''}
+              onClick={() => setFilter('with_deer')}
+            >
+              🦌 With Deer
+            </button>
+            <button
+              className={filter === 'without_deer' ? 'active' : ''}
+              onClick={() => setFilter('without_deer')}
+            >
+              No Deer
+            </button>
+          </div>
+        </div>
+        <div className="filter-section">
+          <label className="filter-label">Camera:</label>
+          <div className="snapshot-filters">
+            <button
+              className={cameraFilter === 'all' ? 'active' : ''}
+              onClick={() => setCameraFilter('all')}
+            >
+              All
+            </button>
+            <button
+              className={cameraFilter === '10cea9e4511f' ? 'active' : ''}
+              onClick={() => setCameraFilter('10cea9e4511f')}
+            >
+              Side
+            </button>
+            <button
+              className={cameraFilter === '587a624d3fae' ? 'active' : ''}
+              onClick={() => setCameraFilter('587a624d3fae')}
+            >
+              Driveway
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="snapshot-grid">
-        {snapshots.map((snapshot) => (
-          <div
-            key={snapshot.id}
-            className={`snapshot-card ${selectedSnapshot?.id === snapshot.id ? 'selected' : ''} ${snapshot.deer_detected ? 'with-deer' : ''}`}
-            onClick={() => selectSnapshot(snapshot)}
-          >
-            <div className="snapshot-thumbnail">
-              <img
-                src={`${apiUrl}/api/ring-snapshots/${snapshot.id}/image`}
-                alt={`Snapshot ${snapshot.id}`}
-                loading="lazy"
-              />
-              {!!snapshot.deer_detected && (
-                <div className="deer-badge">🦌 Deer</div>
-              )}
-            </div>
-            <div className="snapshot-info">
-              <div className="snapshot-meta">
-                <span className="snapshot-camera">
-                  {formatCameraName(snapshot.camera_id)}
-                </span>
-                <span className="snapshot-time">{formatTimestamp(snapshot.timestamp)}</span>
-                {snapshot.detection_confidence !== null && snapshot.detection_confidence !== undefined && (
-                  <span className="snapshot-confidence">
-                    {(snapshot.detection_confidence * 100).toFixed(0)}%
-                  </span>
-                )}
+      {paginatedSnapshots.length === 0 ? (
+        <div className="empty-state">
+          <h3>📸 No Snapshots Found</h3>
+          <p>No snapshots match the selected filters.</p>
+          <p>Try changing the detection or camera filters above.</p>
+        </div>
+      ) : (
+        <>
+          <div className="snapshot-grid">
+            {paginatedSnapshots.map((snapshot) => (
+              <div
+                key={snapshot.id}
+                className={`snapshot-card ${selectedSnapshot?.id === snapshot.id ? 'selected' : ''} ${snapshot.deer_detected ? 'with-deer' : ''}`}
+                onClick={() => selectSnapshot(snapshot)}
+              >
+                <div className="snapshot-thumbnail">
+                  <img
+                    src={`${apiUrl}/api/ring-snapshots/${snapshot.id}/image`}
+                    alt={`Snapshot ${snapshot.id}`}
+                    loading="lazy"
+                  />
+                  {!!snapshot.deer_detected && (
+                    <div className="deer-badge">🦌 Deer</div>
+                  )}
+                </div>
+                <div className="snapshot-info">
+                  <div className="snapshot-meta">
+                    <span className="snapshot-camera">
+                      {formatCameraName(snapshot.camera_id)}
+                    </span>
+                    <span className="snapshot-time">{formatTimestamp(snapshot.timestamp)}</span>
+                    {snapshot.detection_confidence !== null && snapshot.detection_confidence !== undefined && (
+                      <span className="snapshot-confidence">
+                        {(snapshot.detection_confidence * 100).toFixed(0)}%
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="pagination-controls">
+              <button
+                className="btn-page"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(currentPage - 1)}
+              >
+                ← Previous
+              </button>
+              <span className="page-info">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                className="btn-page"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(currentPage + 1)}
+              >
+                Next →
+              </button>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Snapshot Detail Modal */}
       {selectedSnapshot && (
@@ -355,29 +436,82 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
           <div className="upload-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>🖼️ Upload & Test Image</h2>
-              <button className="btn-close" onClick={() => setShowUploadModal(false)}>✕</button>
+              <button className="btn-close" onClick={() => { setShowUploadModal(false); handleCancelUpload(); }}>✕</button>
             </div>
             <div className="modal-content">
-              <p className="upload-description">
-                Upload an image to test deer detection. The image will be analyzed and saved to your snapshot gallery.
-              </p>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                disabled={uploadingImage}
-                style={{ display: 'none' }}
-                id="snapshot-upload-input"
-              />
-              <label htmlFor="snapshot-upload-input" style={{ width: '100%' }}>
-                <button 
-                  className="btn-upload-large"
-                  disabled={uploadingImage}
-                  onClick={() => document.getElementById('snapshot-upload-input').click()}
-                >
-                  {uploadingImage ? '⏳ Testing...' : '📤 Select Image'}
-                </button>
-              </label>
+              {!selectedFile ? (
+                <>
+                  <p className="upload-description">
+                    Upload an image to test deer detection. The image will be analyzed and saved to your snapshot gallery.
+                  </p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    disabled={uploadingImage}
+                    style={{ display: 'none' }}
+                    id="snapshot-upload-input"
+                  />
+                  <label htmlFor="snapshot-upload-input" style={{ width: '100%' }}>
+                    <button 
+                      className="btn-upload-large"
+                      disabled={uploadingImage}
+                      onClick={() => document.getElementById('snapshot-upload-input').click()}
+                    >
+                      {uploadingImage ? '⏳ Testing...' : '📤 Select Image'}
+                    </button>
+                  </label>
+                </>
+              ) : (
+                <>
+                  <p className="upload-description">
+                    <strong>File selected:</strong> {selectedFile.name}
+                  </p>
+                  
+                  <div className="form-group">
+                    <label htmlFor="camera-select">Camera:</label>
+                    <select
+                      id="camera-select"
+                      value={selectedCamera}
+                      onChange={(e) => setSelectedCamera(e.target.value)}
+                      className="camera-select"
+                    >
+                      <option value="side">Side</option>
+                      <option value="driveway">Driveway</option>
+                      <option value="front">Front Door</option>
+                      <option value="back">Back</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="capture-datetime">Date & Time Captured:</label>
+                    <input
+                      type="datetime-local"
+                      id="capture-datetime"
+                      value={captureDateTime}
+                      onChange={(e) => setCaptureDateTime(e.target.value)}
+                      className="datetime-input"
+                    />
+                  </div>
+
+                  <div className="form-actions">
+                    <button 
+                      className="btn-cancel"
+                      onClick={handleCancelUpload}
+                      disabled={uploadingImage}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      className="btn-confirm"
+                      onClick={handleConfirmUpload}
+                      disabled={uploadingImage}
+                    >
+                      {uploadingImage ? '⏳ Uploading...' : '✔️ Upload & Detect'}
+                    </button>
+                  </div>
+                </>
+              )}
               {uploadResult && (
                 <div className={`upload-result ${uploadResult.success ? 'success' : 'error'}`}>
                   <p className="result-message">{uploadResult.message}</p>

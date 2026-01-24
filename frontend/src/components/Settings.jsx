@@ -265,7 +265,10 @@ function Settings({ settings, setSettings }) {
   }
 
   const formatTimestamp = (timestamp) => {
-    return new Date(timestamp).toLocaleString()
+    const date = new Date(timestamp)
+    // Adjust for EST to CST conversion (subtract 1 hour)
+    date.setHours(date.getHours() - 1)
+    return date.toLocaleString()
   }
 
   return (
