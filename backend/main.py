@@ -516,11 +516,43 @@ async def cleanup_old_snapshots(request: dict):
     }
 
 
+@app.delete("/api/ring-snapshots/{event_id}")
+async def delete_snapshot(event_id: int):
+    """Delete a specific snapshot by event ID."""
+    import os
+    
+    # Get the event to find the snapshot path
+    event = db.get_ring_event_by_id(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    # Delete the physical file if it exists
+    snapshot_path = event.get('snapshot_path')
+    if snapshot_path:
+        # Try both possible paths
+        for base_path in ['/app/data/snapshots/', '/app/snapshots/']:
+            full_path = os.path.join(base_path, os.path.basename(snapshot_path))
+            if os.path.exists(full_path):
+                try:
+                    os.remove(full_path)
+                    logger.info(f"Deleted snapshot file: {full_path}")
+                except Exception as e:
+                    logger.error(f"Failed to delete file {full_path}: {e}")
+    
+    # Delete from database
+    db.delete_ring_event(event_id)
+    logger.info(f"Deleted snapshot event {event_id} from database")
+    
+    return {"success": True, "deleted_event_id": event_id}
+
+
 @app.post("/api/test-detection")
 async def test_detection(
     image: UploadFile = File(...), 
     threshold: float = Form(0.6),
-    save_to_database: bool = Form(False)
+    save_to_database: bool = Form(False),
+    camera_id: str = Form(None),
+    captured_at: str = Form(None)
 ):
     """Test deer detection on an uploaded image and optionally save to database."""
     detector_obj = load_detector()
@@ -579,16 +611,29 @@ async def test_detection(
             snapshot_dir = Path("/app/data/snapshots")
             snapshot_dir.mkdir(parents=True, exist_ok=True)
             
-            timestamp = datetime.now()
+            # Use provided timestamp or current time
+            if captured_at:
+                try:
+                    from dateutil import parser
+                    timestamp = parser.parse(captured_at)
+                except:
+                    logger.warning(f"Failed to parse captured_at: {captured_at}, using current time")
+                    timestamp = datetime.now()
+            else:
+                timestamp = datetime.now()
+            
             filename = f"manual_upload_{timestamp.strftime('%Y%m%d_%H%M%S')}.jpg"
             snapshot_path = snapshot_dir / filename
             
             # Save the image
             cv2.imwrite(str(snapshot_path), img)
             
+            # Use provided camera_id or default to 'manual_upload'
+            final_camera_id = camera_id if camera_id else 'manual_upload'
+            
             # Create database entry
             event_data = {
-                'camera_id': 'manual_upload',
+                'camera_id': final_camera_id,
                 'event_type': 'manual_upload',
                 'timestamp': timestamp.isoformat(),
                 'snapshot_available': 1,
@@ -601,7 +646,7 @@ async def test_detection(
             }
             
             saved_event_id = db.create_ring_event(event_data)
-            logger.info(f"Saved manual upload to database as event {saved_event_id}")
+            logger.info(f"Saved manual upload to database as event {saved_event_id} (camera: {final_camera_id}, time: {timestamp.isoformat()})")
         
         return {
             "deer_detected": deer_detected,

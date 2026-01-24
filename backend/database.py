@@ -988,6 +988,20 @@ def get_ring_event_by_id(event_id: int) -> Optional[Dict]:
     return None
 
 
+def delete_ring_event(event_id: int) -> bool:
+    """Delete a Ring event by ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("DELETE FROM ring_events WHERE id = ?", (event_id,))
+    conn.commit()
+    deleted = cursor.rowcount > 0
+    
+    conn.close()
+    
+    return deleted
+
+
 def clear_video_annotation_flag(video_id: int):
     """Clear reviewed flags for all frames of a video (used after adding new frames)."""
     # Note: The fully_annotated status is calculated dynamically,
