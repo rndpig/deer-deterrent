@@ -174,23 +174,32 @@ function CombinedArchive({ onBack, onAnnotate }) {
               <table className="archive-table">
                 <thead>
                   <tr>
+                    <th>Confidence</th>
                     <th>Camera</th>
                     <th>Date/Time</th>
-                    <th>Confidence</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {snapshots.map((snapshot) => (
                     <tr key={snapshot.event_id}>
-                      <td>{formatCameraName(snapshot)}</td>
-                      <td>{formatDate(snapshot.event_time)}</td>
                       <td className="number-cell">
                         {snapshot.confidence_score 
                           ? `${Math.round(snapshot.confidence_score * 100)}%`
                           : '0%'}
                       </td>
+                      <td>{formatCameraName(snapshot)}</td>
+                      <td>{formatDate(snapshot.event_time)}</td>
                       <td className="actions-cell">
+                        <a 
+                          href={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/ring-snapshots/${snapshot.event_id}/image`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-table-action btn-view"
+                          title="View snapshot image"
+                        >
+                          👁️ View
+                        </a>
                         <button 
                           className="btn-table-action btn-restore"
                           onClick={() => unarchiveSnapshot(snapshot.event_id)}
@@ -214,7 +223,7 @@ function CombinedArchive({ onBack, onAnnotate }) {
             </div>
           ) : (
             <div className="archive-table-container">
-              <table className="archive-table">
+              <table className="archive-table video-archive-table">
                 <thead>
                   <tr>
                     <th>Camera</th>
