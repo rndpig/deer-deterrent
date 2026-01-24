@@ -106,6 +106,13 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
 
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp)
+    // Don't adjust timezone for timestamps that are already in local time
+    // (Only adjust for Ring camera snapshots which are in EST)
+    // Checking if timestamp looks like it's from Ring (has microseconds) vs manual upload
+    if (!timestamp.includes('.')) {
+      // Manual upload - already in correct timezone
+      return date.toLocaleString()
+    }
     // Adjust for EST to CST conversion (subtract 1 hour)
     date.setHours(date.getHours() - 1)
     return date.toLocaleString()

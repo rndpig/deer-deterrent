@@ -4,7 +4,7 @@ import './Dashboard.css'
 function Dashboard({ stats, settings }) {
   const [detections, setDetections] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('last24h') // last24h, last7d, all
+  const [filter, setFilter] = useState('last7d') // last24h, last7d, all
   const [selectedImage, setSelectedImage] = useState(null)
 
   // Camera ID to name mapping
