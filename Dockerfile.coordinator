@@ -104,6 +104,40 @@ camera_snapshots: Dict[str, bytes] = {}  # Store latest snapshot for each camera
 last_periodic_snapshot_time: Dict[str, datetime] = {}  # Track last periodic snapshot per camera
 
 
+async def fetch_settings_from_backend():
+    """Fetch settings from backend API"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{CONFIG['BACKEND_API_URL']}/api/settings", timeout=5.0)
+            if response.status_code == 200:
+                settings = response.json()
+                # Update confidence threshold if changed
+                new_threshold = settings.get('confidence_threshold')
+                if new_threshold is not None:
+                    old_threshold = CONFIG["CONFIDENCE_THRESHOLD"]
+                    CONFIG["CONFIDENCE_THRESHOLD"] = float(new_threshold)
+                    if old_threshold != CONFIG["CONFIDENCE_THRESHOLD"]:
+                        logger.info(f"Updated confidence threshold from {old_threshold} to {CONFIG['CONFIDENCE_THRESHOLD']}")
+                return True
+    except httpx.TimeoutException:
+        logger.warning("Timeout fetching settings from backend")
+    except Exception as e:
+        logger.warning(f"Could not fetch settings from backend: {e}")
+    return False
+
+
+async def settings_refresh_loop():
+    """Background task to periodically refresh settings from backend"""
+    logger.info("Starting settings refresh loop")
+    # Initial fetch
+    await fetch_settings_from_backend()
+    
+    # Refresh every 30 seconds
+    while True:
+        await asyncio.sleep(30)
+        await fetch_settings_from_backend()
+
+
 def is_active_hours() -> bool:
     """Check if current time is within active hours"""
     current_hour = datetime.now().hour
@@ -701,6 +735,9 @@ async def startup_event():
     logger.info("Starting Deer Deterrent Coordinator")
     logger.info(f"Configuration: {json.dumps(CONFIG, indent=2)}")
     setup_mqtt()
+    
+    # Start background task to fetch settings from backend
+    asyncio.create_task(settings_refresh_loop())
     
     # Start background task to process MQTT events
     asyncio.create_task(process_event_queue())
