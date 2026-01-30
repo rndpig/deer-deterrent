@@ -89,6 +89,7 @@ CONFIG = {
     "ENABLE_IRRIGATION": os.getenv("ENABLE_IRRIGATION", "true").lower() == "true",
     "ACTIVE_HOURS_START": int(os.getenv("ACTIVE_HOURS_START", "0")),
     "ACTIVE_HOURS_END": int(os.getenv("ACTIVE_HOURS_END", "24")),
+    "ENABLED_CAMERAS": ["10cea9e4511f"],  # Default to Side camera only, updated from backend settings
     # Periodic snapshot polling configuration
     "ENABLE_PERIODIC_SNAPSHOTS": os.getenv("ENABLE_PERIODIC_SNAPSHOTS", "false").lower() == "true",
     "PERIODIC_SNAPSHOT_INTERVAL": int(os.getenv("PERIODIC_SNAPSHOT_INTERVAL", "60")),
@@ -118,6 +119,14 @@ async def fetch_settings_from_backend():
                     CONFIG["CONFIDENCE_THRESHOLD"] = float(new_threshold)
                     if old_threshold != CONFIG["CONFIDENCE_THRESHOLD"]:
                         logger.info(f"Updated confidence threshold from {old_threshold} to {CONFIG['CONFIDENCE_THRESHOLD']}")
+                
+                # Update enabled cameras if changed
+                new_cameras = settings.get('enabled_cameras')
+                if new_cameras is not None:
+                    old_cameras = CONFIG.get("ENABLED_CAMERAS", [])
+                    CONFIG["ENABLED_CAMERAS"] = new_cameras
+                    if old_cameras != CONFIG["ENABLED_CAMERAS"]:
+                        logger.info(f"Updated enabled cameras from {old_cameras} to {CONFIG['ENABLED_CAMERAS']}")
                 return True
     except httpx.TimeoutException:
         logger.warning("Timeout fetching settings from backend")
@@ -299,6 +308,12 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
     
     try:
         logger.info(f"Processing camera event: {camera_id} at {timestamp} (source: {source})")
+        
+        # Check if camera is enabled for detection
+        enabled_cameras = CONFIG.get("ENABLED_CAMERAS", [])
+        if enabled_cameras and camera_id not in enabled_cameras:
+            logger.info(f"Camera {camera_id} not in enabled cameras list {enabled_cameras}, skipping detection")
+            return
         
         # Check if within active hours
         if not is_active_hours():

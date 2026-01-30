@@ -171,6 +171,7 @@ class SystemSettings(BaseModel):
     zone_cooldown: int = 300
     dry_run: bool = True
     snapshot_archive_days: int = 3
+    enabled_cameras: List[str] = ["10cea9e4511f"]  # Default: Side camera only
 
 class ZoneConfig(BaseModel):
     name: str

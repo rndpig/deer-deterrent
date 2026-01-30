@@ -14,7 +14,8 @@ function Settings({ settings, setSettings }) {
     zone_cooldown: 300,
     dry_run: true,
     default_sampling_rate: 1.0,  // frames per second
-    snapshot_archive_days: 3  // days before auto-archiving
+    snapshot_archive_days: 3,  // days before auto-archiving
+    enabled_cameras: ['10cea9e4511f']  // Default: Side camera only
   }
 
   // Initialize from localStorage or defaults
@@ -372,6 +373,31 @@ function Settings({ settings, setSettings }) {
           </div>
 
           <div className="settings-card">
+            <h3>Camera Detection</h3>
+            <div className="card-content">
+              <p className="setting-hint">Select which cameras to use for deer detection</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                {Object.entries(CAMERA_NAMES).map(([id, name]) => (
+                  <label key={id} className="checkbox-inline" style={{ margin: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={(localSettings.enabled_cameras || []).includes(id)}
+                      onChange={(e) => {
+                        const current = localSettings.enabled_cameras || []
+                        const updated = e.target.checked
+                          ? [...current, id]
+                          : current.filter(camId => camId !== id)
+                        handleChange('enabled_cameras', updated)
+                      }}
+                    />
+                    {name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="settings-card">
             <h3>Season</h3>
             <div className="card-content">
               <label htmlFor="season-start">Start Date</label>
@@ -461,6 +487,42 @@ function Settings({ settings, setSettings }) {
                 />
                 Dry Run Mode
               </label>
+            </div>
+          </div>
+
+          {/* Camera Detection Settings - Double-wide card */}
+          <div className="settings-card camera-zones-card">
+            <h3>📹 Detection Cameras</h3>
+            <div className="card-content">
+              <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#666' }}>
+                Select which cameras to use for deer detection
+              </p>
+              {ringCameras.length > 0 ? (
+                <div className="camera-zone-compact">
+                  {ringCameras.map(camera => (
+                    <div key={camera.id} className="camera-zone-row-compact">
+                      <label className="checkbox-inline" style={{ marginBottom: '0.5rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={(localSettings.enabled_cameras || []).includes(camera.id)}
+                          onChange={(e) => {
+                            const current = localSettings.enabled_cameras || [];
+                            const updated = e.target.checked
+                              ? [...current, camera.id]
+                              : current.filter(id => id !== camera.id);
+                            handleChange('enabled_cameras', updated);
+                          }}
+                        />
+                        📹 {camera.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="loading-zones-compact">
+                  <p>Loading cameras...</p>
+                </div>
+              )}
             </div>
           </div>
 
