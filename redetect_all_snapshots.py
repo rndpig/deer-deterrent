@@ -29,7 +29,7 @@ def main():
     # Group by camera
     by_camera = defaultdict(list)
     for event in tagged_events:
-        camera_id = event.get("device_id", "unknown")
+        camera_id = event.get("camera_id", "unknown")
         by_camera[camera_id].append(event)
     
     print("Breakdown by camera:")
@@ -55,22 +55,23 @@ def main():
     for event in tagged_events:
         count += 1
         event_id = event["id"]
-        camera_id = event.get("device_id", "unknown")
+        camera_id = event.get("camera_id", "unknown")
         camera_name = CAMERA_NAMES.get(camera_id, camera_id)
         old_confidence = event.get("detection_confidence", 0.0)
         
         try:
-            # Get snapshot image URL
-            snapshot_url = event.get("snapshot_url")
-            if not snapshot_url:
+            # Get snapshot path and construct URL
+            snapshot_path = event.get("snapshot_path")
+            if not snapshot_path:
                 results["errors"].append({
                     "id": event_id,
                     "camera": camera_name,
-                    "reason": "No snapshot URL"
+                    "reason": "No snapshot path"
                 })
                 continue
             
-            # Download image
+            # Download image from backend API
+            snapshot_url = f"{API_BASE}/api/snapshots/{event_id}/image"
             img_response = requests.get(snapshot_url)
             img_response.raise_for_status()
             
