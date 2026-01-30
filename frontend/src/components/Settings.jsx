@@ -140,10 +140,36 @@ function Settings({ settings, setSettings }) {
   }, [settings])
 
   const handleChange = (field, value) => {
-    setLocalSettings(prev => ({
-      ...prev,
+    const updated = {
+      ...localSettings,
       [field]: value
-    }))
+    }
+    setLocalSettings(updated)
+    
+    // Auto-save to localStorage immediately for enabled_cameras
+    if (field === 'enabled_cameras') {
+      try {
+        localStorage.setItem('deer-deterrent-settings', JSON.stringify(updated))
+        console.log('Camera settings auto-saved to localStorage:', updated)
+        
+        // Auto-save to backend for critical camera settings
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+        fetch(`${apiUrl}/api/settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated)
+        }).then(response => {
+          if (response.ok) {
+            console.log('Camera settings auto-saved to backend')
+            if (setSettings) {
+              setSettings(updated)
+            }
+          }
+        }).catch(err => console.error('Backend auto-save failed:', err))
+      } catch (err) {
+        console.error('Error auto-saving camera settings:', err)
+      }
+    }
   }
 
   const setZoneForCamera = (cameraId, zoneNumber) => {

@@ -5,7 +5,7 @@ function Dashboard({ stats, settings }) {
   const [snapshots, setSnapshots] = useState([])
   const [loading, setLoading] = useState(true)
   const [timeFilter, setTimeFilter] = useState('last7d') // last24h, last7d, all
-  const [feedbackFilter, setFeedbackFilter] = useState('all') // all, with_deer, without_deer
+  const [feedbackFilter, setFeedbackFilter] = useState('with_deer') // all, with_deer, without_deer
   const [cameraFilter, setCameraFilter] = useState('all') // all, or specific camera ID
   const [selectedSnapshot, setSelectedSnapshot] = useState(null)
   const [showUploadModal, setShowUploadModal] = useState(false)
@@ -173,18 +173,16 @@ function Dashboard({ stats, settings }) {
 
   return (
     <div className="dashboard">
-      {/* Header with stats and time filters */}
+      {/* Header with stats and time filters in single row */}
       <div className="dashboard-header">
-        <div className="stats-and-filters">
-          <div className="stats-grid">
-            <div className="stat-card">
-              <h3>Total Snapshots</h3>
-              <p className="stat-value">{snapshots.length}</p>
-            </div>
-            <div className="stat-card">
-              <h3>Deer Detected</h3>
-              <p className="stat-value">{deerCount}</p>
-            </div>
+        <div className="header-row">
+          <div className="stat-card">
+            <h3>Total Snapshots</h3>
+            <p className="stat-value">{snapshots.length}</p>
+          </div>
+          <div className="stat-card">
+            <h3>Deer Detected</h3>
+            <p className="stat-value">{deerCount}</p>
           </div>
           
           <div className="time-filters">
