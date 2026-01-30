@@ -93,7 +93,6 @@ CONFIG = {
     # Periodic snapshot polling configuration
     "ENABLE_PERIODIC_SNAPSHOTS": os.getenv("ENABLE_PERIODIC_SNAPSHOTS", "false").lower() == "true",
     "PERIODIC_SNAPSHOT_INTERVAL": int(os.getenv("PERIODIC_SNAPSHOT_INTERVAL", "60")),
-    "PERIODIC_SNAPSHOT_CAMERAS": os.getenv("PERIODIC_SNAPSHOT_CAMERAS", "10cea9e4511f").split(","),
     "RING_LOCATION_ID": os.getenv("RING_LOCATION_ID", ""),  # Needed for MQTT topics
 }
 
@@ -641,10 +640,10 @@ async def periodic_snapshot_poller():
         logger.error("RING_LOCATION_ID not configured, periodic snapshots disabled")
         return
     
-    logger.info(f"Periodic snapshots enabled: cameras={CONFIG['PERIODIC_SNAPSHOT_CAMERAS']}, interval={CONFIG['PERIODIC_SNAPSHOT_INTERVAL']}s")
+    logger.info(f"Periodic snapshots enabled: cameras={CONFIG['ENABLED_CAMERAS']}, interval={CONFIG['PERIODIC_SNAPSHOT_INTERVAL']}s")
     
     # Subscribe to snapshot response topics
-    for camera_id in CONFIG["PERIODIC_SNAPSHOT_CAMERAS"]:
+    for camera_id in CONFIG["ENABLED_CAMERAS"]:
         topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{camera_id}/snapshot/image"
         mqtt_client.subscribe(topic)
         logger.info(f"Subscribed to periodic snapshots: {topic}")
@@ -657,7 +656,7 @@ async def periodic_snapshot_poller():
                 logger.debug("Outside active hours, skipping periodic snapshots")
                 continue
             
-            for camera_id in CONFIG["PERIODIC_SNAPSHOT_CAMERAS"]:
+            for camera_id in CONFIG["ENABLED_CAMERAS"]:
                 # Request snapshot via MQTT
                 topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{camera_id}/snapshot/command"
                 mqtt_client.publish(topic, "")
