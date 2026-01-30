@@ -129,7 +129,15 @@ function App() {
       </header>
 
       <main className="app-content">
-        {activeTab === 'dashboard' && <Dashboard stats={stats} settings={settings} />}
+        {activeTab === 'dashboard' && (
+          <Dashboard 
+            stats={stats} 
+            settings={settings}
+            onShowSettings={() => setActiveTab('settings')}
+            onViewVideos={() => setActiveTab('training')}
+            onViewArchive={() => { setActiveTab('training'); setShowArchive(true); }}
+          />
+        )}
         {activeTab === 'training' && !showArchive && <Training initialVideoId={selectedVideoFromArchive} onViewArchive={() => setShowArchive(true)} />}
         {activeTab === 'training' && showArchive && (
           <CombinedArchive 
