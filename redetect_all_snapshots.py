@@ -71,7 +71,7 @@ def main():
                 continue
             
             # Download image from backend API
-            snapshot_url = f"{API_BASE}/api/snapshots/{event_id}/image"
+            snapshot_url = f"{API_BASE}/api/ring-snapshots/{event_id}/image"
             img_response = requests.get(snapshot_url)
             img_response.raise_for_status()
             
