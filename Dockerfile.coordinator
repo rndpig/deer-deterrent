@@ -381,10 +381,10 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
         confidence = 0.0
         
         if deer_detected and detection_result.get("detections"):
-            # Get highest confidence deer detection
+            # Get highest confidence deer detection (only actual deer class)
             deer_detections = [
                 d for d in detection_result["detections"]
-                if d["class"].lower() in ['deer', 'dog', 'horse', 'cow', 'sheep', 'bear']
+                if d["class"].lower() == 'deer'
             ]
             if deer_detections:
                 confidence = max(d["confidence"] for d in deer_detections)
