@@ -250,13 +250,13 @@ async def detect_deer(file: UploadFile = File(...)) -> Dict[str, Any]:
                 detections.append(detection)
                 
                 # Check if deer detected
-                # YOLO class 0 is "person", class 15 is "bird", etc.
-                # For custom model, class "deer" should be detected
-                # For COCO model, we might detect "dog", "cat", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe"
-                # Class IDs: dog=16, cat=15, horse=17, sheep=18, cow=19, elephant=20, bear=21, zebra=22, giraffe=23
-                if class_name.lower() in ['deer', 'dog', 'horse', 'cow', 'sheep', 'bear']:
+                # Only mark as deer_detected if the class is actually "deer"
+                # The production model (best.pt) is trained specifically to detect deer
+                if class_name.lower() == 'deer':
                     deer_detected = True
                     logger.info(f"Detected {class_name} with confidence {confidence:.2f}")
+                else:
+                    logger.info(f"Detected {class_name} with confidence {confidence:.2f} (not marked as deer)")
         
         response = {
             "deer_detected": deer_detected,
