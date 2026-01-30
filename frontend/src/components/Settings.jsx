@@ -135,7 +135,24 @@ function Settings({ settings, setSettings }) {
 
   useEffect(() => {
     if (settings) {
-      setLocalSettings(settings)
+      // Merge incoming settings with localStorage, preferring localStorage for enabled_cameras
+      try {
+        const saved = localStorage.getItem('deer-deterrent-settings')
+        if (saved) {
+          const savedSettings = JSON.parse(saved)
+          // Prefer localStorage enabled_cameras over incoming settings
+          setLocalSettings({
+            ...settings,
+            enabled_cameras: savedSettings.enabled_cameras || settings.enabled_cameras || ['10cea9e4511f']
+          })
+          console.log('Merged settings with localStorage enabled_cameras:', savedSettings.enabled_cameras)
+        } else {
+          setLocalSettings(settings)
+        }
+      } catch (err) {
+        console.error('Error merging settings:', err)
+        setLocalSettings(settings)
+      }
     }
   }, [settings])
 
@@ -145,12 +162,13 @@ function Settings({ settings, setSettings }) {
       [field]: value
     }
     setLocalSettings(updated)
+    console.log(`📝 Field '${field}' changed to:`, value)
     
     // Auto-save to localStorage immediately for enabled_cameras
     if (field === 'enabled_cameras') {
       try {
         localStorage.setItem('deer-deterrent-settings', JSON.stringify(updated))
-        console.log('Camera settings auto-saved to localStorage:', updated)
+        console.log('✅ Camera settings auto-saved to localStorage:', updated.enabled_cameras)
         
         // Auto-save to backend for critical camera settings
         const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
@@ -160,14 +178,16 @@ function Settings({ settings, setSettings }) {
           body: JSON.stringify(updated)
         }).then(response => {
           if (response.ok) {
-            console.log('Camera settings auto-saved to backend')
+            console.log('✅ Camera settings auto-saved to backend')
             if (setSettings) {
               setSettings(updated)
             }
+          } else {
+            console.error('❌ Backend save failed with status:', response.status)
           }
-        }).catch(err => console.error('Backend auto-save failed:', err))
+        }).catch(err => console.error('❌ Backend auto-save failed:', err))
       } catch (err) {
-        console.error('Error auto-saving camera settings:', err)
+        console.error('❌ Error auto-saving camera settings:', err)
       }
     }
   }
