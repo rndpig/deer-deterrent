@@ -103,7 +103,39 @@ function App() {
       <header className="app-header">
         <div className="header-content">
           <h1>🦌 Deer Deterrent System</h1>
-          <AuthButton user={user} signIn={signIn} signOut={signOut} />
+          <div className="header-actions">
+            <button 
+              className="btn-nav"
+              onClick={() => {
+                setActiveTab('dashboard')
+                setShowArchive(false)
+                // Trigger upload modal in Dashboard
+                window.dispatchEvent(new CustomEvent('show-upload-modal'))
+              }}
+            >
+              📤 Upload Image
+            </button>
+            <button 
+              className="btn-nav"
+              onClick={() => {
+                setActiveTab('dashboard')
+                setShowArchive(false)
+                // Show videos view - for now just dashboard
+              }}
+            >
+              🎬 Videos
+            </button>
+            <button 
+              className="btn-nav"
+              onClick={() => {
+                setActiveTab('dashboard')
+                setShowArchive(true)
+              }}
+            >
+              📦 Archive
+            </button>
+            <AuthButton user={user} signIn={signIn} signOut={signOut} />
+          </div>
         </div>
         <nav className="tabs">
           <button 
@@ -122,13 +154,10 @@ function App() {
       </header>
 
       <main className="app-content">
-        {activeTab === 'dashboard' && (
+        {activeTab === 'dashboard' && !showArchive && (
           <Dashboard 
             stats={stats} 
             settings={settings}
-            onShowSettings={() => setActiveTab('settings')}
-            onViewVideos={() => { setActiveTab('dashboard'); setShowArchive(false); }}
-            onViewArchive={() => { setActiveTab('dashboard'); setShowArchive(true); }}
           />
         )}
         {activeTab === 'dashboard' && showArchive && (

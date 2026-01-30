@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './Dashboard.css'
 
-function Dashboard({ stats, settings, onShowSettings, onViewVideos, onViewArchive }) {
+function Dashboard({ stats, settings }) {
   const [snapshots, setSnapshots] = useState([])
   const [loading, setLoading] = useState(true)
   const [timeFilter, setTimeFilter] = useState('last7d') // last24h, last7d, all
@@ -47,6 +47,13 @@ function Dashboard({ stats, settings, onShowSettings, onViewVideos, onViewArchiv
   useEffect(() => {
     loadSnapshots()
   }, [timeFilter, feedbackFilter, cameraFilter])
+
+  // Listen for upload modal trigger from header
+  useEffect(() => {
+    const handleShowUpload = () => setShowUploadModal(true)
+    window.addEventListener('show-upload-modal', handleShowUpload)
+    return () => window.removeEventListener('show-upload-modal', handleShowUpload)
+  }, [])
 
   const loadSnapshots = async () => {
     setLoading(true)
@@ -166,55 +173,21 @@ function Dashboard({ stats, settings, onShowSettings, onViewVideos, onViewArchiv
 
   return (
     <div className="dashboard">
-      {/* Header with stats */}
+      {/* Header with stats and time filters */}
       <div className="dashboard-header">
-        <div className="stats-grid">
-          <div className="stat-card">
-            <h3>Total Snapshots</h3>
-            <p className="stat-value">{snapshots.length}</p>
-            <p className="stat-period">
-              {timeFilter === 'last24h' ? 'Last 24 Hours' : 
-               timeFilter === 'last7d' ? 'Last 7 Days' : 'All Time'}
-            </p>
+        <div className="stats-and-filters">
+          <div className="stats-grid">
+            <div className="stat-card">
+              <h3>Total Snapshots</h3>
+              <p className="stat-value">{snapshots.length}</p>
+            </div>
+            <div className="stat-card">
+              <h3>Deer Detected</h3>
+              <p className="stat-value">{deerCount}</p>
+            </div>
           </div>
-          <div className="stat-card">
-            <h3>Deer Detected</h3>
-            <p className="stat-value">{deerCount}</p>
-            <p className="stat-period">
-              {timeFilter === 'last24h' ? 'Last 24 Hours' : 
-               timeFilter === 'last7d' ? 'Last 7 Days' : 'All Time'}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter controls - compact layout */}
-      <div className="snapshot-controls">
-        <div className="controls-row">
-          <div className="nav-buttons">
-            <button 
-              className="btn-nav"
-              onClick={() => setShowUploadModal(true)}
-            >
-              📤 Upload Image
-            </button>
-            <button 
-              className="btn-nav"
-              onClick={onViewVideos}
-            >
-              🎬 Videos
-            </button>
-            <button 
-              className="btn-nav"
-              onClick={onViewArchive}
-            >
-              📦 Archive
-            </button>
-          </div>
-        </div>
-        
-        <div className="controls-row filters-row">
-          <div className="filter-section">
+          
+          <div className="time-filters">
             <label className="filter-label">Time:</label>
             <div className="filter-buttons">
               <button
@@ -237,53 +210,56 @@ function Dashboard({ stats, settings, onShowSettings, onViewVideos, onViewArchiv
               </button>
             </div>
           </div>
+        </div>
+      </div>
 
-          <div className="filter-section">
-            <label className="filter-label">Show:</label>
-            <div className="filter-buttons">
-              <button
-                className={feedbackFilter === 'all' ? 'active' : ''}
-                onClick={() => setFeedbackFilter('all')}
-              >
-                All
-              </button>
-              <button
-                className={feedbackFilter === 'with_deer' ? 'active' : ''}
-                onClick={() => setFeedbackFilter('with_deer')}
-              >
-                🦌 Deer
-              </button>
-              <button
-                className={feedbackFilter === 'without_deer' ? 'active' : ''}
-                onClick={() => setFeedbackFilter('without_deer')}
-              >
-                No Deer
-              </button>
-            </div>
+      {/* Filter controls */}
+      <div className="snapshot-controls">
+        <div className="filter-section">
+          <label className="filter-label">Show:</label>
+          <div className="filter-buttons">
+            <button
+              className={feedbackFilter === 'all' ? 'active' : ''}
+              onClick={() => setFeedbackFilter('all')}
+            >
+              All
+            </button>
+            <button
+              className={feedbackFilter === 'with_deer' ? 'active' : ''}
+              onClick={() => setFeedbackFilter('with_deer')}
+            >
+              🦌 Deer
+            </button>
+            <button
+              className={feedbackFilter === 'without_deer' ? 'active' : ''}
+              onClick={() => setFeedbackFilter('without_deer')}
+            >
+              No Deer
+            </button>
           </div>
+        </div>
 
-          <div className="filter-section">
-            <label className="filter-label">Camera:</label>
-            <div className="filter-buttons">
-              <button
-                className={cameraFilter === 'all' ? 'active' : ''}
-                onClick={() => setCameraFilter('all')}
-              >
-                All
-              </button>
-              <button
-                className={cameraFilter === '10cea9e4511f' ? 'active' : ''}
-                onClick={() => setCameraFilter('10cea9e4511f')}
-              >
-                Side
-              </button>
-              <button
-                className={cameraFilter === '587a624d3fae' ? 'active' : ''}
-                onClick={() => setCameraFilter('587a624d3fae')}
-              >
-                Driveway
-              </button>
-            </div>
+        <div className="filter-section">
+          <label className="filter-label">Camera:</label>
+          <div className="filter-buttons">
+            <button
+              className={cameraFilter === 'all' ? 'active' : ''}
+              onClick={() => setCameraFilter('all')}
+            >
+              All
+            </button>
+            <button
+              className={cameraFilter === '10cea9e4511f' ? 'active' : ''}
+              onClick={() => setCameraFilter('10cea9e4511f')}
+            >
+              Side
+            </button>
+            <button
+              className={cameraFilter === '587a624d3fae' ? 'active' : ''}
+              onClick={() => setCameraFilter('587a624d3fae')}
+            >
+              Driveway
+            </button>
           </div>
         </div>
       </div>
