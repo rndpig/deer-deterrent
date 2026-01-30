@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import './App.css'
 import './components/Auth.css'
 import Dashboard from './components/Dashboard'
-import Training from './components/Training'
 import Settings from './components/Settings'
 import AuthButton from './components/AuthButton'
 import CombinedArchive from './components/CombinedArchive'
@@ -114,12 +113,6 @@ function App() {
             Dashboard
           </button>
           <button 
-            className={activeTab === 'training' ? 'active' : ''}
-            onClick={() => { setActiveTab('training'); setShowArchive(false); }}
-          >
-            Model Improvement
-          </button>
-          <button 
             className={activeTab === 'settings' ? 'active' : ''}
             onClick={() => setActiveTab('settings')}
           >
@@ -134,12 +127,11 @@ function App() {
             stats={stats} 
             settings={settings}
             onShowSettings={() => setActiveTab('settings')}
-            onViewVideos={() => setActiveTab('training')}
-            onViewArchive={() => { setActiveTab('training'); setShowArchive(true); }}
+            onViewVideos={() => { setActiveTab('dashboard'); setShowArchive(false); }}
+            onViewArchive={() => { setActiveTab('dashboard'); setShowArchive(true); }}
           />
         )}
-        {activeTab === 'training' && !showArchive && <Training initialVideoId={selectedVideoFromArchive} onViewArchive={() => setShowArchive(true)} />}
-        {activeTab === 'training' && showArchive && (
+        {activeTab === 'dashboard' && showArchive && (
           <CombinedArchive 
             onBack={() => setShowArchive(false)} 
             onAnnotate={(videoId) => {

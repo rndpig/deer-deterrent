@@ -6,6 +6,7 @@ function Dashboard({ stats, settings, onShowSettings, onViewVideos, onViewArchiv
   const [loading, setLoading] = useState(true)
   const [timeFilter, setTimeFilter] = useState('last7d') // last24h, last7d, all
   const [feedbackFilter, setFeedbackFilter] = useState('all') // all, with_deer, without_deer
+  const [cameraFilter, setCameraFilter] = useState('all') // all, or specific camera ID
   const [selectedSnapshot, setSelectedSnapshot] = useState(null)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -45,7 +46,7 @@ function Dashboard({ stats, settings, onShowSettings, onViewVideos, onViewArchiv
 
   useEffect(() => {
     loadSnapshots()
-  }, [timeFilter, feedbackFilter])
+  }, [timeFilter, feedbackFilter, cameraFilter])
 
   const loadSnapshots = async () => {
     setLoading(true)
@@ -70,6 +71,11 @@ function Dashboard({ stats, settings, onShowSettings, onViewVideos, onViewArchiv
         const hours = timeFilter === 'last24h' ? 24 : 168
         const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
         allSnapshots = allSnapshots.filter(s => new Date(s.timestamp) > cutoff)
+      }
+      
+      // Apply camera filter
+      if (cameraFilter !== 'all') {
+        allSnapshots = allSnapshots.filter(s => s.camera_id === cameraFilter)
       }
       
       setSnapshots(allSnapshots)
@@ -160,7 +166,7 @@ function Dashboard({ stats, settings, onShowSettings, onViewVideos, onViewArchiv
 
   return (
     <div className="dashboard">
-      {/* Header with stats and controls */}
+      {/* Header with stats */}
       <div className="dashboard-header">
         <div className="stats-grid">
           <div className="stat-card">
@@ -179,92 +185,105 @@ function Dashboard({ stats, settings, onShowSettings, onViewVideos, onViewArchiv
                timeFilter === 'last7d' ? 'Last 7 Days' : 'All Time'}
             </p>
           </div>
-          <div className="stat-card">
-            <h3>Season Status</h3>
-            <p className="stat-value status">
-              {stats?.current_season ? '✅ Active' : '❄️ Off-Season'}
-            </p>
-          </div>
-          <div className="stat-card">
-            <button 
-              className="btn-settings"
-              onClick={onShowSettings}
-              title="Open Settings"
-            >
-              ⚙️ Settings
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* Filter controls */}
+      {/* Filter controls - compact layout */}
       <div className="snapshot-controls">
-        <div className="nav-buttons">
-          <button 
-            className="btn-nav"
-            onClick={() => setShowUploadModal(true)}
-          >
-            📤 Upload Image
-          </button>
-          <button 
-            className="btn-nav"
-            onClick={onViewVideos}
-          >
-            🎬 Videos
-          </button>
-          <button 
-            className="btn-nav"
-            onClick={onViewArchive}
-          >
-            📦 Archive
-          </button>
-        </div>
-
-        <div className="filter-section">
-          <label className="filter-label">Time:</label>
-          <div className="filter-buttons">
-            <button
-              className={timeFilter === 'last24h' ? 'active' : ''}
-              onClick={() => setTimeFilter('last24h')}
+        <div className="controls-row">
+          <div className="nav-buttons">
+            <button 
+              className="btn-nav"
+              onClick={() => setShowUploadModal(true)}
             >
-              Last 24h
+              📤 Upload Image
             </button>
-            <button
-              className={timeFilter === 'last7d' ? 'active' : ''}
-              onClick={() => setTimeFilter('last7d')}
+            <button 
+              className="btn-nav"
+              onClick={onViewVideos}
             >
-              Last 7 Days
+              🎬 Videos
             </button>
-            <button
-              className={timeFilter === 'all' ? 'active' : ''}
-              onClick={() => setTimeFilter('all')}
+            <button 
+              className="btn-nav"
+              onClick={onViewArchive}
             >
-              All Time
+              📦 Archive
             </button>
           </div>
         </div>
+        
+        <div className="controls-row filters-row">
+          <div className="filter-section">
+            <label className="filter-label">Time:</label>
+            <div className="filter-buttons">
+              <button
+                className={timeFilter === 'last24h' ? 'active' : ''}
+                onClick={() => setTimeFilter('last24h')}
+              >
+                Last 24h
+              </button>
+              <button
+                className={timeFilter === 'last7d' ? 'active' : ''}
+                onClick={() => setTimeFilter('last7d')}
+              >
+                Last 7 Days
+              </button>
+              <button
+                className={timeFilter === 'all' ? 'active' : ''}
+                onClick={() => setTimeFilter('all')}
+              >
+                All Time
+              </button>
+            </div>
+          </div>
 
-        <div className="filter-section">
-          <label className="filter-label">Show:</label>
-          <div className="filter-buttons">
-            <button
-              className={feedbackFilter === 'all' ? 'active' : ''}
-              onClick={() => setFeedbackFilter('all')}
-            >
-              All
-            </button>
-            <button
-              className={feedbackFilter === 'with_deer' ? 'active' : ''}
-              onClick={() => setFeedbackFilter('with_deer')}
-            >
-              🦌 Deer
-            </button>
-            <button
-              className={feedbackFilter === 'without_deer' ? 'active' : ''}
-              onClick={() => setFeedbackFilter('without_deer')}
-            >
-              No Deer
-            </button>
+          <div className="filter-section">
+            <label className="filter-label">Show:</label>
+            <div className="filter-buttons">
+              <button
+                className={feedbackFilter === 'all' ? 'active' : ''}
+                onClick={() => setFeedbackFilter('all')}
+              >
+                All
+              </button>
+              <button
+                className={feedbackFilter === 'with_deer' ? 'active' : ''}
+                onClick={() => setFeedbackFilter('with_deer')}
+              >
+                🦌 Deer
+              </button>
+              <button
+                className={feedbackFilter === 'without_deer' ? 'active' : ''}
+                onClick={() => setFeedbackFilter('without_deer')}
+              >
+                No Deer
+              </button>
+            </div>
+          </div>
+
+          <div className="filter-section">
+            <label className="filter-label">Camera:</label>
+            <div className="filter-buttons">
+              <button
+                className={cameraFilter === 'all' ? 'active' : ''}
+                onClick={() => setCameraFilter('all')}
+              >
+                All
+              </button>
+              <button
+                className={cameraFilter === '10cea9e4511f' ? 'active' : ''}
+                onClick={() => setCameraFilter('10cea9e4511f')}
+              >
+                Side
+              </button>
+              <button
+                className={cameraFilter === '587a624d3fae' ? 'active' : ''}
+                onClick={() => setCameraFilter('587a624d3fae')}
+              >
+                Driveway
+              </button>
+            </div>
           </div>
         </div>
       </div>
