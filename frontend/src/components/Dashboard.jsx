@@ -196,7 +196,7 @@ function Dashboard({ stats, settings }) {
                 className={timeFilter === 'last7d' ? 'active' : ''}
                 onClick={() => setTimeFilter('last7d')}
               >
-                Last 7 Days
+                Last 7d
               </button>
               <button
                 className={timeFilter === 'all' ? 'active' : ''}
