@@ -994,17 +994,18 @@
 
   .time-filters .filter-label {
     font-size: 0.8rem;
+    margin-bottom: 0.25rem;
   }
 
   .time-filters .filter-buttons {
-    flex-direction: column;
+    flex-direction: row;
     width: 100%;
-    gap: 0.4rem;
+    gap: 0.5rem;
   }
 
   .time-filters .filter-buttons button {
-    width: 100%;
-    padding: 0.6rem;
+    flex: 1;
+    padding: 0.6rem 0.5rem;
     font-size: 0.8rem;
   }
 
