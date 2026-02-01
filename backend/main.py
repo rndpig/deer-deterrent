@@ -32,6 +32,10 @@ print(f"Project root: {project_root}")
 # Import database module
 import database as db
 
+# Import R2 sync and background sampling (lazy load)
+r2_client = None
+background_sampler = None
+
 # Lazy imports - only load when needed
 detector = None
 
@@ -216,6 +220,63 @@ stats = {
 }
 
 
+def is_within_active_hours(check_time: datetime = None) -> bool:
+    """
+    Check if current time (or provided time) is within active hours.
+    
+    Args:
+        check_time: Time to check, defaults to now
+        
+    Returns:
+        True if within active hours or active hours disabled
+    """
+    if not settings.active_hours_enabled:
+        return True
+    
+    if check_time is None:
+        check_time = datetime.now()
+    
+    current_time = check_time.time()
+    from datetime import time as dt_time
+    start_time = dt_time(settings.active_hours_start, 0)
+    end_time = dt_time(settings.active_hours_end, 0)
+    
+    # Handle overnight period (e.g., 20:00 to 6:00)
+    if start_time > end_time:
+        return current_time >= start_time or current_time <= end_time
+    else:
+        return start_time <= current_time <= end_time
+
+
+def load_r2_client():
+    """Lazy load R2 client if credentials are configured."""
+    global r2_client
+    if r2_client is None:
+        try:
+            from src.services.r2_sync import get_r2_client
+            r2_client = get_r2_client()
+            if r2_client:
+                logger.info("R2 storage client initialized")
+            else:
+                logger.info("R2 credentials not configured, backup disabled")
+        except Exception as e:
+            logger.error(f"Failed to initialize R2 client: {e}")
+    return r2_client
+
+
+def load_background_sampler():
+    """Lazy load background sampler."""
+    global background_sampler
+    if background_sampler is None:
+        try:
+            from src.services.background_sampler import BackgroundSampler
+            background_sampler = BackgroundSampler(settings.dict())
+            logger.info("Background sampler initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize background sampler: {e}")
+    return background_sampler
+
+
 async def auto_archive_task():
     """Background task to periodically archive old snapshots."""
     while True:
@@ -232,6 +293,51 @@ async def auto_archive_task():
             logger.error(f"Error in auto-archive task: {e}")
 
 
+async def r2_sync_task():
+    """Background task to sync new snapshots to R2 storage."""
+    while True:
+        try:
+            # Wait 5 minutes before first run, then every 15 minutes
+            await asyncio.sleep(300)  # 5 minutes
+            
+            client = load_r2_client()
+            if not client:
+                # No R2 configured, skip sync
+                await asyncio.sleep(900)  # Check again in 15 minutes
+                continue
+            
+            # Get snapshots from last 24 hours that haven't been synced
+            # (In production, add a 'synced_to_r2' column to track this)
+            from datetime import timedelta
+            cutoff = (datetime.now() - timedelta(hours=24)).isoformat()
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM ring_events 
+                WHERE snapshot_path IS NOT NULL 
+                AND timestamp > ?
+                AND archived = 0
+                ORDER BY timestamp DESC
+                LIMIT 100
+            """, (cutoff,))
+            
+            snapshots = [dict(row) for row in cursor.fetchall()]
+            conn.close()
+            
+            if snapshots:
+                snapshot_dir = Path("/app/data/ring_snapshots") if Path("/app").exists() else Path("data/ring_snapshots")
+                results = client.sync_snapshots_batch(snapshots, snapshot_dir)
+                logger.info(f"R2 sync: uploaded={results['uploaded']}, failed={results['failed']}, skipped={results['skipped']}")
+            
+            # Wait 15 minutes before next sync
+            await asyncio.sleep(900)
+            
+        except Exception as e:
+            logger.error(f"Error in R2 sync task: {e}")
+            await asyncio.sleep(900)
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize detector on startup."""
@@ -240,6 +346,9 @@ async def startup_event():
     # Start background task for auto-archiving snapshots
     asyncio.create_task(auto_archive_task())
     print("✓ Auto-archive task started")
+    # Start R2 sync task
+    asyncio.create_task(r2_sync_task())
+    print("✓ R2 sync task started")
 
 
 @app.get("/")
@@ -555,9 +664,34 @@ async def test_detection(
     threshold: float = Form(0.6),
     save_to_database: bool = Form(False),
     camera_id: str = Form(None),
-    captured_at: str = Form(None)
+    captured_at: str = Form(None),
+    force_detection: bool = Form(False)  # Allow bypassing active hours check for manual uploads
 ):
-    """Test deer detection on an uploaded image and optionally save to database."""
+    """
+    Test deer detection on an uploaded image and optionally save to database.
+    Respects active hours unless force_detection=True (for manual uploads).
+    """
+    # Check if we should process this snapshot based on active hours
+    if not force_detection and not is_within_active_hours():
+        logger.info("Snapshot received outside active hours, skipping detection")
+        return {
+            "deer_detected": False,
+            "max_confidence": 0.0,
+            "detections": [],
+            "detection_count": 0,
+            "threshold_used": threshold,
+            "skipped_reason": "outside_active_hours",
+            "saved_event_id": None
+        }
+    
+    # Check if this should be a background sample (weekly random sampling)
+    is_background_sample = False
+    if camera_id:
+        sampler = load_background_sampler()
+        if sampler and sampler.should_sample_now(camera_id):
+            is_background_sample = True
+            logger.info(f"Marking snapshot as weekly background sample for camera {camera_id}")
+    
     detector_obj = load_detector()
     if not detector_obj:
         raise HTTPException(status_code=503, detail="Detector not initialized")
@@ -637,7 +771,7 @@ async def test_detection(
             # Create database entry
             event_data = {
                 'camera_id': final_camera_id,
-                'event_type': 'manual_upload',
+                'event_type': 'weekly_background_sample' if is_background_sample else 'manual_upload',
                 'timestamp': timestamp.isoformat(),
                 'snapshot_available': 1,
                 'snapshot_size': len(contents),
@@ -649,7 +783,17 @@ async def test_detection(
             }
             
             saved_event_id = db.create_ring_event(event_data)
-            logger.info(f"Saved manual upload to database as event {saved_event_id} (camera: {final_camera_id}, time: {timestamp.isoformat()})")
+            logger.info(f"Saved {'background sample' if is_background_sample else 'manual upload'} to database as event {saved_event_id} (camera: {final_camera_id}, time: {timestamp.isoformat()})")
+            
+            # Sync to R2 if configured
+            r2 = load_r2_client()
+            if r2:
+                try:
+                    success = r2.upload_snapshot_with_metadata(snapshot_path, {**event_data, 'id': saved_event_id})
+                    if success:
+                        logger.info(f"Synced snapshot {saved_event_id} to R2")
+                except Exception as e:
+                    logger.error(f"Failed to sync to R2: {e}")
         
         return {
             "deer_detected": deer_detected,
@@ -776,6 +920,64 @@ async def create_detection(event_data: dict):
 async def get_settings():
     """Get current system settings."""
     return settings
+
+
+@app.get("/api/settings/active-hours-status")
+async def get_active_hours_status():
+    """Check if current time is within active hours."""
+    is_active = is_within_active_hours()
+    current_time = datetime.now()
+    
+    return {
+        "is_active_hours": is_active,
+        "current_time": current_time.isoformat(),
+        "settings": {
+            "enabled": settings.active_hours_enabled,
+            "start_hour": settings.active_hours_start,
+            "end_hour": settings.active_hours_end
+        }
+    }
+
+
+@app.post("/api/storage/r2-sync")
+async def trigger_r2_sync(hours: int = 24, limit: int = 100):
+    """Manually trigger R2 sync for recent snapshots."""
+    client = load_r2_client()
+    if not client:
+        raise HTTPException(status_code=503, detail="R2 storage not configured")
+    
+    # Get recent snapshots
+    from datetime import timedelta
+    cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
+    
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    cursor.execute(\"\"\"
+        SELECT * FROM ring_events 
+        WHERE snapshot_path IS NOT NULL 
+        AND timestamp > ?
+        ORDER BY timestamp DESC
+        LIMIT ?
+    \"\"\", (cutoff, limit))
+    
+    snapshots = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    if not snapshots:
+        return {
+            "success": True,
+            "message": "No snapshots to sync",
+            "results": {'uploaded': 0, 'failed': 0, 'skipped': 0}
+        }
+    
+    snapshot_dir = Path(\"/app/data/ring_snapshots\") if Path(\"/app\").exists() else Path(\"data/ring_snapshots\")
+    results = client.sync_snapshots_batch(snapshots, snapshot_dir)
+    
+    return {
+        "success": True,
+        "message": f\"Synced {results['uploaded']} snapshots to R2\",
+        "results": results
+    }
 
 
 @app.put("/api/settings")
