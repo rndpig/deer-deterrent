@@ -154,6 +154,12 @@ def init_database():
         print("✓ Added 'archived' column to ring_events table")
         logger.info("Added 'archived' column to ring_events table")
     
+    # Migration: Add detection_bboxes column to store bbox data as JSON
+    if 'detection_bboxes' not in ring_columns:
+        cursor.execute("ALTER TABLE ring_events ADD COLUMN detection_bboxes TEXT")
+        print("✓ Added 'detection_bboxes' column to ring_events table")
+        logger.info("Added 'detection_bboxes' column to ring_events table")
+    
     conn.commit()
     conn.close()
     
@@ -770,7 +776,7 @@ def create_ring_event(event_data: dict) -> int:
 
 def update_ring_event_result(event_id: int, processed: bool = True, 
                              deer_detected: bool = None, confidence: float = None,
-                             error_message: str = None):
+                             error_message: str = None, detection_bboxes: list = None):
     """Update Ring event with detection results."""
     conn = get_connection()
     cursor = conn.cursor()
@@ -789,6 +795,10 @@ def update_ring_event_result(event_id: int, processed: bool = True,
     if error_message is not None:
         updates.append("error_message = ?")
         params.append(error_message)
+    
+    if detection_bboxes is not None:
+        updates.append("detection_bboxes = ?")
+        params.append(json.dumps(detection_bboxes))
     
     params.append(event_id)
     
@@ -840,6 +850,16 @@ def get_ring_events_with_snapshots(limit: int = 100, with_deer: bool = None) -> 
     
     cursor.execute(query, (limit,))
     events = [dict(row) for row in cursor.fetchall()]
+    
+    # Parse detection_bboxes from JSON string
+    for event in events:
+        if event.get('detection_bboxes'):
+            try:
+                event['detection_bboxes'] = json.loads(event['detection_bboxes'])
+            except:
+                event['detection_bboxes'] = []
+        else:
+            event['detection_bboxes'] = []
     
     conn.close()
     return events
@@ -910,8 +930,8 @@ def auto_archive_old_snapshots(days: int = 3) -> int:
         WHERE snapshot_path IS NOT NULL 
         AND archived = 0 
         AND timestamp < ?
+        AND deer_detected = 0
     """
-    
     cursor.execute(query, (cutoff,))
     count = cursor.rowcount
     

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './Dashboard.css'
+import BoundingBoxImage from './BoundingBoxImage'
 
 function Dashboard({ stats, settings }) {
   const [snapshots, setSnapshots] = useState([])
@@ -147,20 +148,17 @@ function Dashboard({ stats, settings }) {
 
   const updateSnapshotFeedback = async (snapshotId, hasDeer) => {
     try {
-      const response = await fetch(`${apiUrl}/api/ring-snapshots/${snapshotId}/feedback`, {
-        method: 'PUT',
+      const response = await fetch(`${apiUrl}/api/ring-events/${snapshotId}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deer_detected: hasDeer ? 1 : 0 })
       })
 
       if (response.ok) {
-        // Update local state
-        setSnapshots(prev => prev.map(s => 
-          s.id === snapshotId ? { ...s, deer_detected: hasDeer ? 1 : 0 } : s
-        ))
-        if (selectedSnapshot?.id === snapshotId) {
-          setSelectedSnapshot({ ...selectedSnapshot, deer_detected: hasDeer ? 1 : 0 })
-        }
+        // Close modal
+        setSelectedSnapshot(null)
+        // Reload snapshots to reflect the change
+        loadSnapshots()
       }
     } catch (error) {
       console.error('Error updating feedback:', error)
@@ -279,11 +277,20 @@ function Dashboard({ stats, settings }) {
               onClick={() => setSelectedSnapshot(snapshot)}
             >
               <div className="snapshot-thumbnail">
-                <img
-                  src={`${apiUrl}/api/ring-snapshots/${snapshot.id}/image`}
-                  alt={`Snapshot ${snapshot.id}`}
-                  loading="lazy"
-                />
+                {snapshot.deer_detected ? (
+                  <BoundingBoxImage
+                    src={`${apiUrl}/api/ring-snapshots/${snapshot.id}/image`}
+                    alt={`Snapshot ${snapshot.id}`}
+                    detections={snapshot.detection_bboxes || []}
+                    className="snapshot-img"
+                  />
+                ) : (
+                  <img
+                    src={`${apiUrl}/api/ring-snapshots/${snapshot.id}/image`}
+                    alt={`Snapshot ${snapshot.id}`}
+                    loading="lazy"
+                  />
+                )}
                 {!!snapshot.deer_detected && (
                   <div className="deer-badge">🦌 Deer</div>
                 )}
@@ -381,10 +388,19 @@ function Dashboard({ stats, settings }) {
               ✕
             </button>
             <div className="modal-content">
-              <img 
-                src={`${apiUrl}/api/ring-snapshots/${selectedSnapshot.id}/image`}
-                alt="Snapshot"
-              />
+              {selectedSnapshot.deer_detected ? (
+                <BoundingBoxImage
+                  src={`${apiUrl}/api/ring-snapshots/${selectedSnapshot.id}/image`}
+                  alt="Snapshot"
+                  detections={selectedSnapshot.detection_bboxes || []}
+                  className="modal-img"
+                />
+              ) : (
+                <img 
+                  src={`${apiUrl}/api/ring-snapshots/${selectedSnapshot.id}/image`}
+                  alt="Snapshot"
+                />
+              )}
               <div className="image-info">
                 <div className="info-row">
                   <span className="label">ID:</span>

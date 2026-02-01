@@ -1,0 +1,87 @@
+{
+  "registry_version": "1.0",
+  "created_at": "2026-01-31T19:56:00Z",
+  "description": "Model registry for deer detection models. Tracks all trained models, their performance, and deployment status.",
+  "models": [
+    {
+      "model_id": "yolov8n_baseline",
+      "name": "YOLOv8n - Legacy Production Model",
+      "version": "0.1.0",
+      "framework": "ultralytics_yolov8",
+      "architecture": "yolov8n",
+      "model_path": "models/production/best.pt",
+      "dataset_version": "unknown",
+      "dataset_notes": "Trained on historical dataset, exact composition unknown. Estimated ~1 year of manually annotated data across multiple seasons.",
+      "training_date": "2025-xx-xx",
+      "training_config": {
+        "epochs": "unknown",
+        "batch_size": "unknown",
+        "image_size": 640,
+        "augmentation": "unknown"
+      },
+      "metrics": {
+        "mAP50": null,
+        "mAP50_95": null,
+        "precision": null,
+        "recall": null,
+        "confidence_threshold": 0.75,
+        "notes": "Metrics to be benchmarked on v1.0_baseline dataset"
+      },
+      "performance": {
+        "inference_format": "pytorch",
+        "device": "cpu",
+        "avg_inference_time_ms": "150-200",
+        "model_size_mb": "~30"
+      },
+      "deployment": {
+        "status": "deployed",
+        "environment": "production",
+        "service": "ml-detector",
+        "deployed_at": "2025-xx-xx",
+        "notes": "Currently active production model"
+      },
+      "git_commit": null,
+      "notes": "Original baseline model. Being replaced by YOLO26 with OpenVINO INT8 optimization."
+    }
+  ],
+  "deployment_history": [
+    {
+      "date": "2025-xx-xx",
+      "model_id": "yolov8n_baseline",
+      "action": "deployed",
+      "environment": "production"
+    }
+  ],
+  "dataset_versions": [
+    {
+      "version": "1.0",
+      "name": "v1.0_2026-01-baseline",
+      "path": "data/training_datasets/v1.0_2026-01-baseline",
+      "created_at": "2026-01-31T19:55:59Z",
+      "description": "Initial baseline dataset with manually annotated video frames",
+      "statistics": {
+        "total_images": 258,
+        "train_images": 204,
+        "val_images": 25,
+        "test_images": 29,
+        "total_annotations": 362,
+        "classes": ["deer"],
+        "cameras": ["Driveway", "Side"],
+        "temporal_coverage": "2025-11-17 to 2025-12-11",
+        "seasons": ["fall", "winter"]
+      },
+      "source": {
+        "video_frames": 258,
+        "ring_snapshots": 0,
+        "videos_processed": 13
+      }
+    }
+  ],
+  "next_steps": [
+    "1. Benchmark YOLOv8n baseline on v1.0 dataset: yolo val model=models/production/best.pt data=data/training_datasets/v1.0_2026-01-baseline/data.yaml",
+    "2. Train YOLO26n on v1.0 dataset: yolo detect train data=data/training_datasets/v1.0_2026-01-baseline/data.yaml model=yolo26n.pt epochs=100",
+    "3. Export YOLO26n to OpenVINO INT8: model.export(format='openvino', int8=True)",
+    "4. Benchmark YOLO26 OpenVINO INT8 vs YOLOv8 PyTorch",
+    "5. Deploy YOLO26 INT8 to production after validation"
+  ]
+}

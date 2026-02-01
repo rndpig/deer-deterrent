@@ -315,7 +315,8 @@ async def update_ring_event(event_id: int, update: dict):
         processed=update.get("processed", True),
         deer_detected=update.get("deer_detected"),
         confidence=update.get("confidence"),
-        error_message=update.get("error_message")
+        error_message=update.get("error_message"),
+        detection_bboxes=update.get("detection_bboxes")
     )
     return {"status": "success"}
 
@@ -423,7 +424,8 @@ async def rerun_snapshot_detection(event_id: int, threshold: float = 0.15):
             event_id=event_id,
             processed=True,
             deer_detected=deer_detected,
-            confidence=max_confidence if deer_detected else 0.0
+            confidence=max_confidence if deer_detected else 0.0,
+            detection_bboxes=detections if deer_detected else []
         )
         
         return {
