@@ -182,35 +182,35 @@ function Dashboard({ stats, settings }) {
             <h3>Deer Detected</h3>
             <p className="stat-value">{deerCount}</p>
           </div>
-          
-          <div className="time-filters">
-            <label className="filter-label">Time:</label>
-            <div className="filter-buttons">
-              <button
-                className={timeFilter === 'last24h' ? 'active' : ''}
-                onClick={() => setTimeFilter('last24h')}
-              >
-                Last 24h
-              </button>
-              <button
-                className={timeFilter === 'last7d' ? 'active' : ''}
-                onClick={() => setTimeFilter('last7d')}
-              >
-                Last 7d
-              </button>
-              <button
-                className={timeFilter === 'all' ? 'active' : ''}
-                onClick={() => setTimeFilter('all')}
-              >
-                All Time
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
       {/* Filter controls */}
       <div className="snapshot-controls">
+        <div className="filter-section">
+          <label className="filter-label">Time:</label>
+          <div className="filter-buttons">
+            <button
+              className={timeFilter === 'last24h' ? 'active' : ''}
+              onClick={() => setTimeFilter('last24h')}
+            >
+              Last 24h
+            </button>
+            <button
+              className={timeFilter === 'last7d' ? 'active' : ''}
+              onClick={() => setTimeFilter('last7d')}
+            >
+              Last 7d
+            </button>
+            <button
+              className={timeFilter === 'all' ? 'active' : ''}
+              onClick={() => setTimeFilter('all')}
+            >
+              All Time
+            </button>
+          </div>
+        </div>
+        
         <div className="filter-section">
           <label className="filter-label">Show:</label>
           <div className="filter-buttons">

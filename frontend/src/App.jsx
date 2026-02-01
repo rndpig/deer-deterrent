@@ -15,6 +15,7 @@ function App() {
   const [showArchive, setShowArchive] = useState(false)
   const [selectedVideoFromArchive, setSelectedVideoFromArchive] = useState(null)
   const [ws, setWs] = useState(null)
+  const [showMenu, setShowMenu] = useState(false)
 
   // Connect to WebSocket
   useEffect(() => {
@@ -105,36 +106,56 @@ function App() {
           <h1>🦌 Deer Deterrent System</h1>
           <div className="header-actions">
             <button 
-              className="btn-nav"
-              onClick={() => {
-                setActiveTab('dashboard')
-                setShowArchive(false)
-                // Trigger upload modal in Dashboard
-                window.dispatchEvent(new CustomEvent('show-upload-modal'))
-              }}
+              className="btn-hamburger"
+              onClick={() => setShowMenu(!showMenu)}
+              aria-label="Menu"
             >
-              📤 Upload Image
+              ☰
             </button>
-            <button 
-              className="btn-nav"
-              onClick={() => {
-                setActiveTab('dashboard')
-                setShowArchive(false)
-                // Show videos view - for now just dashboard
-              }}
-            >
-              🎬 Videos
-            </button>
-            <button 
-              className="btn-nav"
-              onClick={() => {
-                setActiveTab('dashboard')
-                setShowArchive(true)
-              }}
-            >
-              📦 Archive
-            </button>
-            <AuthButton user={user} signIn={signIn} signOut={signOut} />
+            {showMenu && (
+              <div className="dropdown-menu">
+                <button 
+                  className="dropdown-item"
+                  onClick={() => {
+                    setActiveTab('dashboard')
+                    setShowArchive(false)
+                    setShowMenu(false)
+                    window.dispatchEvent(new CustomEvent('show-upload-modal'))
+                  }}
+                >
+                  📤 Upload Image
+                </button>
+                <button 
+                  className="dropdown-item"
+                  onClick={() => {
+                    setActiveTab('dashboard')
+                    setShowArchive(false)
+                    setShowMenu(false)
+                  }}
+                >
+                  🎬 Videos
+                </button>
+                <button 
+                  className="dropdown-item"
+                  onClick={() => {
+                    setActiveTab('dashboard')
+                    setShowArchive(true)
+                    setShowMenu(false)
+                  }}
+                >
+                  📦 Archive
+                </button>
+                <button 
+                  className="dropdown-item"
+                  onClick={() => {
+                    signOut()
+                    setShowMenu(false)
+                  }}
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
           </div>
         </div>
         <nav className="tabs">
