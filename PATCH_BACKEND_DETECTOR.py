@@ -145,6 +145,6 @@ This is the fastest fix. Here's the complete patch:
 8. Restart backend:
    sudo systemctl restart deer-backend
 
-9. Test upload again from https://deer.rndpig.com
+9. Test upload again from https://deer-deterrent-rnp.web.app
 
 """)

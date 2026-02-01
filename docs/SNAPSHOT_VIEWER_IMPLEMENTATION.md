@@ -1,7 +1,7 @@
 # Snapshot Viewer Implementation
 
 ## Overview
-Added a snapshot viewer to the web application (Vercel deployment at deer.rndpig.com) to review Ring motion event snapshots and test ML model performance on snapshot images.
+Added a snapshot viewer to the web application (Firebase Hosting at deer-deterrent-rnp.web.app) to review Ring motion event snapshots and test ML model performance on snapshot images.
 
 ## Purpose
 - **Manual Review**: View snapshots as they're collected from Ring motion events
@@ -103,7 +103,7 @@ Added a snapshot viewer to the web application (Vercel deployment at deer.rndpig
 ## User Workflow
 
 ### Access Snapshot Viewer
-1. Navigate to deer.rndpig.com
+1. Navigate to deer-deterrent-rnp.web.app
 2. Login with credentials
 3. Go to "Model Improvement" tab (previously "Model Development")
 4. Click "📸 View Snapshots" button in Video Library header
@@ -158,13 +158,15 @@ git add .
 git commit -m "Add snapshot viewer to Model Development tab"
 git push
 
-# Vercel auto-deploys from main branch
-# Should be live at deer.rndpig.com within 1-2 minutes
+cd frontend
+npm run build
+firebase deploy --only hosting
+# Should be live at deer-deterrent-rnp.web.app within 1-2 minutes
 ```
 
 ### Verify Deployment
-1. Wait for Vercel build to complete
-2. Visit deer.rndpig.com
+1. Wait for Firebase deployment to complete
+2. Visit deer-deterrent-rnp.web.app
 3. Login and navigate to Model Improvement tab
 4. Click "View Snapshots" button
 5. Should see message: "No Snapshots Found" (until motion events occur)
@@ -212,7 +214,7 @@ git push
 ## Next Steps
 
 ### Immediate (After Deployment)
-1. ✅ Deploy frontend changes to Vercel
+1. ✅ Deploy frontend changes to Firebase Hosting
 2. ✅ Verify snapshot viewer loads correctly
 3. ✅ Restart backend to load new API endpoints (if not already done)
 4. ✅ Restart coordinator to start saving snapshots (if not already done)

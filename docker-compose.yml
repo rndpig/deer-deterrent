@@ -13,7 +13,7 @@
 # - Database: PostgreSQL (port 5432)
 # - MQTT Broker: Mosquitto (port 1883)
 # - Ring MQTT: Ring camera integration (port 55123)
-# - Frontend: DISABLED - Now hosted on Vercel (https://deer.rndpig.com)
+# - Frontend: DISABLED - Now hosted on Firebase (https://deer-deterrent-rnp.web.app)
 #
 # Usage:
 #   docker compose up -d
@@ -277,7 +277,7 @@ services:
   # ===========================================================================
   # Frontend - React/Vite Dashboard
   # ===========================================================================
-  # DISABLED: Frontend now hosted on Vercel at https://deer.rndpig.com
+  # DISABLED: Frontend now hosted on Firebase at https://deer-deterrent-rnp.web.app
   # No need to run locally since external dashboard is accessible via Cloudflare Tunnel
   #
   # frontend:

@@ -26,7 +26,7 @@ deer-backend.service ✅ INACTIVE (migrated to Docker)
 Network:             deer-network (bridge mode)
 Backend URL:         http://backend:8000 (Docker service name)
 Coordinator:         Uses Docker service names for all communication
-Frontend:            Vercel (deer.rndpig.com)
+Frontend:            Firebase Hosting (deer-deterrent-rnp.web.app)
 Backend Tunnel:      Cloudflare (deer-api.rndpig.com)
 ```
 

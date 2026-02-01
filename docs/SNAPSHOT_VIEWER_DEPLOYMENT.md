@@ -8,7 +8,7 @@
 
 ## Deployment Steps
 
-### 1. Deploy Frontend to Vercel
+### 1. Deploy Frontend to Firebase Hosting
 ```bash
 # Commit and push changes
 cd "c:\Users\rndpi\Documents\Coding Projects\deer-deterrent"
@@ -22,9 +22,14 @@ git add docs/SNAPSHOT_VIEWER_IMPLEMENTATION.md
 git add docs/SNAPSHOT_VIEWER_DEPLOYMENT.md
 git commit -m "Add snapshot viewer to Model Development tab for testing ML performance on Ring snapshots"
 git push origin main
+
+# Build and deploy to Firebase
+cd frontend
+npm run build
+firebase deploy --only hosting
 ```
 
-**Expected Result**: Vercel auto-deploys within 1-2 minutes. Check deer.rndpig.com.
+**Expected Result**: Firebase deploys within 1 minute. Check deer-deterrent-rnp.web.app.
 
 ### 2. Restart Backend (if not already done)
 ```bash
@@ -63,7 +68,7 @@ ls -la data/ring_snapshots/
 **Expected Result**: Directory exists (may be empty until first motion event)
 
 ### 5. Test Frontend Deployment
-1. Visit https://deer.rndpig.com
+1. Visit https://deer-deterrent-rnp.web.app
 2. Login with credentials
 3. Navigate to "Model Improvement" tab
 4. Look for "📸 View Snapshots" button (orange, before "Upload Video")
@@ -104,7 +109,7 @@ ls -la data/ring_snapshots/
 **Expected Result**: Detection runs successfully and results update
 
 ## Verification Checklist
-- [ ] Frontend deployed to Vercel (check build status)
+- [ ] Frontend deployed to Firebase Hosting (check build status)
 - [ ] Backend restarted and running
 - [ ] Coordinator restarted and running
 - [ ] Snapshot directory exists (`data/ring_snapshots/`)
@@ -122,7 +127,7 @@ ls -la data/ring_snapshots/
 **Issue**: "View Snapshots" button doesn't appear
 
 **Solutions**:
-1. Check Vercel build status: https://vercel.com/dashboard
+1. Check Firebase deployment: `firebase deploy --only hosting` in frontend/
 2. Force refresh browser (Ctrl+Shift+R)
 3. Check browser console for errors (F12)
 4. Verify git push succeeded: `git log --oneline -n 5`
@@ -234,7 +239,10 @@ If deployment causes critical issues:
 git revert HEAD
 git push origin main
 
-# Vercel will auto-deploy previous version
+# Re-deploy previous version to Firebase
+cd frontend
+npm run build
+firebase deploy --only hosting
 
 # Backend/coordinator changes are backward compatible
 # (new endpoints don't affect existing functionality)

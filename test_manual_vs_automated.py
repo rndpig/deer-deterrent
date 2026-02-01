@@ -86,7 +86,7 @@ def monitor_manual_upload():
     print("="*80)
     print()
     print("Instructions:")
-    print("1. Go to https://deer.rndpig.com")
+    print("1. Go to https://deer-deterrent-rnp.web.app")
     print("2. Click 'Upload Video' or similar button")
     print("3. Select the Jan 16, 2026 ~11:06 PM video from your Ring app")
     print("4. Upload and wait for processing to complete")

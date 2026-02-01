@@ -10,8 +10,8 @@
 └──────────┬──────────────────────────────────┬───────────────────┘
            │                                  │
     ┌──────▼──────────┐              ┌───────▼────────────┐
-    │  Vercel Cloud   │              │  Cloudflare Edge   │
-    │  deer.rndpig.com│              │  deer-api.rndpig.com│
+    │ Firebase Hosting│              │  Cloudflare Edge   │
+    │deer-deterrent-rnp│             │  deer-api.rndpig.com│
     └──────┬──────────┘              └───────┬────────────┘
            │                                  │
            │ (Frontend React App)             │ (Cloudflare Tunnel)
@@ -27,19 +27,18 @@
 
 ## Component Details
 
-### 1. Frontend (Vercel)
-- **URL**: https://deer.rndpig.com
-- **DNS**: Points to Vercel (vercel-dns-017.com)
+### 1. Frontend (Firebase Hosting)
+- **URL**: https://deer-deterrent-rnp.web.app
 - **Platform**: React + Vite
 - **API URL**: Hardcoded fallback to `https://deer-api.rndpig.com`
-- **Auth**: Google OAuth (handled by Vercel serverless functions in `/api/auth/`)
-- **Deployment**: Auto-deploy on git push to main branch
+- **Auth**: Google OAuth via Firebase Authentication
+- **Deployment**: Manual deploy via `firebase deploy --only hosting`
 - **Local Dev**: `npm run dev` in `frontend/` directory (port 5173)
 
 **Critical Files:**
 - `frontend/src/components/*.jsx` - All use `import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'`
 - `frontend/.env` - Local dev environment (not used in production)
-- `frontend/vercel.json` - Vercel configuration
+- `frontend/firebase.json` - Firebase Hosting configuration
 
 ### 2. Backend API (Dell OptiPlex Server)
 
@@ -243,7 +242,7 @@ git commit -m "Update frontend"
 git push
 
 # 2. Vercel auto-deploys in ~30-60 seconds
-# 3. Check: https://deer.rndpig.com
+# 3. Check: https://deer-deterrent-rnp.web.app
 ```
 
 ### Deploy Systemd Service Changes

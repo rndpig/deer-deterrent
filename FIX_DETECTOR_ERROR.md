@@ -99,7 +99,7 @@ sudo journalctl -u deer-backend -n 20 --no-pager
 ```
 
 ### Step 7: Test upload
-Go to https://deer.rndpig.com and try uploading a video again.
+Go to https://deer-deterrent-rnp.web.app and try uploading a video again.
 
 ---
 
