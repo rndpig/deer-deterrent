@@ -143,7 +143,8 @@ class R2Storage:
             # Resolve snapshot path
             snapshot_path = Path(event['snapshot_path'])
             if not snapshot_path.is_absolute():
-                snapshot_path = snapshot_dir / snapshot_path.name
+                # Path is relative - join with snapshot_dir
+                snapshot_path = snapshot_dir / event['snapshot_path']
             
             if not snapshot_path.exists():
                 logger.warning(f"Snapshot file not found: {snapshot_path}")
@@ -239,6 +240,43 @@ class R2Storage:
         except ClientError as e:
             logger.error(f"Failed to export database: {e}")
             return False
+    
+    def clear_bucket(self) -> Dict:
+        """
+        Delete all objects in the bucket.
+        
+        Returns:
+            Dictionary with deletion results
+        """
+        results = {'deleted': 0, 'failed': 0}
+        
+        try:
+            # List all objects
+            paginator = self.s3_client.get_paginator('list_objects_v2')
+            pages = paginator.paginate(Bucket=self.bucket_name)
+            
+            for page in pages:
+                if 'Contents' not in page:
+                    continue
+                
+                # Delete objects in batches
+                objects = [{'Key': obj['Key']} for obj in page['Contents']]
+                
+                response = self.s3_client.delete_objects(
+                    Bucket=self.bucket_name,
+                    Delete={'Objects': objects}
+                )
+                
+                results['deleted'] += len(response.get('Deleted', []))
+                results['failed'] += len(response.get('Errors', []))
+            
+            logger.info(f"Cleared R2 bucket: {results}")
+            return results
+            
+        except ClientError as e:
+            logger.error(f"Failed to clear bucket: {e}")
+            results['failed'] += 1
+            return results
 
 
 def get_r2_client() -> Optional[R2Storage]:
@@ -264,3 +302,170 @@ def get_r2_client() -> Optional[R2Storage]:
         return None
     
     return R2Storage(account_id, access_key_id, secret_access_key, bucket_name)
+
+
+def sync_training_data(db, r2_client: R2Storage, base_dir: Path) -> Dict:
+    """
+    Sync all training-relevant data to R2.
+    
+    Training data includes:
+    - Manual uploads
+    - Deer detections
+    - False positives marked by user
+    - Weekly background samples
+    - All original videos
+    - All video frames (annotated and unannotated)
+    
+    Args:
+        db: Database instance
+        r2_client: R2Storage client
+        base_dir: Base directory for file paths (usually /app)
+        
+    Returns:
+        Dictionary with sync results
+    """
+    results = {
+        'snapshots': {'uploaded': 0, 'skipped': 0, 'failed': 0},
+        'videos': {'uploaded': 0, 'skipped': 0, 'failed': 0},
+        'frames': {'uploaded': 0, 'skipped': 0, 'failed': 0}
+    }
+    
+    # 1. Sync training-relevant snapshots
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    
+    # Get snapshots that are training-relevant
+    cursor.execute("""
+        SELECT * FROM ring_events 
+        WHERE snapshot_path IS NOT NULL
+        AND (
+            event_type = 'manual_upload' OR
+            deer_detected = 1 OR
+            false_positive = 1 OR
+            event_type = 'weekly_background_sample'
+        )
+        AND archived = 0
+    """)
+    
+    snapshots = [dict(row) for row in cursor.fetchall()]
+    logger.info(f"Found {len(snapshots)} training snapshots to sync")
+    
+    for snapshot in snapshots:
+        snapshot_path = Path(snapshot['snapshot_path'])
+        if not snapshot_path.is_absolute():
+            snapshot_path = base_dir / snapshot_path
+        
+        if not snapshot_path.exists():
+            logger.warning(f"Snapshot file not found: {snapshot_path}")
+            results['snapshots']['failed'] += 1
+            continue
+        
+        # Check if already exists in R2
+        timestamp = datetime.fromisoformat(snapshot['timestamp'])
+        year_month = timestamp.strftime('%Y/%m')
+        remote_key = f"snapshots/{year_month}/{snapshot_path.name}"
+        
+        try:
+            r2_client.s3_client.head_object(Bucket=r2_client.bucket_name, Key=remote_key)
+            results['snapshots']['skipped'] += 1
+            continue
+        except ClientError:
+            pass  # Object doesn't exist, upload it
+        
+        # Upload snapshot
+        if r2_client.upload_snapshot_with_metadata(snapshot_path, snapshot):
+            results['snapshots']['uploaded'] += 1
+        else:
+            results['snapshots']['failed'] += 1
+    
+    # 2. Sync all videos
+    cursor.execute("SELECT * FROM videos WHERE video_path IS NOT NULL")
+    videos = [dict(row) for row in cursor.fetchall()]
+    logger.info(f"Found {len(videos)} videos to sync")
+    
+    for video in videos:
+        video_path = Path(video['video_path'])
+        if not video_path.is_absolute():
+            video_path = base_dir / video_path
+        
+        if not video_path.exists():
+            logger.warning(f"Video file not found: {video_path}")
+            results['videos']['failed'] += 1
+            continue
+        
+        # Organize by upload date
+        upload_date = datetime.fromisoformat(video['upload_date'])
+        year_month = upload_date.strftime('%Y/%m')
+        remote_key = f"videos/{year_month}/{video_path.name}"
+        
+        try:
+            r2_client.s3_client.head_object(Bucket=r2_client.bucket_name, Key=remote_key)
+            results['videos']['skipped'] += 1
+            continue
+        except ClientError:
+            pass
+        
+        # Upload video with metadata
+        metadata = {
+            'video_id': video['id'],
+            'camera': video.get('camera', 'unknown'),
+            'upload_date': video['upload_date'],
+            'duration': str(video.get('duration_seconds', 0))
+        }
+        
+        if r2_client.upload_file(video_path, remote_key, metadata):
+            results['videos']['uploaded'] += 1
+        else:
+            results['videos']['failed'] += 1
+    
+    # 3. Sync all video frames
+    cursor.execute("""
+        SELECT f.*, v.upload_date as video_upload_date 
+        FROM frames f
+        JOIN videos v ON f.video_id = v.id
+        WHERE f.image_path IS NOT NULL
+    """)
+    frames = [dict(row) for row in cursor.fetchall()]
+    logger.info(f"Found {len(frames)} frames to sync")
+    
+    for frame in frames:
+        frame_path = Path(frame['image_path'])
+        if not frame_path.is_absolute():
+            frame_path = base_dir / frame_path
+        
+        if not frame_path.exists():
+            logger.warning(f"Frame file not found: {frame_path}")
+            results['frames']['failed'] += 1
+            continue
+        
+        # Organize by video upload date
+        upload_date = datetime.fromisoformat(frame['video_upload_date'])
+        year_month = upload_date.strftime('%Y/%m')
+        remote_key = f"frames/{year_month}/{frame_path.name}"
+        
+        try:
+            r2_client.s3_client.head_object(Bucket=r2_client.bucket_name, Key=remote_key)
+            results['frames']['skipped'] += 1
+            continue
+        except ClientError:
+            pass
+        
+        # Upload frame with metadata
+        metadata = {
+            'frame_id': frame['id'],
+            'video_id': frame['video_id'],
+            'frame_number': frame['frame_number'],
+            'has_deer': str(frame.get('has_deer', 0)),
+            'selected_for_training': str(frame.get('selected_for_training', 0))
+        }
+        
+        if r2_client.upload_file(frame_path, remote_key, metadata):
+            results['frames']['uploaded'] += 1
+        else:
+            results['frames']['failed'] += 1
+    
+    conn.close()
+    
+    logger.info(f"Sync complete: {results}")
+    return results
+

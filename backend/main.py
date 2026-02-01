@@ -32,12 +32,9 @@ print(f"Project root: {project_root}")
 # Import database module
 import database as db
 
-# Import R2 sync and background sampling (lazy load)
-r2_client = None
-background_sampler = None
-
 # Lazy imports - only load when needed
 detector = None
+r2_storage = None
 
 def load_detector():
     """Lazy load detector to avoid import errors if dependencies not installed."""
@@ -72,6 +69,26 @@ def load_detector():
             print("  Running in demo mode - detection features disabled")
     return detector
 
+def load_r2_storage():
+    """Lazy load R2 storage client."""
+    global r2_storage
+    if r2_storage is None:
+        try:
+            from src.services.r2_sync import R2Storage
+            account_id = os.getenv('R2_ACCOUNT_ID')
+            access_key = os.getenv('R2_ACCESS_KEY_ID')
+            secret_key = os.getenv('R2_SECRET_ACCESS_KEY')
+            bucket_name = os.getenv('R2_BUCKET_NAME', 'deer-deterrent')
+            
+            if account_id and access_key and secret_key:
+                r2_storage = R2Storage(account_id, access_key, secret_key, bucket_name)
+                logger.info(f"R2 storage client initialized: {bucket_name}")
+            else:
+                logger.warning("R2 credentials not configured - backup disabled")
+        except Exception as e:
+            logger.error(f"Failed to initialize R2 storage: {e}")
+    return r2_storage
+
 try:
     import cv2
     import numpy as np
@@ -102,6 +119,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:5173",
         "https://deer-deterrent-rnp.web.app",
+        "https://deer.rndpig.com",
         "https://deer-deterrent.vercel.app"
     ],
     allow_credentials=True,
@@ -220,63 +238,6 @@ stats = {
 }
 
 
-def is_within_active_hours(check_time: datetime = None) -> bool:
-    """
-    Check if current time (or provided time) is within active hours.
-    
-    Args:
-        check_time: Time to check, defaults to now
-        
-    Returns:
-        True if within active hours or active hours disabled
-    """
-    if not settings.active_hours_enabled:
-        return True
-    
-    if check_time is None:
-        check_time = datetime.now()
-    
-    current_time = check_time.time()
-    from datetime import time as dt_time
-    start_time = dt_time(settings.active_hours_start, 0)
-    end_time = dt_time(settings.active_hours_end, 0)
-    
-    # Handle overnight period (e.g., 20:00 to 6:00)
-    if start_time > end_time:
-        return current_time >= start_time or current_time <= end_time
-    else:
-        return start_time <= current_time <= end_time
-
-
-def load_r2_client():
-    """Lazy load R2 client if credentials are configured."""
-    global r2_client
-    if r2_client is None:
-        try:
-            from src.services.r2_sync import get_r2_client
-            r2_client = get_r2_client()
-            if r2_client:
-                logger.info("R2 storage client initialized")
-            else:
-                logger.info("R2 credentials not configured, backup disabled")
-        except Exception as e:
-            logger.error(f"Failed to initialize R2 client: {e}")
-    return r2_client
-
-
-def load_background_sampler():
-    """Lazy load background sampler."""
-    global background_sampler
-    if background_sampler is None:
-        try:
-            from src.services.background_sampler import BackgroundSampler
-            background_sampler = BackgroundSampler(settings.dict())
-            logger.info("Background sampler initialized")
-        except Exception as e:
-            logger.error(f"Failed to initialize background sampler: {e}")
-    return background_sampler
-
-
 async def auto_archive_task():
     """Background task to periodically archive old snapshots."""
     while True:
@@ -293,51 +254,6 @@ async def auto_archive_task():
             logger.error(f"Error in auto-archive task: {e}")
 
 
-async def r2_sync_task():
-    """Background task to sync new snapshots to R2 storage."""
-    while True:
-        try:
-            # Wait 5 minutes before first run, then every 15 minutes
-            await asyncio.sleep(300)  # 5 minutes
-            
-            client = load_r2_client()
-            if not client:
-                # No R2 configured, skip sync
-                await asyncio.sleep(900)  # Check again in 15 minutes
-                continue
-            
-            # Get snapshots from last 24 hours that haven't been synced
-            # (In production, add a 'synced_to_r2' column to track this)
-            from datetime import timedelta
-            cutoff = (datetime.now() - timedelta(hours=24)).isoformat()
-            
-            conn = db.get_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT * FROM ring_events 
-                WHERE snapshot_path IS NOT NULL 
-                AND timestamp > ?
-                AND archived = 0
-                ORDER BY timestamp DESC
-                LIMIT 100
-            """, (cutoff,))
-            
-            snapshots = [dict(row) for row in cursor.fetchall()]
-            conn.close()
-            
-            if snapshots:
-                snapshot_dir = Path("/app/data/ring_snapshots") if Path("/app").exists() else Path("data/ring_snapshots")
-                results = client.sync_snapshots_batch(snapshots, snapshot_dir)
-                logger.info(f"R2 sync: uploaded={results['uploaded']}, failed={results['failed']}, skipped={results['skipped']}")
-            
-            # Wait 15 minutes before next sync
-            await asyncio.sleep(900)
-            
-        except Exception as e:
-            logger.error(f"Error in R2 sync task: {e}")
-            await asyncio.sleep(900)
-
-
 @app.on_event("startup")
 async def startup_event():
     """Initialize detector on startup."""
@@ -346,9 +262,6 @@ async def startup_event():
     # Start background task for auto-archiving snapshots
     asyncio.create_task(auto_archive_task())
     print("✓ Auto-archive task started")
-    # Start R2 sync task
-    asyncio.create_task(r2_sync_task())
-    print("✓ R2 sync task started")
 
 
 @app.get("/")
@@ -430,7 +343,7 @@ async def update_ring_event(event_id: int, update: dict):
     return {"status": "success"}
 
 
-@app.get("/api/ring-snapshots")
+@app.get("/api/snapshots")
 async def get_ring_snapshots(limit: int = 100, with_deer: bool = None):
     """Get Ring snapshots with metadata."""
     events = db.get_ring_events_with_snapshots(limit=limit, with_deer=with_deer)
@@ -455,7 +368,7 @@ async def get_ring_snapshots(limit: int = 100, with_deer: bool = None):
     }
 
 
-@app.get("/api/ring-snapshots/{event_id}/image")
+@app.get("/api/snapshots/{event_id}/image")
 async def get_snapshot_image(event_id: int):
     """Serve snapshot image file."""
     event = db.get_ring_event_by_id(event_id)
@@ -478,7 +391,7 @@ async def get_snapshot_image(event_id: int):
     )
 
 
-@app.post("/api/ring-snapshots/{event_id}/rerun-detection")
+@app.post("/api/snapshots/{event_id}/rerun-detection")
 async def rerun_snapshot_detection(event_id: int, threshold: float = 0.15):
     """Re-run ML detection on a saved snapshot."""
     detector_obj = load_detector()
@@ -555,7 +468,7 @@ async def rerun_snapshot_detection(event_id: int, threshold: float = 0.15):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/ring-snapshots/archived")
+@app.get("/api/snapshots/archived")
 async def get_archived_snapshots(limit: int = 1000):
     """Get archived Ring snapshots."""
     events = db.get_archived_ring_snapshots(limit=limit)
@@ -567,7 +480,7 @@ async def get_archived_snapshots(limit: int = 1000):
     }
 
 
-@app.post("/api/ring-snapshots/{event_id}/archive")
+@app.post("/api/snapshots/{event_id}/archive")
 async def archive_snapshot(event_id: int):
     """Archive a Ring snapshot."""
     success = db.archive_ring_snapshot(event_id)
@@ -578,7 +491,7 @@ async def archive_snapshot(event_id: int):
     return {"success": True, "event_id": event_id, "archived": True}
 
 
-@app.post("/api/ring-snapshots/{event_id}/unarchive")
+@app.post("/api/snapshots/{event_id}/unarchive")
 async def unarchive_snapshot(event_id: int):
     """Unarchive a Ring snapshot."""
     success = db.unarchive_ring_snapshot(event_id)
@@ -664,34 +577,9 @@ async def test_detection(
     threshold: float = Form(0.6),
     save_to_database: bool = Form(False),
     camera_id: str = Form(None),
-    captured_at: str = Form(None),
-    force_detection: bool = Form(False)  # Allow bypassing active hours check for manual uploads
+    captured_at: str = Form(None)
 ):
-    """
-    Test deer detection on an uploaded image and optionally save to database.
-    Respects active hours unless force_detection=True (for manual uploads).
-    """
-    # Check if we should process this snapshot based on active hours
-    if not force_detection and not is_within_active_hours():
-        logger.info("Snapshot received outside active hours, skipping detection")
-        return {
-            "deer_detected": False,
-            "max_confidence": 0.0,
-            "detections": [],
-            "detection_count": 0,
-            "threshold_used": threshold,
-            "skipped_reason": "outside_active_hours",
-            "saved_event_id": None
-        }
-    
-    # Check if this should be a background sample (weekly random sampling)
-    is_background_sample = False
-    if camera_id:
-        sampler = load_background_sampler()
-        if sampler and sampler.should_sample_now(camera_id):
-            is_background_sample = True
-            logger.info(f"Marking snapshot as weekly background sample for camera {camera_id}")
-    
+    """Test deer detection on an uploaded image and optionally save to database."""
     detector_obj = load_detector()
     if not detector_obj:
         raise HTTPException(status_code=503, detail="Detector not initialized")
@@ -771,7 +659,7 @@ async def test_detection(
             # Create database entry
             event_data = {
                 'camera_id': final_camera_id,
-                'event_type': 'weekly_background_sample' if is_background_sample else 'manual_upload',
+                'event_type': 'manual_upload',
                 'timestamp': timestamp.isoformat(),
                 'snapshot_available': 1,
                 'snapshot_size': len(contents),
@@ -783,17 +671,7 @@ async def test_detection(
             }
             
             saved_event_id = db.create_ring_event(event_data)
-            logger.info(f"Saved {'background sample' if is_background_sample else 'manual upload'} to database as event {saved_event_id} (camera: {final_camera_id}, time: {timestamp.isoformat()})")
-            
-            # Sync to R2 if configured
-            r2 = load_r2_client()
-            if r2:
-                try:
-                    success = r2.upload_snapshot_with_metadata(snapshot_path, {**event_data, 'id': saved_event_id})
-                    if success:
-                        logger.info(f"Synced snapshot {saved_event_id} to R2")
-                except Exception as e:
-                    logger.error(f"Failed to sync to R2: {e}")
+            logger.info(f"Saved manual upload to database as event {saved_event_id} (camera: {final_camera_id}, time: {timestamp.isoformat()})")
         
         return {
             "deer_detected": deer_detected,
@@ -920,64 +798,6 @@ async def create_detection(event_data: dict):
 async def get_settings():
     """Get current system settings."""
     return settings
-
-
-@app.get("/api/settings/active-hours-status")
-async def get_active_hours_status():
-    """Check if current time is within active hours."""
-    is_active = is_within_active_hours()
-    current_time = datetime.now()
-    
-    return {
-        "is_active_hours": is_active,
-        "current_time": current_time.isoformat(),
-        "settings": {
-            "enabled": settings.active_hours_enabled,
-            "start_hour": settings.active_hours_start,
-            "end_hour": settings.active_hours_end
-        }
-    }
-
-
-@app.post("/api/storage/r2-sync")
-async def trigger_r2_sync(hours: int = 24, limit: int = 100):
-    """Manually trigger R2 sync for recent snapshots."""
-    client = load_r2_client()
-    if not client:
-        raise HTTPException(status_code=503, detail="R2 storage not configured")
-    
-    # Get recent snapshots
-    from datetime import timedelta
-    cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
-    
-    conn = db.get_connection()
-    cursor = conn.cursor()
-    cursor.execute(\"\"\"
-        SELECT * FROM ring_events 
-        WHERE snapshot_path IS NOT NULL 
-        AND timestamp > ?
-        ORDER BY timestamp DESC
-        LIMIT ?
-    \"\"\", (cutoff, limit))
-    
-    snapshots = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    
-    if not snapshots:
-        return {
-            "success": True,
-            "message": "No snapshots to sync",
-            "results": {'uploaded': 0, 'failed': 0, 'skipped': 0}
-        }
-    
-    snapshot_dir = Path(\"/app/data/ring_snapshots\") if Path(\"/app\").exists() else Path(\"data/ring_snapshots\")
-    results = client.sync_snapshots_batch(snapshots, snapshot_dir)
-    
-    return {
-        "success": True,
-        "message": f\"Synced {results['uploaded']} snapshots to R2\",
-        "results": results
-    }
 
 
 @app.put("/api/settings")
@@ -4305,6 +4125,134 @@ async def deploy_latest_model():
             status_code=500,
             detail=f"Failed to deploy model: {e}"
         )
+
+
+@app.post("/api/storage/r2-sync")
+async def trigger_r2_sync(hours: int = 24, limit: int = 100):
+    """
+    Manually trigger R2 sync for recent snapshots.
+    
+    Args:
+        hours: Sync snapshots from last N hours (default: 24)
+        limit: Maximum snapshots to sync (default: 100)
+    """
+    r2 = load_r2_storage()
+    if not r2:
+        raise HTTPException(status_code=503, detail="R2 storage not configured")
+    
+    try:
+        from datetime import timedelta
+        cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
+        
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM ring_events 
+            WHERE snapshot_path IS NOT NULL 
+            AND timestamp > ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (cutoff, limit))
+        
+        snapshots = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        if not snapshots:
+            return {
+                "success": True,
+                "message": "No snapshots to sync",
+                "results": {"uploaded": 0, "failed": 0, "skipped": 0}
+            }
+        
+        # Sync snapshots - snapshot_dir is /app in Docker
+        snapshot_dir = Path("/app")
+        results = r2.sync_snapshots_batch(snapshots, snapshot_dir)
+        
+        return {
+            "success": True,
+            "message": f"Synced {results['uploaded']} snapshots to R2",
+            "results": results
+        }
+        
+    except Exception as e:
+        logger.error(f"R2 sync failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/storage/r2-status")
+async def get_r2_status():
+    """Check R2 storage configuration and connectivity."""
+    r2 = load_r2_storage()
+    
+    if not r2:
+        return {
+            "configured": False,
+            "message": "R2 credentials not set"
+        }
+    
+    try:
+        # Count all objects in bucket
+        total_objects = 0
+        paginator = r2.s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=r2.bucket_name):
+            total_objects += page.get('KeyCount', 0)
+        
+        return {
+            "configured": True,
+            "connected": True,
+            "bucket": r2.bucket_name,
+            "objects_count": total_objects
+        }
+    except Exception as e:
+        return {
+            "configured": True,
+            "connected": False,
+            "error": str(e)
+        }
+
+
+@app.post("/api/storage/r2-clear")
+async def clear_r2_bucket():
+    """Clear all objects from R2 bucket."""
+    r2 = load_r2_storage()
+    
+    if not r2:
+        raise HTTPException(status_code=503, detail="R2 storage not configured")
+    
+    try:
+        results = r2.clear_bucket()
+        return {
+            "success": True,
+            "message": f"Cleared R2 bucket",
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear R2 bucket: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/storage/r2-sync-training")
+async def sync_training_data_to_r2():
+    """Sync all training-relevant data to R2."""
+    from src.services.r2_sync import sync_training_data
+    
+    r2 = load_r2_storage()
+    
+    if not r2:
+        raise HTTPException(status_code=503, detail="R2 storage not configured")
+    
+    try:
+        base_dir = Path("/app")
+        results = sync_training_data(db, r2, base_dir)
+        
+        return {
+            "success": True,
+            "message": "Training data sync complete",
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Failed to sync training data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
