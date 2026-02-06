@@ -14,14 +14,35 @@ function BoundingBoxImage({ src, alt, detections, className, onClick }) {
     const image = imageRef.current
     const ctx = canvas.getContext('2d')
 
-    // Set canvas size to match image DISPLAYED dimensions
+    // Get the img element's layout dimensions (includes letterbox padding area)
     const rect = image.getBoundingClientRect()
     canvas.width = rect.width
     canvas.height = rect.height
 
-    // Calculate scale from natural to displayed size
-    const scaleX = rect.width / image.naturalWidth
-    const scaleY = rect.height / image.naturalHeight
+    // Calculate how object-fit: contain renders the image within the element.
+    // The actual rendered image may be smaller than the element, centered with
+    // letterbox padding on sides or top/bottom.
+    const naturalAspect = image.naturalWidth / image.naturalHeight
+    const containerAspect = rect.width / rect.height
+
+    let renderedWidth, renderedHeight, offsetX, offsetY
+
+    if (naturalAspect > containerAspect) {
+      // Image is wider than container — fits width, letterboxed top/bottom
+      renderedWidth = rect.width
+      renderedHeight = rect.width / naturalAspect
+      offsetX = 0
+      offsetY = (rect.height - renderedHeight) / 2
+    } else {
+      // Image is taller (or same) — fits height, letterboxed left/right
+      renderedHeight = rect.height
+      renderedWidth = rect.height * naturalAspect
+      offsetX = (rect.width - renderedWidth) / 2
+      offsetY = 0
+    }
+
+    // Uniform scale from natural image pixels to rendered area
+    const scale = renderedWidth / image.naturalWidth
 
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -29,7 +50,6 @@ function BoundingBoxImage({ src, alt, detections, className, onClick }) {
     // Draw bounding boxes
     detections.forEach((detection) => {
       const bbox = detection.bbox
-      const confidence = detection.confidence
 
       let x, y, width, height
 
@@ -37,26 +57,20 @@ function BoundingBoxImage({ src, alt, detections, className, onClick }) {
       // or in pixel format {x1, y1, x2, y2}
       if (Array.isArray(bbox)) {
         // YOLO normalized format: [x_center, y_center, width, height] (all normalized 0-1)
-        // Convert to natural pixel coordinates first, then scale to displayed size
-        const x_center_natural = bbox[0] * image.naturalWidth
-        const y_center_natural = bbox[1] * image.naturalHeight
-        const width_natural = bbox[2] * image.naturalWidth
-        const height_natural = bbox[3] * image.naturalHeight
-        const x_natural = x_center_natural - width_natural / 2
-        const y_natural = y_center_natural - height_natural / 2
-        
-        // Scale to displayed size
-        x = x_natural * scaleX
-        y = y_natural * scaleY
-        width = width_natural * scaleX
-        height = height_natural * scaleY
+        const x_center = bbox[0] * image.naturalWidth
+        const y_center = bbox[1] * image.naturalHeight
+        const w = bbox[2] * image.naturalWidth
+        const h = bbox[3] * image.naturalHeight
+        x = offsetX + (x_center - w / 2) * scale
+        y = offsetY + (y_center - h / 2) * scale
+        width = w * scale
+        height = h * scale
       } else if (bbox.x1 !== undefined) {
         // Pixel coordinate format: {x1, y1, x2, y2} - already in natural dimensions
-        // Just need to scale from natural to displayed size
-        x = bbox.x1 * scaleX
-        y = bbox.y1 * scaleY
-        width = (bbox.x2 - bbox.x1) * scaleX
-        height = (bbox.y2 - bbox.y1) * scaleY
+        x = offsetX + bbox.x1 * scale
+        y = offsetY + bbox.y1 * scale
+        width = (bbox.x2 - bbox.x1) * scale
+        height = (bbox.y2 - bbox.y1) * scale
       } else {
         return // Skip invalid bbox
       }
