@@ -1,86 +1,117 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import './BoundingBoxImage.css'
 
 function BoundingBoxImage({ src, alt, detections, className, onClick }) {
   const canvasRef = useRef(null)
   const imageRef = useRef(null)
+  const containerRef = useRef(null)
   const [imageLoaded, setImageLoaded] = useState(false)
 
-  // Draw bounding boxes when image loads or detections change
-  useEffect(() => {
-    if (!imageLoaded || !detections || detections.length === 0 || !canvasRef.current || !imageRef.current) return
+  const drawBboxes = useCallback(() => {
+    if (!detections || detections.length === 0 || !canvasRef.current || !imageRef.current || !containerRef.current) return
 
     const canvas = canvasRef.current
     const image = imageRef.current
+    const container = containerRef.current
     const ctx = canvas.getContext('2d')
 
-    // Get the img element's layout dimensions (includes letterbox padding area)
-    const rect = image.getBoundingClientRect()
-    canvas.width = rect.width
-    canvas.height = rect.height
+    // Safety: ensure natural dimensions are available
+    if (!image.naturalWidth || !image.naturalHeight) return
 
-    // Calculate how object-fit: contain renders the image within the element.
-    // The actual rendered image may be smaller than the element, centered with
-    // letterbox padding on sides or top/bottom.
-    const naturalAspect = image.naturalWidth / image.naturalHeight
-    const containerAspect = rect.width / rect.height
+    // Use the CONTAINER's rect for canvas sizing (the canvas fills the container via CSS).
+    // Round to integers so that canvas.width/height (unsigned long) matches exactly.
+    const containerRect = container.getBoundingClientRect()
+    const canvasW = Math.round(containerRect.width)
+    const canvasH = Math.round(containerRect.height)
 
-    let renderedWidth, renderedHeight, offsetX, offsetY
+    if (canvasW === 0 || canvasH === 0) return
 
-    if (naturalAspect > containerAspect) {
-      // Image is wider than container — fits width, letterboxed top/bottom
-      renderedWidth = rect.width
-      renderedHeight = rect.width / naturalAspect
+    // Set canvas pixel buffer AND explicitly override CSS to match exactly.
+    // This prevents any float→int mismatch between buffer and display size.
+    canvas.width = canvasW
+    canvas.height = canvasH
+    canvas.style.width = canvasW + 'px'
+    canvas.style.height = canvasH + 'px'
+
+    // Calculate how object-fit: contain renders the image within the container.
+    // The image content may be smaller than the container, centered with letterbox
+    // padding. We need to know the rendered image area to map bbox pixel coords.
+    const imgNatW = image.naturalWidth
+    const imgNatH = image.naturalHeight
+    const imgAspect = imgNatW / imgNatH
+    const canvasAspect = canvasW / canvasH
+
+    let renderedW, renderedH, offsetX, offsetY
+
+    if (imgAspect > canvasAspect) {
+      // Image is wider → constrained by width, letterboxed top/bottom
+      renderedW = canvasW
+      renderedH = canvasW / imgAspect
       offsetX = 0
-      offsetY = (rect.height - renderedHeight) / 2
+      offsetY = (canvasH - renderedH) / 2
     } else {
-      // Image is taller (or same) — fits height, letterboxed left/right
-      renderedHeight = rect.height
-      renderedWidth = rect.height * naturalAspect
-      offsetX = (rect.width - renderedWidth) / 2
+      // Image is taller or equal → constrained by height, letterboxed left/right
+      renderedH = canvasH
+      renderedW = canvasH * imgAspect
+      offsetX = (canvasW - renderedW) / 2
       offsetY = 0
     }
 
-    // Uniform scale from natural image pixels to rendered area
-    const scale = renderedWidth / image.naturalWidth
+    // Uniform scale from image natural pixels to rendered area
+    const scale = renderedW / imgNatW
 
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    // Clear and draw
+    ctx.clearRect(0, 0, canvasW, canvasH)
 
-    // Draw bounding boxes
     detections.forEach((detection) => {
       const bbox = detection.bbox
+      if (!bbox) return
 
-      let x, y, width, height
+      let x, y, w, h
 
-      // Check if bbox is in YOLO normalized format [x_center, y_center, width, height]
-      // or in pixel format {x1, y1, x2, y2}
       if (Array.isArray(bbox)) {
-        // YOLO normalized format: [x_center, y_center, width, height] (all normalized 0-1)
-        const x_center = bbox[0] * image.naturalWidth
-        const y_center = bbox[1] * image.naturalHeight
-        const w = bbox[2] * image.naturalWidth
-        const h = bbox[3] * image.naturalHeight
-        x = offsetX + (x_center - w / 2) * scale
-        y = offsetY + (y_center - h / 2) * scale
-        width = w * scale
-        height = h * scale
+        // YOLO normalized format: [x_center, y_center, width, height] (0-1)
+        const cx = bbox[0] * imgNatW
+        const cy = bbox[1] * imgNatH
+        const bw = bbox[2] * imgNatW
+        const bh = bbox[3] * imgNatH
+        x = offsetX + (cx - bw / 2) * scale
+        y = offsetY + (cy - bh / 2) * scale
+        w = bw * scale
+        h = bh * scale
       } else if (bbox.x1 !== undefined) {
-        // Pixel coordinate format: {x1, y1, x2, y2} - already in natural dimensions
+        // Pixel coordinate format: {x1, y1, x2, y2}
         x = offsetX + bbox.x1 * scale
         y = offsetY + bbox.y1 * scale
-        width = (bbox.x2 - bbox.x1) * scale
-        height = (bbox.y2 - bbox.y1) * scale
+        w = (bbox.x2 - bbox.x1) * scale
+        h = (bbox.y2 - bbox.y1) * scale
       } else {
-        return // Skip invalid bbox
+        return
       }
 
       // Draw green bounding box
       ctx.strokeStyle = '#00ff00'
       ctx.lineWidth = 2
-      ctx.strokeRect(x, y, width, height)
+      ctx.strokeRect(x, y, w, h)
+
+      // Draw confidence label if available
+      if (detection.confidence) {
+        const label = `${Math.round(detection.confidence * 100)}%`
+        ctx.font = '12px sans-serif'
+        ctx.fillStyle = '#00ff00'
+        const textW = ctx.measureText(label).width
+        ctx.fillRect(x, y - 16, textW + 6, 16)
+        ctx.fillStyle = '#000'
+        ctx.fillText(label, x + 3, y - 4)
+      }
     })
-  }, [imageLoaded, detections])
+  }, [detections])
+
+  // Draw bounding boxes when image loads or detections change
+  useEffect(() => {
+    if (!imageLoaded) return
+    drawBboxes()
+  }, [imageLoaded, detections, drawBboxes])
 
   const handleImageLoad = () => {
     setImageLoaded(true)
@@ -88,25 +119,25 @@ function BoundingBoxImage({ src, alt, detections, className, onClick }) {
 
   // Handle window resize to redraw boxes
   useEffect(() => {
+    if (!imageLoaded || !detections || detections.length === 0) return
+
     const handleResize = () => {
-      if (imageLoaded && detections && detections.length > 0) {
-        // Trigger redraw
-        setImageLoaded(false)
-        setTimeout(() => setImageLoaded(true), 0)
-      }
+      // Use requestAnimationFrame to ensure layout is settled before redrawing
+      requestAnimationFrame(() => drawBboxes())
     }
 
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [imageLoaded, detections])
+  }, [imageLoaded, detections, drawBboxes])
 
   return (
-    <div className="bounding-box-container" onClick={onClick}>
+    <div className="bounding-box-container" ref={containerRef} onClick={onClick}>
       <img
         ref={imageRef}
         src={src}
         alt={alt}
         className={className}
+        style={{ objectFit: 'contain' }}
         onLoad={handleImageLoad}
       />
       {detections && detections.length > 0 && (

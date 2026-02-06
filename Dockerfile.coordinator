@@ -424,17 +424,19 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
             "irrigation_activated": False
         }
         
-        # Update Ring event with detection result
+        # Update Ring event with detection result (including bboxes for frontend overlay)
         if ring_event_id:
             try:
+                update_payload = {
+                    "processed": True,
+                    "deer_detected": deer_detected,
+                    "confidence": confidence,
+                    "detection_bboxes": detection_result.get("detections", []) if deer_detected else []
+                }
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     await client.patch(
                         f"{CONFIG['BACKEND_API_URL']}/api/ring-events/{ring_event_id}",
-                        json={
-                            "processed": True,
-                            "deer_detected": deer_detected,
-                            "confidence": confidence
-                        }
+                        json=update_payload
                     )
             except Exception as e:
                 logger.error(f"Failed to update Ring event: {e}")
