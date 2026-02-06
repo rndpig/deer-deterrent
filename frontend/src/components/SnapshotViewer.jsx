@@ -41,7 +41,7 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
   const loadSnapshots = async () => {
     setLoading(true)
     try {
-      let url = `${apiUrl}/api/ring-snapshots?limit=2000` // Load more for pagination
+      let url = `${apiUrl}/api/snapshots?limit=2000` // Load more for pagination
       
       if (filter === 'with_deer') {
         url += '&with_deer=true'
@@ -72,7 +72,7 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
     setDetectionRunning(true)
     try {
       const response = await fetch(
-        `${apiUrl}/api/ring-snapshots/${selectedSnapshot.id}/rerun-detection?threshold=${threshold}`,
+        `${apiUrl}/api/snapshots/${selectedSnapshot.id}/rerun-detection?threshold=${threshold}`,
         { method: 'POST' }
       )
 
@@ -299,7 +299,7 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
               >
                 <div className="snapshot-thumbnail">
                   <img
-                    src={`${apiUrl}/api/ring-snapshots/${snapshot.id}/image`}
+                    src={`${apiUrl}/api/snapshots/${snapshot.id}/image`}
                     alt={`Snapshot ${snapshot.id}`}
                     loading="lazy"
                   />
@@ -363,7 +363,7 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
             <div className="modal-content">
               <div className="detail-image">
                 <img
-                  src={`${apiUrl}/api/ring-snapshots/${selectedSnapshot.id}/image`}
+                  src={`${apiUrl}/api/snapshots/${selectedSnapshot.id}/image`}
                   alt={`Snapshot ${selectedSnapshot.id}`}
                 />
                 {selectedSnapshot.detection_result?.detections?.map((det, idx) => (
@@ -385,29 +385,23 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
               </div>
 
               <div className="detail-info-compact">
-                <div className="info-grid">
-                  <div className="info-item">
-                    <span className="label">Camera:</span>
-                    <span className="value">{formatCameraName(selectedSnapshot.camera_id)}</span>
-                  </div>
-                  <div className="info-item">
-                    <span className="label">Time:</span>
-                    <span className="value">{formatTimestamp(selectedSnapshot.timestamp)}</span>
-                  </div>
-                  <div className="info-item">
-                    <span className="label">Deer:</span>
-                    <span className={`value ${selectedSnapshot.deer_detected ? 'detected' : 'not-detected'}`}>
-                      {selectedSnapshot.deer_detected ? '✓ Yes' : '✗ No'}
-                    </span>
-                  </div>
-                  <div className="info-item">
-                    <span className="label">Confidence:</span>
-                    <span className="value">
-                      {selectedSnapshot.detection_confidence !== null && selectedSnapshot.detection_confidence !== undefined
-                        ? `${(selectedSnapshot.detection_confidence * 100).toFixed(1)}%`
-                        : '0.0%'}
-                    </span>
-                  </div>
+                <div className="info-grid-4col">
+                  <span className="label">ID:</span>
+                  <span className="value">#{selectedSnapshot.id}</span>
+                  <span className="label">Camera:</span>
+                  <span className="value">{formatCameraName(selectedSnapshot.camera_id)}</span>
+                  
+                  <span className="label">Time:</span>
+                  <span className="value">{formatTimestamp(selectedSnapshot.timestamp)}</span>
+                  <span className="label">Confidence:</span>
+                  <span className="value">
+                    {selectedSnapshot.detection_confidence !== null && selectedSnapshot.detection_confidence !== undefined
+                      ? `${(selectedSnapshot.detection_confidence * 100).toFixed(1)}%`
+                      : '0.0%'}
+                  </span>
+                  
+                  <span className="label">Model:</span>
+                  <span className="value" style={{ gridColumn: 'span 3' }}>YOLO26n v1.1 OpenVINO FP16</span>
                 </div>
 
                 <div className="detection-controls">

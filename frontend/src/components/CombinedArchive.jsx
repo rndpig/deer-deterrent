@@ -36,7 +36,7 @@ function CombinedArchive({ onBack, onAnnotate }) {
     const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
-      const response = await fetch(`${apiUrl}/api/ring-snapshots/archived`)
+      const response = await fetch(`${apiUrl}/api/snapshots/archived`)
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
@@ -74,7 +74,7 @@ function CombinedArchive({ onBack, onAnnotate }) {
     const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
     
     try {
-      const response = await fetch(`${apiUrl}/api/ring-snapshots/${eventId}/unarchive`, {
+      const response = await fetch(`${apiUrl}/api/snapshots/${eventId}/unarchive`, {
         method: 'POST'
       })
       
@@ -292,7 +292,7 @@ function CombinedArchive({ onBack, onAnnotate }) {
             </div>
             <div className="modal-body">
               <img 
-                src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/ring-snapshots/${selectedSnapshot.event_id}/image`}
+                src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/snapshots/${selectedSnapshot.event_id}/image`}
                 alt="Archived snapshot"
                 className="modal-image"
               />
@@ -333,7 +333,7 @@ function CombinedArchive({ onBack, onAnnotate }) {
             </div>
             <div className="modal-body">
               <img 
-                src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/ring-snapshots/${selectedSnapshot.event_id}/image`}
+                src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/snapshots/${selectedSnapshot.event_id}/image`}
                 alt="Archived snapshot"
                 className="modal-image"
               />

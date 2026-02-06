@@ -223,7 +223,7 @@
   border-radius: 4px;
   font-size: 0.875rem;
   font-weight: 600;
-  text-align: center;
+  text-align: left;
   background: #2563eb;
   color: white;
 }
@@ -431,6 +431,24 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.camera-zone-row-combined {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0;
+}
+
+.camera-zone-row-combined .checkbox-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.camera-zone-row-combined select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .camera-label-compact {

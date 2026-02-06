@@ -14,14 +14,14 @@ function BoundingBoxImage({ src, alt, detections, className, onClick }) {
     const image = imageRef.current
     const ctx = canvas.getContext('2d')
 
-    // Set canvas size to match image display size
+    // Set canvas size to match image DISPLAYED dimensions
     const rect = image.getBoundingClientRect()
     canvas.width = rect.width
     canvas.height = rect.height
 
-    // Get image natural dimensions for scaling
-    const scaleX = canvas.width / image.naturalWidth
-    const scaleY = canvas.height / image.naturalHeight
+    // Calculate scale from natural to displayed size
+    const scaleX = rect.width / image.naturalWidth
+    const scaleY = rect.height / image.naturalHeight
 
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -37,14 +37,22 @@ function BoundingBoxImage({ src, alt, detections, className, onClick }) {
       // or in pixel format {x1, y1, x2, y2}
       if (Array.isArray(bbox)) {
         // YOLO normalized format: [x_center, y_center, width, height] (all normalized 0-1)
-        const x_center = bbox[0] * canvas.width
-        const y_center = bbox[1] * canvas.height
-        width = bbox[2] * canvas.width
-        height = bbox[3] * canvas.height
-        x = x_center - width / 2
-        y = y_center - height / 2
+        // Convert to natural pixel coordinates first, then scale to displayed size
+        const x_center_natural = bbox[0] * image.naturalWidth
+        const y_center_natural = bbox[1] * image.naturalHeight
+        const width_natural = bbox[2] * image.naturalWidth
+        const height_natural = bbox[3] * image.naturalHeight
+        const x_natural = x_center_natural - width_natural / 2
+        const y_natural = y_center_natural - height_natural / 2
+        
+        // Scale to displayed size
+        x = x_natural * scaleX
+        y = y_natural * scaleY
+        width = width_natural * scaleX
+        height = height_natural * scaleY
       } else if (bbox.x1 !== undefined) {
-        // Pixel coordinate format: {x1, y1, x2, y2} - scale to display size
+        // Pixel coordinate format: {x1, y1, x2, y2} - already in natural dimensions
+        // Just need to scale from natural to displayed size
         x = bbox.x1 * scaleX
         y = bbox.y1 * scaleY
         width = (bbox.x2 - bbox.x1) * scaleX

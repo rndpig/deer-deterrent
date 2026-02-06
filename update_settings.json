@@ -1,0 +1,13 @@
+{
+  "confidence_threshold": 0.6,
+  "season_start": "04-01",
+  "season_end": "10-31",
+  "active_hours_enabled": true,
+  "active_hours_start": 20,
+  "active_hours_end": 6,
+  "irrigation_duration": 30,
+  "zone_cooldown": 300,
+  "dry_run": true,
+  "snapshot_archive_days": 3,
+  "enabled_cameras": ["10cea9e4511f", "587a624d3fae"]
+}

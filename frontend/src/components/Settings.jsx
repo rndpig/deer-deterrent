@@ -18,20 +18,9 @@ function Settings({ settings, setSettings }) {
     enabled_cameras: ['10cea9e4511f']  // Default: Side camera only
   }
 
-  // Initialize from localStorage or defaults
-  const getInitialSettings = () => {
-    try {
-      const saved = localStorage.getItem('deer-deterrent-settings')
-      if (saved) {
-        return JSON.parse(saved)
-      }
-    } catch (err) {
-      console.error('Error loading saved settings:', err)
-    }
-    return settings || defaultSettings
-  }
-
-  const [localSettings, setLocalSettings] = useState(getInitialSettings())
+  // Initialize settings from API (passed as prop) or defaults
+  // Do NOT use localStorage on initialization - API is source of truth
+  const [localSettings, setLocalSettings] = useState(settings || defaultSettings)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [rainbirdZones, setRainbirdZones] = useState([])
@@ -135,23 +124,14 @@ function Settings({ settings, setSettings }) {
 
   useEffect(() => {
     if (settings) {
-      // Merge incoming settings with localStorage, preferring localStorage for enabled_cameras
+      // API settings are the definitive source of truth
+      setLocalSettings(settings)
+      console.log('✅ Loaded settings from API (source of truth):', settings)
+      // Update localStorage cache to match API
       try {
-        const saved = localStorage.getItem('deer-deterrent-settings')
-        if (saved) {
-          const savedSettings = JSON.parse(saved)
-          // Prefer localStorage enabled_cameras over incoming settings
-          setLocalSettings({
-            ...settings,
-            enabled_cameras: savedSettings.enabled_cameras || settings.enabled_cameras || ['10cea9e4511f']
-          })
-          console.log('Merged settings with localStorage enabled_cameras:', savedSettings.enabled_cameras)
-        } else {
-          setLocalSettings(settings)
-        }
+        localStorage.setItem('deer-deterrent-settings', JSON.stringify(settings))
       } catch (err) {
-        console.error('Error merging settings:', err)
-        setLocalSettings(settings)
+        console.error('Error caching settings to localStorage:', err)
       }
     }
   }, [settings])
@@ -164,31 +144,33 @@ function Settings({ settings, setSettings }) {
     setLocalSettings(updated)
     console.log(`📝 Field '${field}' changed to:`, value)
     
-    // Auto-save to localStorage immediately for enabled_cameras
+    // Auto-save to backend for critical camera settings
     if (field === 'enabled_cameras') {
-      try {
-        localStorage.setItem('deer-deterrent-settings', JSON.stringify(updated))
-        console.log('✅ Camera settings auto-saved to localStorage:', updated.enabled_cameras)
-        
-        // Auto-save to backend for critical camera settings
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-        fetch(`${apiUrl}/api/settings`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updated)
-        }).then(response => {
-          if (response.ok) {
-            console.log('✅ Camera settings auto-saved to backend')
-            if (setSettings) {
-              setSettings(updated)
-            }
-          } else {
-            console.error('❌ Backend save failed with status:', response.status)
-          }
-        }).catch(err => console.error('❌ Backend auto-save failed:', err))
-      } catch (err) {
-        console.error('❌ Error auto-saving camera settings:', err)
-      }
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+      fetch(`${apiUrl}/api/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      }).then(response => {
+        if (response.ok) {
+          return response.json()
+        } else {
+          throw new Error(`Backend save failed with status: ${response.status}`)
+        }
+      }).then(data => {
+        console.log('✅ Camera settings auto-saved to backend (definitive):', data.settings.enabled_cameras)
+        if (setSettings) {
+          setSettings(data.settings)
+        }
+        // Cache to localStorage after successful backend save
+        try {
+          localStorage.setItem('deer-deterrent-settings', JSON.stringify(data.settings))
+        } catch (err) {
+          console.error('Error caching settings:', err)
+        }
+      }).catch(err => {
+        console.error('❌ Backend auto-save failed:', err)
+      })
     }
   }
 
@@ -203,24 +185,10 @@ function Settings({ settings, setSettings }) {
     setSaving(true)
     setMessage('')
     
-    // Save settings to localStorage immediately
-    try {
-      localStorage.setItem('deer-deterrent-settings', JSON.stringify(localSettings))
-      localStorage.setItem('deer-deterrent-camera-zones', JSON.stringify(cameraZones))
-      console.log('Settings saved to localStorage:', localSettings)
-      
-      // Update parent state immediately to ensure persistence
-      if (setSettings) {
-        setSettings(localSettings)
-      }
-    } catch (err) {
-      console.error('Error saving to localStorage:', err)
-    }
-    
-    // Try to save to backend if available
+    // Save to backend API first - this is the definitive source of truth
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-      console.log('Attempting to save to backend:', `${apiUrl}/api/settings`)
+      console.log('💾 Saving settings to backend (definitive source):', `${apiUrl}/api/settings`)
       console.log('Settings data:', localSettings)
       
       const response = await fetch(`${apiUrl}/api/settings`, {
@@ -240,14 +208,25 @@ function Settings({ settings, setSettings }) {
       }
       
       const data = await response.json()
+      
+      // Update parent state to trigger re-render with backend data
       if (setSettings) {
         setSettings(data.settings)
       }
-      setMessage('✅ Settings saved successfully (backend and local)!')
+      
+      // Cache to localStorage only after successful backend save
+      try {
+        localStorage.setItem('deer-deterrent-settings', JSON.stringify(data.settings))
+        localStorage.setItem('deer-deterrent-camera-zones', JSON.stringify(cameraZones))
+      } catch (err) {
+        console.error('Error caching to localStorage:', err)
+      }
+      
+      setMessage('✅ Settings saved successfully to server!')
+      console.log('✅ Settings persisted to backend and cached locally')
     } catch (err) {
-      console.error('Backend save failed:', err)
-      // Still consider it a success since we saved locally
-      setMessage('✅ Settings saved locally (backend offline)')
+      console.error('❌ Backend save failed:', err)
+      setMessage('❌ Failed to save settings to server. Please try again.')
     } finally {
       setSaving(false)
       setTimeout(() => setMessage(''), 5000)
@@ -349,126 +328,58 @@ function Settings({ settings, setSettings }) {
       <div className="settings-sections">
         {/* Compact Card Grid for Quick Settings */}
         <div className="settings-grid">
-          <div className="settings-card">
-            <h3>Detection</h3>
+          {/* Combined Camera Detection + Zone Mapping - Double-wide card */}
+          <div className="settings-card camera-zones-card">
+            <h3>Detection Cameras</h3>
             <div className="card-content">
-              <label htmlFor="confidence">Confidence Threshold</label>
-              <div className="input-with-display">
-                <input
-                  id="confidence"
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={localSettings.confidence_threshold || 0.6}
-                  onChange={(e) => handleChange('confidence_threshold', parseFloat(e.target.value))}
-                />
-                <input
-                  type="number"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={localSettings.confidence_threshold || 0.6}
-                  onChange={(e) => handleChange('confidence_threshold', parseFloat(e.target.value))}
-                  className="value-input"
-                />
-              </div>
-            </div>
-          </div>
-          
-          <div className="settings-card">
-            <h3>Training</h3>
-            <div className="card-content">
-              <label htmlFor="sampling-rate">Default Frame Sampling Rate</label>
-              <div className="input-with-unit">
-                <input
-                  id="sampling-rate"
-                  type="number"
-                  min="0.1"
-                  max="10"
-                  step="0.1"
-                  value={localSettings.default_sampling_rate || 1.0}
-                  onChange={(e) => handleChange('default_sampling_rate', parseFloat(e.target.value))}
-                  className="value-input"
-                />
-                <span className="unit-label">frames/sec</span>
-              </div>
-              <p className="setting-hint">Number of frames to extract per second for annotation (default: 1.0)</p>
-            </div>
-          </div>
-
-          <div className="settings-card">
-            <h3>Snapshot Archive</h3>
-            <div className="card-content">
-              <label htmlFor="archive-days">Auto-Archive After</label>
-              <div className="input-with-unit">
-                <input
-                  id="archive-days"
-                  type="number"
-                  min="1"
-                  max="30"
-                  step="1"
-                  value={localSettings.snapshot_archive_days || 3}
-                  onChange={(e) => handleChange('snapshot_archive_days', parseInt(e.target.value))}
-                  className="value-input"
-                />
-                <span className="unit-label">days</span>
-              </div>
-              <p className="setting-hint">Snapshots older than this will be automatically archived</p>
+              <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#666' }}>
+                Select which cameras to use for deer detection and link to irrigation zones
+              </p>
+              {ringCameras.length > 0 && rainbirdZones.length > 0 ? (
+                <div className="camera-zone-compact">
+                  {ringCameras.map(camera => (
+                    <div key={camera.id} className="camera-zone-row-combined">
+                      <label className="checkbox-inline" style={{ marginBottom: 0, minWidth: '140px' }}>
+                        <input
+                          type="checkbox"
+                          checked={(localSettings.enabled_cameras || []).includes(camera.id)}
+                          onChange={(e) => {
+                            const current = localSettings.enabled_cameras || [];
+                            const updated = e.target.checked
+                              ? [...current, camera.id]
+                              : current.filter(id => id !== camera.id);
+                            handleChange('enabled_cameras', updated);
+                          }}
+                        />
+                        {camera.name}
+                      </label>
+                      <select
+                        className="zone-select-compact"
+                        value={cameraZones[camera.id] || ''}
+                        onChange={(e) => setZoneForCamera(camera.id, e.target.value ? parseInt(e.target.value) : null)}
+                        disabled={!(localSettings.enabled_cameras || []).includes(camera.id)}
+                      >
+                        <option value="">No Zone</option>
+                        {rainbirdZones.map(zone => (
+                          <option key={zone.number} value={zone.number}>
+                            Zone {zone.number} - {zone.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="loading-zones-compact">
+                  <p>Loading cameras and zones...</p>
+                </div>
+              )}
             </div>
           </div>
 
+          {/* Snapshot Archive + Active Hours */}
           <div className="settings-card">
-            <h3>Camera Detection</h3>
-            <div className="card-content">
-              <p className="setting-hint">Select which cameras to use for deer detection</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
-                {Object.entries(CAMERA_NAMES).map(([id, name]) => (
-                  <label key={id} className="checkbox-inline" style={{ margin: 0 }}>
-                    <input
-                      type="checkbox"
-                      checked={(localSettings.enabled_cameras || []).includes(id)}
-                      onChange={(e) => {
-                        const current = localSettings.enabled_cameras || []
-                        const updated = e.target.checked
-                          ? [...current, id]
-                          : current.filter(camId => camId !== id)
-                        handleChange('enabled_cameras', updated)
-                      }}
-                    />
-                    {name}
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="settings-card">
-            <h3>Season</h3>
-            <div className="card-content">
-              <label htmlFor="season-start">Start Date</label>
-              <input
-                id="season-start"
-                type="text"
-                pattern="\d{2}-\d{2}"
-                placeholder="MM-DD"
-                value={localSettings.season_start || '04-01'}
-                onChange={(e) => handleChange('season_start', e.target.value)}
-              />
-              <label htmlFor="season-end">End Date</label>
-              <input
-                id="season-end"
-                type="text"
-                pattern="\d{2}-\d{2}"
-                placeholder="MM-DD"
-                value={localSettings.season_end || '10-31'}
-                onChange={(e) => handleChange('season_end', e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="settings-card">
-            <h3>Active Hours</h3>
+            <h3>Snapshot Management</h3>
             <div className="card-content">
               <label className="checkbox-inline">
                 <input
@@ -476,7 +387,7 @@ function Settings({ settings, setSettings }) {
                   checked={localSettings.active_hours_enabled || false}
                   onChange={(e) => handleChange('active_hours_enabled', e.target.checked)}
                 />
-                Enabled
+                Active Hours Enabled
               </label>
               {localSettings.active_hours_enabled && (
                 <>
@@ -500,12 +411,46 @@ function Settings({ settings, setSettings }) {
                   />
                 </>
               )}
+              <label htmlFor="archive-days">Auto-Archive After</label>
+              <div className="input-with-unit">
+                <input
+                  id="archive-days"
+                  type="number"
+                  min="1"
+                  max="30"
+                  step="1"
+                  value={localSettings.snapshot_archive_days || 3}
+                  onChange={(e) => handleChange('snapshot_archive_days', parseInt(e.target.value))}
+                  className="value-input"
+                />
+                <span className="unit-label">days</span>
+              </div>
+              <p className="setting-hint">Snapshots older than this will be automatically archived</p>
             </div>
           </div>
 
+          {/* Season + Irrigation */}
           <div className="settings-card">
-            <h3>Irrigation</h3>
+            <h3>Irrigation Season</h3>
             <div className="card-content">
+              <label htmlFor="season-start">Season Start Date</label>
+              <input
+                id="season-start"
+                type="text"
+                pattern="\d{2}-\d{2}"
+                placeholder="MM-DD"
+                value={localSettings.season_start || '04-01'}
+                onChange={(e) => handleChange('season_start', e.target.value)}
+              />
+              <label htmlFor="season-end">Season End Date</label>
+              <input
+                id="season-end"
+                type="text"
+                pattern="\d{2}-\d{2}"
+                placeholder="MM-DD"
+                value={localSettings.season_end || '10-31'}
+                onChange={(e) => handleChange('season_end', e.target.value)}
+              />
               <label htmlFor="duration">Duration (sec)</label>
               <input
                 id="duration"
@@ -535,74 +480,47 @@ function Settings({ settings, setSettings }) {
               </label>
             </div>
           </div>
-
-          {/* Camera Detection Settings - Double-wide card */}
-          <div className="settings-card camera-zones-card">
-            <h3>📹 Detection Cameras</h3>
+          
+          {/* Detection + Training */}
+          <div className="settings-card">
+            <h3>Detection & Training</h3>
             <div className="card-content">
-              <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#666' }}>
-                Select which cameras to use for deer detection
-              </p>
-              {ringCameras.length > 0 ? (
-                <div className="camera-zone-compact">
-                  {ringCameras.map(camera => (
-                    <div key={camera.id} className="camera-zone-row-compact">
-                      <label className="checkbox-inline" style={{ marginBottom: '0.5rem' }}>
-                        <input
-                          type="checkbox"
-                          checked={(localSettings.enabled_cameras || []).includes(camera.id)}
-                          onChange={(e) => {
-                            const current = localSettings.enabled_cameras || [];
-                            const updated = e.target.checked
-                              ? [...current, camera.id]
-                              : current.filter(id => id !== camera.id);
-                            handleChange('enabled_cameras', updated);
-                          }}
-                        />
-                        📹 {camera.name}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="loading-zones-compact">
-                  <p>Loading cameras...</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Camera Zone Mappings - Double-wide card */}
-          <div className="settings-card camera-zones-card">
-            <h3>Camera → Zone</h3>
-            <div className="card-content">
-              {rainbirdZones.length > 0 && ringCameras.length > 0 ? (
-                <div className="camera-zone-compact">
-                  {ringCameras.map(camera => (
-                    <div key={camera.id} className="camera-zone-row-compact">
-                      <label className="camera-label-compact">
-                        📹 {camera.name}
-                      </label>
-                      <select
-                        className="zone-select-compact"
-                        value={cameraZones[camera.id] || ''}
-                        onChange={(e) => setZoneForCamera(camera.id, e.target.value ? parseInt(e.target.value) : null)}
-                      >
-                        <option value="">None</option>
-                        {rainbirdZones.map(zone => (
-                          <option key={zone.number} value={zone.number}>
-                            Zone {zone.number} - {zone.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="loading-zones-compact">
-                  <p>Loading cameras and zones...</p>
-                </div>
-              )}
+              <label htmlFor="confidence">Confidence Threshold</label>
+              <div className="input-with-display">
+                <input
+                  id="confidence"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={localSettings.confidence_threshold || 0.6}
+                  onChange={(e) => handleChange('confidence_threshold', parseFloat(e.target.value))}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={localSettings.confidence_threshold || 0.6}
+                  onChange={(e) => handleChange('confidence_threshold', parseFloat(e.target.value))}
+                  className="value-input"
+                />
+              </div>
+              <label htmlFor="sampling-rate">Default Frame Sampling Rate</label>
+              <div className="input-with-unit">
+                <input
+                  id="sampling-rate"
+                  type="number"
+                  min="0.1"
+                  max="10"
+                  step="0.1"
+                  value={localSettings.default_sampling_rate || 1.0}
+                  onChange={(e) => handleChange('default_sampling_rate', parseFloat(e.target.value))}
+                  className="value-input"
+                />
+                <span className="unit-label">frames/sec</span>
+              </div>
+              <p className="setting-hint">Number of frames to extract per second for annotation (default: 1.0)</p>
             </div>
           </div>
         </div>

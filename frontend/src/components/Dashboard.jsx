@@ -5,7 +5,7 @@ import BoundingBoxImage from './BoundingBoxImage'
 function Dashboard({ stats, settings }) {
   const [snapshots, setSnapshots] = useState([])
   const [loading, setLoading] = useState(true)
-  const [timeFilter, setTimeFilter] = useState('last7d') // last24h, last7d, all
+  const [timeFilter, setTimeFilter] = useState('all') // last24h, last7d, all
   const [feedbackFilter, setFeedbackFilter] = useState('with_deer') // all, with_deer, without_deer
   const [cameraFilter, setCameraFilter] = useState('all') // all, or specific camera ID
   const [selectedSnapshot, setSelectedSnapshot] = useState(null)
@@ -33,16 +33,15 @@ function Dashboard({ stats, settings }) {
 
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp)
-    const now = new Date()
-    const diff = now - date
-    const hours = Math.floor(diff / (1000 * 60 * 60))
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const year = date.getFullYear()
+    let hours = date.getHours()
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    const ampm = hours >= 12 ? 'PM' : 'AM'
+    hours = hours % 12 || 12
     
-    if (hours < 24) {
-      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-    } else if (hours < 168) {
-      return date.toLocaleDateString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
-    }
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    return `${month}/${day}/${year} ${hours}:${minutes} ${ampm}`
   }
 
   useEffect(() => {
@@ -59,7 +58,7 @@ function Dashboard({ stats, settings }) {
   const loadSnapshots = async () => {
     setLoading(true)
     try {
-      let url = `${apiUrl}/api/ring-snapshots?limit=500`
+      let url = `${apiUrl}/api/snapshots?limit=500`
       
       // Apply feedback filter
       if (feedbackFilter === 'with_deer') {
@@ -68,27 +67,38 @@ function Dashboard({ stats, settings }) {
         url += '&with_deer=false'
       }
       
+      console.log('Fetching snapshots from:', url)
       const response = await fetch(url)
-      if (!response.ok) throw new Error('Failed to fetch snapshots')
+      console.log('Response status:', response.status)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
       
       const data = await response.json()
+      console.log('Received data:', data)
       let allSnapshots = data.snapshots || []
+      console.log('Total snapshots from API:', allSnapshots.length)
       
       // Apply time filter
       if (timeFilter !== 'all') {
         const hours = timeFilter === 'last24h' ? 24 : 168
         const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
         allSnapshots = allSnapshots.filter(s => new Date(s.timestamp) > cutoff)
+        console.log('After time filter:', allSnapshots.length)
       }
       
       // Apply camera filter
       if (cameraFilter !== 'all') {
         allSnapshots = allSnapshots.filter(s => s.camera_id === cameraFilter)
+        console.log('After camera filter:', allSnapshots.length)
       }
       
+      console.log('Final snapshots to display:', allSnapshots.length)
       setSnapshots(allSnapshots)
     } catch (error) {
       console.error('Error loading snapshots:', error)
+      alert(`Failed to load snapshots: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -191,10 +201,10 @@ function Dashboard({ stats, settings }) {
           <label className="filter-label">Time:</label>
           <div className="filter-buttons">
             <button
-              className={timeFilter === 'last24h' ? 'active' : ''}
-              onClick={() => setTimeFilter('last24h')}
+              className={timeFilter === 'all' ? 'active' : ''}
+              onClick={() => setTimeFilter('all')}
             >
-              Last 24h
+              All Time
             </button>
             <button
               className={timeFilter === 'last7d' ? 'active' : ''}
@@ -203,10 +213,10 @@ function Dashboard({ stats, settings }) {
               Last 7d
             </button>
             <button
-              className={timeFilter === 'all' ? 'active' : ''}
-              onClick={() => setTimeFilter('all')}
+              className={timeFilter === 'last24h' ? 'active' : ''}
+              onClick={() => setTimeFilter('last24h')}
             >
-              All Time
+              Last 24h
             </button>
           </div>
         </div>
@@ -279,14 +289,14 @@ function Dashboard({ stats, settings }) {
               <div className="snapshot-thumbnail">
                 {snapshot.deer_detected ? (
                   <BoundingBoxImage
-                    src={`${apiUrl}/api/ring-snapshots/${snapshot.id}/image`}
+                    src={`${apiUrl}/api/snapshots/${snapshot.id}/image`}
                     alt={`Snapshot ${snapshot.id}`}
                     detections={snapshot.detection_bboxes || []}
                     className="snapshot-img"
                   />
                 ) : (
                   <img
-                    src={`${apiUrl}/api/ring-snapshots/${snapshot.id}/image`}
+                    src={`${apiUrl}/api/snapshots/${snapshot.id}/image`}
                     alt={`Snapshot ${snapshot.id}`}
                     loading="lazy"
                   />
@@ -390,36 +400,35 @@ function Dashboard({ stats, settings }) {
             <div className="modal-content">
               {selectedSnapshot.deer_detected ? (
                 <BoundingBoxImage
-                  src={`${apiUrl}/api/ring-snapshots/${selectedSnapshot.id}/image`}
+                  src={`${apiUrl}/api/snapshots/${selectedSnapshot.id}/image`}
                   alt="Snapshot"
                   detections={selectedSnapshot.detection_bboxes || []}
                   className="modal-img"
                 />
               ) : (
                 <img 
-                  src={`${apiUrl}/api/ring-snapshots/${selectedSnapshot.id}/image`}
+                  src={`${apiUrl}/api/snapshots/${selectedSnapshot.id}/image`}
                   alt="Snapshot"
                 />
               )}
               <div className="image-info">
-                <div className="info-row">
+                <div className="info-grid-compact">
                   <span className="label">ID:</span>
                   <span className="value">#{selectedSnapshot.id}</span>
-                </div>
-                <div className="info-row">
                   <span className="label">Camera:</span>
                   <span className="value">{formatCameraName(selectedSnapshot.camera_id)}</span>
-                </div>
-                <div className="info-row">
+                  <span className="label">Confidence:</span>
+                  <span className="value">
+                    {selectedSnapshot.detection_confidence !== null
+                      ? `${(selectedSnapshot.detection_confidence * 100).toFixed(0)}%`
+                      : 'N/A'}
+                  </span>
+                  
                   <span className="label">Time:</span>
-                  <span className="value">{new Date(selectedSnapshot.timestamp).toLocaleString()}</span>
+                  <span className="value time-value">{new Date(selectedSnapshot.timestamp).toLocaleString()}</span>
+                  <span className="label">Model:</span>
+                  <span className="value model-value">{selectedSnapshot.model_version || 'Unknown'}</span>
                 </div>
-                {selectedSnapshot.detection_confidence !== null && (
-                  <div className="info-row">
-                    <span className="label">Confidence:</span>
-                    <span className="value">{(selectedSnapshot.detection_confidence * 100).toFixed(0)}%</span>
-                  </div>
-                )}
                 <div className="feedback-section">
                   <p className="feedback-label">Is there a deer in this image?</p>
                   <div className="feedback-buttons">
