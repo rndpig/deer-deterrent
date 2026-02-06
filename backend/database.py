@@ -160,6 +160,18 @@ def init_database():
         print("✓ Added 'detection_bboxes' column to ring_events table")
         logger.info("Added 'detection_bboxes' column to ring_events table")
     
+    # Migration: Add false_positive flag for user-marked false positives
+    if 'false_positive' not in ring_columns:
+        cursor.execute("ALTER TABLE ring_events ADD COLUMN false_positive BOOLEAN DEFAULT 0")
+        print("✓ Added 'false_positive' column to ring_events table")
+        logger.info("Added 'false_positive' column to ring_events table")
+    
+    # Migration: Add model_version column to track which detector model was used
+    if 'model_version' not in ring_columns:
+        cursor.execute("ALTER TABLE ring_events ADD COLUMN model_version TEXT")
+        print("✓ Added 'model_version' column to ring_events table")
+        logger.info("Added 'model_version' column to ring_events table")
+    
     conn.commit()
     conn.close()
     
@@ -169,6 +181,7 @@ def get_connection():
     """Get a database connection with row factory."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 # Video operations
@@ -776,7 +789,8 @@ def create_ring_event(event_data: dict) -> int:
 
 def update_ring_event_result(event_id: int, processed: bool = True, 
                              deer_detected: bool = None, confidence: float = None,
-                             error_message: str = None, detection_bboxes: list = None):
+                             error_message: str = None, detection_bboxes: list = None,
+                             model_version: str = None):
     """Update Ring event with detection results."""
     conn = get_connection()
     cursor = conn.cursor()
@@ -799,6 +813,10 @@ def update_ring_event_result(event_id: int, processed: bool = True,
     if detection_bboxes is not None:
         updates.append("detection_bboxes = ?")
         params.append(json.dumps(detection_bboxes))
+    
+    if model_version is not None:
+        updates.append("model_version = ?")
+        params.append(model_version)
     
     params.append(event_id)
     

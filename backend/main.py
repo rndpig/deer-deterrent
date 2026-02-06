@@ -41,29 +41,41 @@ def load_detector():
     global detector
     if detector is None:
         try:
-            from src.inference.detector import DeerDetector
-            # Try production model first, fall back to base model
+            # Try OpenVINO detector first (1.94x faster than PyTorch)
+            from src.inference.detector_openvino import DeerDetectorOpenVINO
             import os
             from pathlib import Path
             
             # In Docker, main.py is at /app/main.py, so project root is /app
             project_root = Path(__file__).parent
             
-            production_model = project_root / "models" / "production" / "best.pt"
-            fallback_model = project_root / "models" / "deer_detector_best.pt"
-            base_model = project_root / "yolov8n.pt"
+            # OpenVINO FP16 model (YOLO26n v1.1)
+            openvino_model = project_root / "models" / "production" / "openvino" / "best_fp16.xml"
             
-            if production_model.exists():
-                model_path = str(production_model)
-            elif fallback_model.exists():
-                model_path = str(fallback_model)
-            elif base_model.exists():
-                model_path = str(base_model)
+            if openvino_model.exists():
+                detector = DeerDetectorOpenVINO(model_path=str(openvino_model), conf_threshold=0.6)
+                print(f"✓ OpenVINO detector initialized: {openvino_model}")
+                print(f"  Performance: ~29ms inference (1.94x faster than PyTorch)")
             else:
-                model_path = "yolov8n.pt"  # Download default if needed
+                # Fall back to PyTorch detector
+                from src.inference.detector import DeerDetector
                 
-            detector = DeerDetector(model_path=model_path, conf_threshold=0.6)
-            print(f"✓ Detector initialized with model: {model_path}")
+                production_model = project_root / "models" / "production" / "best.pt"
+                fallback_model = project_root / "models" / "deer_detector_best.pt"
+                base_model = project_root / "yolov8n.pt"
+                
+                if production_model.exists():
+                    model_path = str(production_model)
+                elif fallback_model.exists():
+                    model_path = str(fallback_model)
+                elif base_model.exists():
+                    model_path = str(base_model)
+                else:
+                    model_path = "yolov8n.pt"  # Download default if needed
+                    
+                detector = DeerDetector(model_path=model_path, conf_threshold=0.6)
+                print(f"✓ PyTorch detector initialized with model: {model_path}")
+                print(f"  (Consider deploying OpenVINO model for better performance)")
         except Exception as e:
             print(f"⚠ Detector initialization failed: {e}")
             print("  Running in demo mode - detection features disabled")
@@ -332,13 +344,81 @@ async def create_ring_event(event: dict):
 @app.patch("/api/ring-events/{event_id}")
 async def update_ring_event(event_id: int, update: dict):
     """Update Ring event with detection results."""
+    deer_detected = update.get("deer_detected")
+    
+    # If user is marking this as having deer, run detection to get bounding boxes
+    if deer_detected == 1 or deer_detected == True:
+        detector_obj = load_detector()
+        if detector_obj:
+            try:
+                # Get event and snapshot
+                event = db.get_ring_event_by_id(event_id)
+                if event and event.get('snapshot_path'):
+                    snapshot_path = Path(event['snapshot_path'])
+                    if not snapshot_path.is_absolute():
+                        snapshot_path = Path("/app") / snapshot_path
+                    
+                    if snapshot_path.exists():
+                        import cv2
+                        
+                        # Load image
+                        img = cv2.imread(str(snapshot_path))
+                        if img is not None:
+                            # Run detection with lower threshold to catch the deer user saw
+                            original_threshold = detector_obj.conf_threshold
+                            detector_obj.conf_threshold = 0.15  # Lower threshold for user-confirmed deer
+                            
+                            detections_list, _ = detector_obj.detect(img, return_annotated=False)
+                            
+                            # Restore original threshold
+                            detector_obj.conf_threshold = original_threshold
+                            
+                            # Format results
+                            detections = []
+                            max_confidence = 0.0
+                            
+                            for det in detections_list:
+                                confidence = det['confidence']
+                                detections.append({
+                                    "confidence": confidence,
+                                    "bbox": det['bbox']
+                                })
+                                if confidence > max_confidence:
+                                    max_confidence = confidence
+                            
+                            # Update with detection results
+                            if len(detections) > 0:
+                                update["confidence"] = max_confidence
+                                update["detection_bboxes"] = detections
+                                # Include model version
+                                model_name = type(detector_obj).__name__
+                                if 'OpenVINO' in model_name:
+                                    update["model_version"] = "YOLO26n v1.1 OpenVINO FP16"
+                                else:
+                                    update["model_version"] = "YOLO26n v1.1 PyTorch"
+                                logger.info(f"Snapshot {event_id} re-detected with {len(detections)} boxes, confidence: {max_confidence:.2f}, model: {update['model_version']}")
+                            else:
+                                # User says deer but detector didn't find any - still mark as deer with 0 confidence
+                                update["confidence"] = 0.0
+                                update["detection_bboxes"] = []
+                                model_name = type(detector_obj).__name__
+                                if 'OpenVINO' in model_name:
+                                    update["model_version"] = "YOLO26n v1.1 OpenVINO FP16"
+                                else:
+                                    update["model_version"] = "YOLO26n v1.1 PyTorch"
+                                logger.warning(f"Snapshot {event_id} marked as deer by user but detector found none")
+            except Exception as e:
+                logger.error(f"Error running detection for user feedback on snapshot {event_id}: {e}")
+                # Continue with update even if detection fails
+    
     db.update_ring_event_result(
         event_id=event_id,
         processed=update.get("processed", True),
         deer_detected=update.get("deer_detected"),
         confidence=update.get("confidence"),
         error_message=update.get("error_message"),
-        detection_bboxes=update.get("detection_bboxes")
+        detection_bboxes=update.get("detection_bboxes"),
+        model_version=update.get("model_version")
     )
     return {"status": "success"}
 
@@ -2225,10 +2305,10 @@ async def reanalyze_all_videos():
                 # Add new detections
                 for det in detections:
                     bbox = {
-                        'x1': int(det['bbox'][0]),
-                        'y1': int(det['bbox'][1]),
-                        'x2': int(det['bbox'][2]),
-                        'y2': int(det['bbox'][3])
+                        'x1': int(det['bbox']['x1']),
+                        'y1': int(det['bbox']['y1']),
+                        'x2': int(det['bbox']['x2']),
+                        'y2': int(det['bbox']['y2'])
                     }
                     db.add_detection(
                         frame_id=frame['id'],

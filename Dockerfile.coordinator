@@ -41,6 +41,8 @@ Handles the complete flow from camera event to deterrent action
 import os
 import logging
 import json
+import hashlib
+import itertools
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -89,10 +91,9 @@ CONFIG = {
     "ENABLE_IRRIGATION": os.getenv("ENABLE_IRRIGATION", "true").lower() == "true",
     "ACTIVE_HOURS_START": int(os.getenv("ACTIVE_HOURS_START", "0")),
     "ACTIVE_HOURS_END": int(os.getenv("ACTIVE_HOURS_END", "24")),
-    "ENABLED_CAMERAS": ["10cea9e4511f"],  # Default to Side camera only, updated from backend settings
-    # Periodic snapshot polling configuration
+    "ENABLED_CAMERAS": [c.strip() for c in os.getenv("PERIODIC_SNAPSHOT_CAMERAS", "10cea9e4511f,587a624d3fae").split(",") if c.strip()],
+    # Periodic snapshot polling (fixed 25-second cycle)
     "ENABLE_PERIODIC_SNAPSHOTS": os.getenv("ENABLE_PERIODIC_SNAPSHOTS", "false").lower() == "true",
-    "PERIODIC_SNAPSHOT_INTERVAL": int(os.getenv("PERIODIC_SNAPSHOT_INTERVAL", "60")),
     "RING_LOCATION_ID": os.getenv("RING_LOCATION_ID", ""),  # Needed for MQTT topics
 }
 
@@ -100,8 +101,10 @@ CONFIG = {
 last_activation_time: Optional[datetime] = None
 mqtt_client: Optional[mqtt.Client] = None
 event_queue: queue.PriorityQueue = queue.PriorityQueue()  # Priority queue: motion > periodic
+event_counter = itertools.count()  # Monotonic counter for PriorityQueue tiebreaking
 camera_snapshots: Dict[str, bytes] = {}  # Store latest snapshot for each camera
 last_periodic_snapshot_time: Dict[str, datetime] = {}  # Track last periodic snapshot per camera
+last_snapshot_hash: Dict[str, str] = {}  # Track snapshot hashes to prevent duplicate processing
 
 
 async def fetch_settings_from_backend():
@@ -161,16 +164,21 @@ def is_active_hours() -> bool:
 async def request_high_res_snapshot(camera_id: str) -> Optional[bytes]:
     """Request a fresh high-resolution snapshot from Ring via ring-mqtt"""
     try:
-        # Ring-MQTT exposes an API to request fresh snapshots
-        # Publish a command to request snapshot refresh
+        # Ring-MQTT: set a short snapshot interval to trigger a fresh snapshot
         if mqtt_client and mqtt_client.is_connected():
-            # Topic format: ring/{location_id}/camera/{camera_id}/snapshot/refresh
-            # The location_id is in the MQTT topic structure we've seen
-            location_id = "dp1hu9-2i94c-0"  # From the MQTT topics we observed
-            refresh_topic = f"ring/{location_id}/camera/{camera_id}/snapshot/refresh"
+            location_id = CONFIG.get("RING_LOCATION_ID", "")
+            if not location_id:
+                logger.warning("RING_LOCATION_ID not set, cannot request snapshot")
+                return camera_snapshots.get(camera_id)
+            
+            # Clear cached snapshot to detect when a new one arrives
+            old_snapshot = camera_snapshots.pop(camera_id, None)
+            
+            # Use snapshot_interval/command to request fresh snapshot (ring-mqtt topic)
+            refresh_topic = f"ring/{location_id}/camera/{camera_id}/snapshot_interval/command"
             
             logger.info(f"Requesting high-res snapshot for camera {camera_id}...")
-            mqtt_client.publish(refresh_topic, "ON")
+            mqtt_client.publish(refresh_topic, "10")
             
             # Wait up to 3 seconds for the new snapshot to arrive
             for i in range(30):  # 30 * 0.1s = 3 seconds
@@ -547,19 +555,21 @@ def on_mqtt_message(client, userdata, msg):
                     )
                     if ring_event_id:
                         logger.info(f"Logged Ring event #{ring_event_id}")
-                
-                # Use instant snapshot for real-time detection (low-res but fast)
-                if camera_id in camera_snapshots:
-                    logger.info(f"✓ Using instant snapshot for real-time detection")
-                    event_queue.put((0, {  # Priority 0 = highest (motion events)
-                        "camera_id": camera_id,
-                        "snapshot_bytes": camera_snapshots[camera_id],
-                        "timestamp": datetime.now().isoformat(),
-                        "source": "instant_snapshot",
-                        "ring_event_id": ring_event_id
-                    }))
+                    
+                    # Use instant snapshot for real-time detection (low-res but fast)
+                    if camera_id in camera_snapshots:
+                        logger.info(f"✓ Using instant snapshot for real-time detection")
+                        event_queue.put((0, next(event_counter), {  # Priority 0 = highest (motion events)
+                            "camera_id": camera_id,
+                            "snapshot_bytes": camera_snapshots[camera_id],
+                            "timestamp": datetime.now().isoformat(),
+                            "source": "instant_snapshot",
+                            "ring_event_id": ring_event_id
+                        }))
+                    else:
+                        logger.warning(f"No cached snapshot available for {camera_id}")
                 else:
-                    logger.warning(f"No cached snapshot available for {camera_id}")
+                    logger.info(f"Outside active hours ({CONFIG['ACTIVE_HOURS_START']}-{CONFIG['ACTIVE_HOURS_END']}), skipping motion event")
             return
         
         # Handle event_select messages (SLOW - 30-60 seconds, skip for now since we use instant snapshots)
@@ -577,7 +587,7 @@ def setup_mqtt():
     global mqtt_client
     
     try:
-        mqtt_client = mqtt.Client()
+        mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1)
         mqtt_client.on_connect = on_mqtt_connect
         mqtt_client.on_message = on_mqtt_message
         
@@ -602,7 +612,7 @@ async def process_event_queue():
         try:
             # Check queue for events (non-blocking)
             try:
-                priority, event = event_queue.get_nowait()  # Get tuple (priority, event)
+                priority, _counter, event = event_queue.get_nowait()  # Get tuple (priority, counter, event)
                 source = event.get("source", "unknown")
                 logger.info(f"Processing queued event for camera {event['camera_id']} (priority={priority}, source={source})")
                 
@@ -640,7 +650,7 @@ async def periodic_snapshot_poller():
         logger.error("RING_LOCATION_ID not configured, periodic snapshots disabled")
         return
     
-    logger.info(f"Periodic snapshots enabled: cameras={CONFIG['ENABLED_CAMERAS']}, interval={CONFIG['PERIODIC_SNAPSHOT_INTERVAL']}s")
+    logger.info(f"Periodic snapshots enabled for cameras: {CONFIG['ENABLED_CAMERAS']} (polling every 25 seconds)")
     
     # Subscribe to snapshot response topics
     for camera_id in CONFIG["ENABLED_CAMERAS"]:
@@ -650,31 +660,46 @@ async def periodic_snapshot_poller():
     
     while True:
         try:
-            await asyncio.sleep(CONFIG["PERIODIC_SNAPSHOT_INTERVAL"])
+            # Fixed 25-second polling cycle
+            await asyncio.sleep(25)
             
             if not is_active_hours():
                 logger.debug("Outside active hours, skipping periodic snapshots")
                 continue
             
             for camera_id in CONFIG["ENABLED_CAMERAS"]:
-                # Request snapshot via MQTT
-                topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{camera_id}/snapshot/command"
-                mqtt_client.publish(topic, "")
+                # Clear stale snapshot to detect when new one arrives
+                old_snapshot = camera_snapshots.pop(camera_id, None)
+                
+                # Request snapshot via MQTT (ring-mqtt snapshot_interval/command topic)
+                topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{camera_id}/snapshot_interval/command"
+                mqtt_client.publish(topic, "10")
                 logger.info(f"Requested periodic snapshot from camera {camera_id}")
                 
                 # Wait a bit for snapshot to arrive, then queue for processing
                 await asyncio.sleep(2)  # Give Ring-MQTT time to publish snapshot
                 
                 if camera_id in camera_snapshots:
+                    # Check if this is the same snapshot as last time (prevent duplicates)
+                    snapshot_bytes = camera_snapshots[camera_id]
+                    snapshot_hash = hashlib.md5(snapshot_bytes).hexdigest()
+                    
+                    if camera_id in last_snapshot_hash and last_snapshot_hash[camera_id] == snapshot_hash:
+                        logger.debug(f"Skipping duplicate snapshot for camera {camera_id} (same hash)")
+                        continue
+                    
+                    # Update hash tracker
+                    last_snapshot_hash[camera_id] = snapshot_hash
+                    
                     # Log Ring event (synchronous)
-                    snapshot_size = len(camera_snapshots[camera_id])
+                    snapshot_size = len(snapshot_bytes)
                     
                     # Save snapshot to disk
                     timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
                     snapshot_filename = f"periodic_{timestamp_str}_{camera_id}.jpg"
                     snapshot_path_obj = Path(f"/app/data/snapshots/{snapshot_filename}")
                     snapshot_path_obj.parent.mkdir(parents=True, exist_ok=True)
-                    snapshot_path_obj.write_bytes(camera_snapshots[camera_id])
+                    snapshot_path_obj.write_bytes(snapshot_bytes)
                     snapshot_path = f"data/snapshots/{snapshot_filename}"
                     
                     logger.info(f"✓ Saved periodic snapshot to {snapshot_path}")
@@ -691,9 +716,9 @@ async def periodic_snapshot_poller():
                         logger.info(f"Logged periodic snapshot event #{ring_event_id}")
                     
                     # Queue for ML detection (lower priority than motion events)
-                    event_queue.put((1, {  # Priority 1 = lower (periodic snapshots)
+                    event_queue.put((1, next(event_counter), {  # Priority 1 = lower (periodic snapshots)
                         "camera_id": camera_id,
-                        "snapshot_bytes": camera_snapshots[camera_id],
+                        "snapshot_bytes": snapshot_bytes,
                         "timestamp": datetime.now().isoformat(),
                         "source": "periodic_snapshot",
                         "ring_event_id": ring_event_id
@@ -812,7 +837,7 @@ async def test_webhook(request: Request, background_tasks: BackgroundTasks):
         if not snapshot_url:
             raise HTTPException(status_code=400, detail="Missing snapshot_url")
         
-        background_tasks.add_task(process_camera_event, camera_id, snapshot_url, timestamp)
+        background_tasks.add_task(process_camera_event, camera_id, timestamp, snapshot_url=snapshot_url)
         
         return {"status": "accepted", "message": "Processing test event"}
         

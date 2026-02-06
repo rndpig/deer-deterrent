@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard'
 import Settings from './components/Settings'
 import AuthButton from './components/AuthButton'
 import CombinedArchive from './components/CombinedArchive'
+import VideoLibrary from './components/VideoLibrary'
 import { useAuth } from './hooks/useAuth'
 
 function App() {
@@ -128,7 +129,7 @@ function App() {
                 <button 
                   className="dropdown-item"
                   onClick={() => {
-                    setActiveTab('dashboard')
+                    setActiveTab('videos')
                     setShowArchive(false)
                     setShowMenu(false)
                   }}
@@ -188,6 +189,15 @@ function App() {
               setSelectedVideoFromArchive(videoId)
               setShowArchive(false)
             }}
+          />
+        )}
+        {activeTab === 'videos' && (
+          <VideoLibrary 
+            onStartReview={() => setActiveTab('dashboard')}
+            onTrainModel={() => {}}
+            onViewSnapshots={() => setActiveTab('dashboard')}
+            onViewArchive={() => { setActiveTab('dashboard'); setShowArchive(true); }}
+            hideSnapshotsButton={false}
           />
         )}
         {activeTab === 'settings' && (
