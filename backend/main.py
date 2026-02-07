@@ -49,7 +49,7 @@ def load_detector():
             # In Docker, main.py is at /app/main.py, so project root is /app
             project_root = Path(__file__).parent
             
-            # OpenVINO FP16 model (YOLO26n v1.1)
+            # OpenVINO model (legacy - YOLO26s v2.0 uses PyTorch via ml-detector service)
             openvino_model = project_root / "models" / "production" / "openvino" / "best_fp16.xml"
             
             if openvino_model.exists():
@@ -62,7 +62,7 @@ def load_detector():
                 
                 production_model = project_root / "models" / "production" / "best.pt"
                 fallback_model = project_root / "models" / "deer_detector_best.pt"
-                base_model = project_root / "yolov8n.pt"
+                base_model = project_root / "yolo26s.pt"
                 
                 if production_model.exists():
                     model_path = str(production_model)
@@ -71,7 +71,7 @@ def load_detector():
                 elif base_model.exists():
                     model_path = str(base_model)
                 else:
-                    model_path = "yolov8n.pt"  # Download default if needed
+                    model_path = "yolo26s.pt"  # Download default if needed
                     
                 detector = DeerDetector(model_path=model_path, conf_threshold=0.6)
                 print(f"✓ PyTorch detector initialized with model: {model_path}")
@@ -393,9 +393,9 @@ async def update_ring_event(event_id: int, update: dict):
                                 # Include model version
                                 model_name = type(detector_obj).__name__
                                 if 'OpenVINO' in model_name:
-                                    update["model_version"] = "YOLO26n v1.1 OpenVINO FP16"
+                                    update["model_version"] = "YOLO26s v2.0 OpenVINO"
                                 else:
-                                    update["model_version"] = "YOLO26n v1.1 PyTorch"
+                                    update["model_version"] = "YOLO26s v2.0 PyTorch"
                                 logger.info(f"Snapshot {event_id} re-detected with {len(detections)} boxes, confidence: {max_confidence:.2f}, model: {update['model_version']}")
                             else:
                                 # User says deer but detector didn't find any - still mark as deer with 0 confidence
@@ -403,9 +403,9 @@ async def update_ring_event(event_id: int, update: dict):
                                 update["detection_bboxes"] = []
                                 model_name = type(detector_obj).__name__
                                 if 'OpenVINO' in model_name:
-                                    update["model_version"] = "YOLO26n v1.1 OpenVINO FP16"
+                                    update["model_version"] = "YOLO26s v2.0 OpenVINO"
                                 else:
-                                    update["model_version"] = "YOLO26n v1.1 PyTorch"
+                                    update["model_version"] = "YOLO26s v2.0 PyTorch"
                                 logger.warning(f"Snapshot {event_id} marked as deer by user but detector found none")
             except Exception as e:
                 logger.error(f"Error running detection for user feedback on snapshot {event_id}: {e}")

@@ -1,7 +1,7 @@
 # Core ML/AI Libraries
 torch>=2.0.0
 torchvision>=0.15.0
-ultralytics>=8.0.0  # YOLOv8 for object detection
+ultralytics>=8.4.0  # YOLO26s for object detection
 opencv-python>=4.8.0
 Pillow>=10.0.0
 numpy>=1.24.0

@@ -11,7 +11,7 @@ data:
   
 # Model configuration
 model:
-  architecture: "yolov8n"  # Options: yolov8n, yolov8s, yolov8m, yolov8l, yolov8x
+  architecture: "yolo26s"  # Options: yolo26s, yolo26n, yolo26m, yolo26l, yolo26x
   pretrained: true
   num_classes: 1  # Just "deer"
   

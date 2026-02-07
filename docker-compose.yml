@@ -8,7 +8,7 @@
 #
 # Services:
 # - Backend: FastAPI server (port 8000)
-# - ML Detector: YOLOv8 inference service (port 8001)
+# - ML Detector: YOLO26s inference service (port 8001)
   # Coordinator - Orchestrates Ring camera events -> ML detection -> Irrigation activation
 # - Database: PostgreSQL (port 5432)
 # - MQTT Broker: Mosquitto (port 1883)
@@ -171,7 +171,7 @@ services:
       - deer-network
 
   # ===========================================================================
-  # ML Detector - YOLOv8 Inference Service
+  # ML Detector - YOLO26s Inference Service
   # ===========================================================================
   ml-detector:
     build:

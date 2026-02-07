@@ -1,17 +1,18 @@
 {
-  "registry_version": "1.0",
+  "registry_version": "2.0",
   "created_at": "2026-01-31T19:56:00Z",
+  "updated_at": "2026-02-07T00:00:00Z",
   "description": "Model registry for deer detection models. Tracks all trained models, their performance, and deployment status.",
   "models": [
     {
       "model_id": "yolov8n_baseline",
-      "name": "YOLOv8n - Legacy Production Model",
+      "name": "YOLOv8n - Retired Baseline",
       "version": "0.1.0",
       "framework": "ultralytics_yolov8",
       "architecture": "yolov8n",
-      "model_path": "models/production/best.pt",
+      "model_path": "models/production/best.pt.backup_yolov8n_20260207",
       "dataset_version": "unknown",
-      "dataset_notes": "Trained on historical dataset, exact composition unknown. Estimated ~1 year of manually annotated data across multiple seasons.",
+      "dataset_notes": "Trained on historical dataset, exact composition unknown.",
       "training_date": "2025-xx-xx",
       "training_config": {
         "epochs": "unknown",
@@ -25,23 +26,90 @@
         "precision": null,
         "recall": null,
         "confidence_threshold": 0.75,
-        "notes": "Metrics to be benchmarked on v1.0_baseline dataset"
+        "notes": "Never properly benchmarked. Was mislabeled as 'YOLO26n v1.1' in code."
       },
       "performance": {
         "inference_format": "pytorch",
         "device": "cpu",
-        "avg_inference_time_ms": "150-200",
-        "model_size_mb": "~30"
+        "avg_inference_time_ms": 65,
+        "model_size_mb": 5.94,
+        "parameters": 3000000
+      },
+      "deployment": {
+        "status": "retired",
+        "environment": "production",
+        "service": "ml-detector",
+        "deployed_at": "2025-xx-xx",
+        "retired_at": "2026-02-07",
+        "notes": "Replaced by YOLO26s v2.0. Backup at best.pt.backup_yolov8n_20260207"
+      },
+      "file_hash_md5": "fea202a209da1f4a63487b842589e44d",
+      "git_commit": null,
+      "notes": "Original baseline model. Was actually YOLOv8n despite being labeled YOLO26n in code."
+    },
+    {
+      "model_id": "yolo26s_v2.0",
+      "name": "YOLO26s v2.0 - Production",
+      "version": "2.0.0",
+      "framework": "ultralytics",
+      "architecture": "yolo26s",
+      "model_path": "models/production/best.pt",
+      "dataset_version": "2.0",
+      "dataset_notes": "401 images: 258 video frames + 3 Ring snapshots + 140 hard negatives. CLAHE preprocessed.",
+      "training_date": "2026-02-06",
+      "training_config": {
+        "phase1_epochs": 20,
+        "phase2_epochs": 97,
+        "phase2_best_epoch": 54,
+        "phase2_early_stopping_patience": 30,
+        "batch_size": 16,
+        "image_size": 640,
+        "augmentation": "mosaic + CLAHE preprocessing",
+        "optimizer": "auto",
+        "lr0": 0.001,
+        "warmup_epochs": 5,
+        "freeze_layers": "10 (phase1 only)"
+      },
+      "metrics": {
+        "validation": {
+          "mAP50": 0.722,
+          "mAP50_95": 0.316,
+          "precision": 0.836,
+          "recall": 0.705
+        },
+        "test": {
+          "mAP50": 0.806,
+          "mAP50_95": 0.361,
+          "precision": 0.836,
+          "recall": 0.765
+        },
+        "confidence_threshold": 0.6
+      },
+      "performance": {
+        "inference_format": "pytorch",
+        "device": "cpu (i7-4790)",
+        "avg_inference_time_ms": 162,
+        "fps": 6.2,
+        "model_size_mb": 19.35,
+        "parameters": 9948638
+      },
+      "preprocessing": {
+        "clahe_enabled": true,
+        "clahe_clip_limit": 2.0,
+        "clahe_tile_grid_size": [8, 8]
       },
       "deployment": {
         "status": "deployed",
         "environment": "production",
         "service": "ml-detector",
-        "deployed_at": "2025-xx-xx",
-        "notes": "Currently active production model"
+        "deployed_at": "2026-02-07",
+        "container_image": "deer-ml-detector (sha256:69c4119f...)",
+        "ultralytics_version": "8.4.12",
+        "notes": "Deployed via docker compose with CLAHE preprocessing enabled"
       },
-      "git_commit": null,
-      "notes": "Original baseline model. Being replaced by YOLO26 with OpenVINO INT8 optimization."
+      "file_hash_md5": "cb50366cac8b5a5f5a445f3c85277da6",
+      "git_commit": "750c360",
+      "notes": "Trained on Dell server (i7-4790 CPU). Significant improvement over baseline: events previously missed (conf=0.0) now detected at conf=0.85+."
     }
   ],
   "deployment_history": [
@@ -50,6 +118,20 @@
       "model_id": "yolov8n_baseline",
       "action": "deployed",
       "environment": "production"
+    },
+    {
+      "date": "2026-02-07",
+      "model_id": "yolov8n_baseline",
+      "action": "retired",
+      "environment": "production",
+      "notes": "Backed up as best.pt.backup_yolov8n_20260207"
+    },
+    {
+      "date": "2026-02-07",
+      "model_id": "yolo26s_v2.0",
+      "action": "deployed",
+      "environment": "production",
+      "notes": "Container rebuilt with ultralytics 8.4.12, CLAHE enabled, verified inside container"
     }
   ],
   "dataset_versions": [
@@ -75,13 +157,42 @@
         "ring_snapshots": 0,
         "videos_processed": 13
       }
+    },
+    {
+      "version": "2.0",
+      "name": "v2.0_20260206_200528",
+      "path": "data/training_datasets/v2.0_20260206_200528",
+      "created_at": "2026-02-06T20:05:28Z",
+      "description": "Extended dataset with CLAHE preprocessing, Ring snapshots, and hard negatives",
+      "statistics": {
+        "total_images": 401,
+        "train_images": 321,
+        "val_images": 40,
+        "test_images": 40,
+        "total_annotations": 423,
+        "classes": ["deer"],
+        "cameras": ["Driveway", "Side"],
+        "temporal_coverage": "2025-11-17 to 2026-02-06",
+        "seasons": ["fall", "winter"]
+      },
+      "source": {
+        "video_frames": 258,
+        "ring_snapshots": 3,
+        "hard_negatives": 140,
+        "videos_processed": 13
+      },
+      "preprocessing": {
+        "clahe_applied": true,
+        "clahe_clip_limit": 2.0,
+        "clahe_tile_grid_size": [8, 8]
+      }
     }
   ],
   "next_steps": [
-    "1. Benchmark YOLOv8n baseline on v1.0 dataset: yolo val model=models/production/best.pt data=data/training_datasets/v1.0_2026-01-baseline/data.yaml",
-    "2. Train YOLO26n on v1.0 dataset: yolo detect train data=data/training_datasets/v1.0_2026-01-baseline/data.yaml model=yolo26n.pt epochs=100",
-    "3. Export YOLO26n to OpenVINO INT8: model.export(format='openvino', int8=True)",
-    "4. Benchmark YOLO26 OpenVINO INT8 vs YOLOv8 PyTorch",
-    "5. Deploy YOLO26 INT8 to production after validation"
+    "1. Monitor YOLO26s v2.0 detection quality on nightly deer events",
+    "2. Collect more Ring snapshots from all 4 cameras for dataset v3.0",
+    "3. Consider OpenVINO INT8 export for faster inference: model.export(format='openvino', int8=True)",
+    "4. Add seasonal diversity (spring/summer) when available",
+    "5. Evaluate YOLO26m if more compute budget becomes available"
   ]
 }

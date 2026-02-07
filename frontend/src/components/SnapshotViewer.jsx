@@ -401,7 +401,7 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
                   </span>
                   
                   <span className="label">Model:</span>
-                  <span className="value" style={{ gridColumn: 'span 3' }}>YOLO26n v1.1 OpenVINO FP16</span>
+                  <span className="value" style={{ gridColumn: 'span 3' }}>{selectedSnapshot.model_version || 'YOLO26s v2.0'}</span>
                 </div>
 
                 <div className="detection-controls">

@@ -54,7 +54,7 @@ def load_detector():
             
             production_model = project_root / "models" / "production" / "best.pt"
             fallback_model = project_root / "models" / "deer_detector_best.pt"
-            base_model = project_root / "yolov8n.pt"
+            base_model = project_root / "yolo26s.pt"
             
             if production_model.exists():
                 model_path = str(production_model)
@@ -63,7 +63,7 @@ def load_detector():
             elif base_model.exists():
                 model_path = str(base_model)
             else:
-                model_path = "yolov8n.pt"  # Download default if needed
+                model_path = "yolo26s.pt"  # Download default if needed
                 
             detector = DeerDetector(model_path=model_path, conf_threshold=0.6)
             print(f"✓ Detector initialized with model: {model_path}")
