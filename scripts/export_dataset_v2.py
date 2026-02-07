@@ -638,7 +638,7 @@ def export_dataset():
         f.write(f"# Exported: {datetime.now().isoformat()}\n")
         f.write(f"# Includes: annotated frames + Ring deer snapshots + negatives\n")
         f.write(f"# Preprocessing: CLAHE (clip_limit={CLAHE_CLIP_LIMIT})\n\n")
-        f.write(f"path: .\n")
+        f.write(f"path: {OUTPUT_DIR}\n")
         f.write(f"train: images/train\n")
         f.write(f"val: images/val\n")
         f.write(f"test: images/test\n\n")
