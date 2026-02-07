@@ -621,6 +621,30 @@ async def cleanup_old_snapshots(request: dict):
     }
 
 
+@app.get("/api/training-archive/stats")
+async def get_training_archive_stats():
+    """Get statistics about the training data archive (negatives collected per camera)."""
+    from pathlib import Path
+    
+    archive_base = Path("/app/data/training_archive/negatives")
+    stats = {"cameras": {}, "total_images": 0, "total_size_mb": 0.0}
+    
+    if archive_base.exists():
+        for camera_dir in sorted(archive_base.iterdir()):
+            if camera_dir.is_dir():
+                files = list(camera_dir.glob("*.jpg"))
+                size_bytes = sum(f.stat().st_size for f in files)
+                stats["cameras"][camera_dir.name] = {
+                    "count": len(files),
+                    "size_mb": round(size_bytes / (1024 * 1024), 2)
+                }
+                stats["total_images"] += len(files)
+                stats["total_size_mb"] += size_bytes / (1024 * 1024)
+    
+    stats["total_size_mb"] = round(stats["total_size_mb"], 2)
+    return stats
+
+
 @app.delete("/api/ring-snapshots/{event_id}")
 async def delete_snapshot(event_id: int):
     """Delete a specific snapshot by event ID."""

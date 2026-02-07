@@ -301,30 +301,39 @@ Target: **~1,500 positives + ~400 negatives = ~1,900 total training images**
 
 #### 3.4.1 Model Architecture Decision
 
-| Option | Params | Speed (i7-4790) | Accuracy | Recommendation |
-|---|---|---|---|---|
-| YOLOv8n | 3.2M | ~150ms (PT), ~60ms (OV FP16) | Low for this domain | ❌ Current — insufficient |
-| **YOLOv8s** | **11.2M** | **~300ms (PT), ~100ms (OV FP16)** | **Good balance** | **✅ Recommended** |
-| YOLOv8m | 25.9M | ~700ms (PT), ~200ms (OV FP16) | High | ⚠️ Too slow for real-time |
-| YOLOv11n | 2.6M | ~140ms estimate | Similar to v8n | ❌ Same problem |
-| YOLOv11s | 9.4M | ~280ms estimate | Slightly better than v8s | ⚠️ Consider if v8s insufficient |
+**Important context:** The project originally planned to use YOLO26 for its CPU-optimized architecture. However, what's actually deployed is a YOLOv8n labeled "YOLO26n v1.1" — the Dockerfile pins `ultralytics==8.3.0`, which predates the real YOLO26 release (Jan 14, 2026, requires `ultralytics>=8.4.0`). The deployment summary itself states "Architecture: YOLOv8n (YOLO26n v1.1)" — confirming it's YOLOv8n under a YOLO26 label.
 
-**Recommendation: YOLOv8s (small)**
+| Option | Params | CPU Speed (i7-4790) | COCO mAP50-95 | Key Traits | Recommendation |
+|---|---|---|---|---|---|
+| YOLOv8n | 3.2M | ~56ms (OV FP16) | 37.3 | Current (mislabeled as YOLO26n) | ❌ Insufficient capacity |
+| YOLOv8s | 11.2M | ~100ms (OV FP16 est) | 44.9 | Proven, more capacity | ⚠️ Viable fallback |
+| YOLO26n | 2.4M | ~39ms (ONNX CPU) | 40.9 | NMS-free, DFL-free, 43% faster CPU | ⚠️ May still be too small |
+| **YOLO26s** | **~9M** | **~60-80ms (OV FP16 est)** | **~46** | **NMS-free, CPU-optimized, more capacity** | **✅ Recommended** |
+| YOLO26m | ~20M | ~150ms (OV FP16 est) | ~50 | High accuracy, slower | ⚠️ Only if needed |
+
+**Recommendation: YOLO26s (small)**
 
 Rationale:
-- **YOLOv8n is too small** for this domain. The nano model simply doesn't have enough capacity to learn the subtle IR features that distinguish deer from background foliage
-- **YOLOv8s at ~100ms (OpenVINO FP16)** is well within the acceptable latency for Ring snapshot processing (snapshots arrive every ~30 seconds minimum)
-- The jump from 3.2M → 11.2M parameters gives 3.5× more capacity for learning subtle IR texture patterns
-- Still runs comfortably on the i7-4790 with OpenVINO
+- **YOLO26 was the right architectural choice all along** — NMS-free inference and DFL removal give it a native CPU speed advantage of ~43% over YOLOv8 at equivalent accuracy
+- **The current "YOLO26n" is actually a mislabeled YOLOv8n** — we never actually deployed real YOLO26. Upgrading to genuine YOLO26 fixes this
+- **YOLO26s over YOLO26n** because the nano variant (~2.4M params) likely doesn't have enough capacity for the subtle IR deer-vs-background discrimination. The "s" variant (~9M params) provides substantially more capacity while remaining fast on CPU
+- **YOLO26s on OpenVINO FP16 should achieve ~60-80ms** on the i7-4790 — well within the 25-second snapshot interval
+- **Simpler deployment** — YOLO26's NMS-free output `(1, 300, 6)` → `[x1, y1, x2, y2, confidence, class_id]` eliminates NMS post-processing entirely, which benefits OpenVINO export
+- **INT8 quantization is cleaner** — no DFL module to quantize means less accuracy loss from INT8
+
+**To use real YOLO26:** Update `ultralytics==8.3.0` → `ultralytics>=8.4.0` in Dockerfile.ml-detector
+
+**Fallback:** If YOLO26s doesn't train well on this small dataset, YOLOv8s is the proven alternative with more community support
 
 #### 3.4.2 Training Hyperparameters (v2.0)
 
 ```yaml
 # configs/training_config_v2.yaml
 model:
-  architecture: "yolov8s"      # Upgrade from nano to small
-  pretrained: true
+  architecture: "yolo26s"      # Real YOLO26 small (requires ultralytics>=8.4.0)
+  pretrained: true              # Start from COCO-pretrained yolo26s.pt
   num_classes: 1
+  fallback: "yolov8s"          # If YOLO26s doesn't converge well
 
 training:
   epochs: 150                  # More epochs with early stopping
@@ -339,8 +348,8 @@ training:
   lr_scheduler: "cosine"       # Cosine annealing
   lrf: 0.01                   # Final LR = lr0 * lrf
   
-  # Device
-  device: "cuda"               # Colab T4 mandatory
+  # Device — Google Colab T4 GPU (see Section 3.4.4)
+  device: "cuda"               # Colab T4
   workers: 2
 
 augmentation:
@@ -361,9 +370,9 @@ validation:
 ```
 
 #### 3.4.3 Transfer Learning Strategy
-Instead of fine-tuning from COCO weights (which are RGB-daytime-biased):
+COCO pretrained weights are RGB-daytime, but retain useful low-level feature extractors (edges, textures) that transfer well to IR images:
 
-1. **Start with COCO-pretrained YOLOv8s** (yolov8s.pt)
+1. **Start with COCO-pretrained YOLO26s** (yolo26s.pt — downloads automatically with `ultralytics>=8.4.0`)
 2. **Freeze backbone layers for first 20 epochs** — let the head adapt to deer-specific features
 3. **Unfreeze all layers for remaining epochs** — fine-tune the full network
 4. This prevents catastrophic forgetting of useful low-level features while adapting to the IR domain
@@ -371,7 +380,8 @@ Instead of fine-tuning from COCO weights (which are RGB-daytime-biased):
 ```python
 from ultralytics import YOLO
 
-model = YOLO('yolov8s.pt')
+# Requires: pip install ultralytics>=8.4.0
+model = YOLO('yolo26s.pt')  # Downloads real YOLO26s pretrained weights
 
 # Phase 1: Freeze backbone (20 epochs)
 results1 = model.train(
@@ -380,7 +390,9 @@ results1 = model.train(
     freeze=10,          # Freeze first 10 layers (backbone)
     lr0=0.01,
     optimizer='AdamW',
-    ...
+    imgsz=640,
+    batch=16,
+    device='cuda',      # Colab T4
 )
 
 # Phase 2: Full fine-tune (130 epochs)
@@ -389,9 +401,30 @@ results2 = model.train(
     epochs=130,
     freeze=0,           # Unfreeze all
     lr0=0.001,          # Lower LR for fine-tuning
-    ...
+    optimizer='AdamW',
+    imgsz=640,
+    batch=16,
+    device='cuda',
 )
 ```
+
+#### 3.4.4 GPU Training Strategy
+
+**Training hardware: Google Colab T4 GPU** (existing workflow, proven in v1.0 training)
+
+The Dell i7-4790 server is CPU-only — ideal for **inference** (which is why YOLO26 + OpenVINO was chosen), but too slow for training. Training v1.0 took 14.3 hours on Colab T4. With the expanded v2.0 dataset (~1,900 images) and YOLO26s, expect ~4-8 hours on T4.
+
+**Workflow:**
+1. Prepare dataset locally (preprocessing, augmentation, splits)
+2. Upload to Google Drive (shared folder already exists: "Deer video detection")
+3. Open Colab notebook → connect T4 runtime
+4. Train YOLO26s → download `best.pt`
+5. Export to OpenVINO FP16 locally on the Dell server
+6. Deploy to Docker containers
+
+**Why not Vertex AI?** The WORKFLOW_MODERNIZATION_STRATEGY.md proposed Vertex AI for automated training. This is a good long-term goal, but for the immediate v2.0 retraining, Colab is simpler — no cloud billing setup, no service account configuration, and the free T4 tier is sufficient for this dataset size.
+
+**Future:** Once the active learning pipeline (Section 7) generates enough data for regular retraining, automate via Vertex AI or Colab Pro scheduled notebooks.
 
 ### 3.5 Phase 5: Evaluation & Comparison Framework
 
@@ -437,23 +470,23 @@ models = {
 ## 4. OpenVINO / INT8 Assessment
 
 ### 4.1 Is OpenVINO FP16 Still Needed?
-**Yes, but for YOLOv8s, not YOLOv8n.** The current FP16 model exists but the base model (YOLOv8n) is too weak regardless of format. With YOLOv8s:
+**Yes, and YOLO26 is even better for OpenVINO.** YOLO26's NMS-free architecture exports more cleanly to OpenVINO than YOLOv8 (no NMS post-processing layer to handle). With YOLO26s:
 
 | Format | Estimated Inference (i7-4790) |
 |---|---|
-| YOLOv8s PyTorch FP32 | ~300-400ms |
-| YOLOv8s OpenVINO FP16 | ~100-150ms |
-| YOLOv8s OpenVINO INT8 | ~50-80ms |
+| YOLO26s PyTorch FP32 | ~150-200ms |
+| YOLO26s OpenVINO FP16 | ~60-80ms |
+| YOLO26s OpenVINO INT8 | ~30-50ms |
 
 ### 4.2 Is INT8 Quantization Needed?
-**Not immediately.** At ~100-150ms with FP16, the model processes snapshots well within the ~30-second arrival interval. INT8 would be a "nice-to-have" optimization for later — focus first on getting a model that actually detects deer reliably.
+**Not immediately.** At ~60-80ms with FP16, YOLO26s processes snapshots well within the 25-second polling interval. INT8 would be a "nice-to-have" optimization for later — focus first on getting a model that actually detects deer reliably.
 
-**Recommendation:** Export to OpenVINO FP16 for deployment. Defer INT8 to Phase 6 if latency becomes a concern with higher snapshot frequency.
+**Recommendation:** Export to OpenVINO FP16 for deployment. YOLO26's DFL-free architecture makes future INT8 conversion cleaner when needed.
 
 ### 4.3 When to Revisit INT8
 - If snapshot polling frequency increases to < 5 seconds
-- If running multiple cameras simultaneously requires batching
-- If the user wants to run YOLOv8m (which would need INT8 to hit acceptable latency)
+- If running all 4 cameras simultaneously requires batching
+- If switching to YOLO26m for higher accuracy (would need INT8 to stay under 100ms)
 
 ---
 
@@ -496,19 +529,20 @@ pip install megadetector
 # 4. Write data.yaml
 ```
 
-### Step 5: Train on Colab T4 (~2-4 hours)
+### Step 5: Train YOLO26s on Colab T4 (~4-8 hours)
 ```python
 # notebooks/train_deer_v2_colab.ipynb
-# 1. Upload dataset to Google Drive
-# 2. Train YOLOv8s with config_v2.yaml
-# 3. Evaluate on test set
-# 4. Download best.pt
+# 1. pip install ultralytics>=8.4.0  (required for real YOLO26)
+# 2. Upload dataset to Google Drive
+# 3. Train YOLO26s: model = YOLO('yolo26s.pt'); model.train(data=...)
+# 4. Evaluate on test set
+# 5. Download best.pt
 ```
 
 ### Step 6: Benchmark & Compare (~30 min)
 ```python
 # scripts/evaluate_v2.py
-# Compare v1.0 (YOLOv8n) vs v2.0 (YOLOv8s) on:
+# Compare v1.0 (YOLOv8n mislabeled YOLO26n) vs v2.0 (real YOLO26s) on:
 #   - 10 Ring deer snapshots (held-out)
 #   - 252 Ring negative snapshots
 #   - Inference latency on i7-4790
@@ -516,6 +550,7 @@ pip install megadetector
 
 ### Step 7: Export & Deploy (~15 min)
 ```bash
+# Update ultralytics in Dockerfile.ml-detector: ultralytics>=8.4.0
 # Export to OpenVINO FP16
 yolo export model=models/v2.0/best.pt format=openvino half=True imgsz=640
 
@@ -569,18 +604,105 @@ This is the most scalable path to a robust model. Every deer encounter improves 
 
 ---
 
-## 8. Summary of Recommendations
+## 8. Negative Image Archiving Pipeline
+
+### 8.1 The Problem
+We can't easily get more deer images until they appear naturally across seasons. But we **can** continuously collect background/negative images from all cameras. These are critical for:
+- Reducing false positives (model learns what "no deer" looks like from every angle)
+- Capturing seasonal variation (lighting, foliage, snow, rain)
+- Building a diverse background set that covers the full year
+
+### 8.2 Current State
+| Setting | Value | Issue |
+|---|---|---|
+| `ENABLE_PERIODIC_SNAPSHOTS` | `true` | ✅ Working |
+| `PERIODIC_SNAPSHOT_CAMERAS` | `10cea9e4511f,587a624d3fae` | ⚠️ Only 2 of 4 cameras |
+| Cleanup behavior | Deletes periodic files after 48h if no deer | ❌ **Losing training data** |
+| `auto_archive_old_snapshots()` | Marks `archived=1` after 3 days | DB entries survive but files deleted |
+| Snapshots on disk | 164 files (162 from cam 10cea9e4511f) | Very few survived cleanup |
+
+### 8.3 Required Changes
+
+#### Change 1: Add All 4 Cameras to Periodic Snapshot Polling
+```
+# docker-compose.yml environment:
+PERIODIC_SNAPSHOT_CAMERAS=10cea9e4511f,587a624d3fae,4439c4de7a79,f045dae9383a
+```
+
+Camera inventory:
+| Camera ID | Name | Events | Role |
+|---|---|---|---|
+| `10cea9e4511f` | Side (deer camera) | 1,273 | Primary — all deer detections come from here |
+| `587a624d3fae` | (unknown) | 2,080 | Background/negative |
+| `4439c4de7a79` | (unknown) | 1,395 | Background/negative |
+| `f045dae9383a` | (unknown) | 1,251 | Background/negative |
+
+#### Change 2: Archive Negative Snapshots Instead of Deleting
+Modify the cleanup task to **move** snapshots to a training archive instead of deleting them, sampling at a sustainable rate:
+
+```python
+# New behavior in cleanup_no_deer_snapshots():
+# 1. Keep 1 snapshot per camera per hour (instead of deleting all)
+# 2. Move kept snapshots to data/training_archive/negatives/{camera_id}/
+# 3. Delete the rest (to manage disk space)
+# Target: ~24 images/camera/day × 4 cameras = ~96 negatives/day
+# Over 1 year: ~35,000 negatives spanning all seasons/lighting
+```
+
+#### Change 3: Add Training Archive Directory Structure
+```
+backend/data/
+├── snapshots/              # Live snapshots (rolling 48h window)
+├── training_archive/       # Long-term training data collection
+│   ├── negatives/          # Background images (no deer)
+│   │   ├── 10cea9e4511f/   # Per-camera organization
+│   │   ├── 587a624d3fae/
+│   │   ├── 4439c4de7a79/
+│   │   └── f045dae9383a/
+│   └── positives/          # Confirmed deer images
+│       └── (auto-collected from user "yes-deer" feedback)
+```
+
+#### Change 4: Disk Space Management
+At ~40-50KB per JPEG snapshot:
+- 96 images/day × 50KB = ~4.8 MB/day
+- ~1.7 GB/year for negatives (very manageable on the Dell server)
+- The Dell server has ample disk space for years of collection
+
+### 8.4 Seasonal Collection Strategy
+
+The real value of this archive is capturing **all four seasons** from all camera angles:
+
+| Season | Months | Key Variations | Training Value |
+|---|---|---|---|
+| Winter | Dec-Feb | Snow, bare trees, short days, cold IR signature | ✅ Currently collecting (limited) |
+| Spring | Mar-May | Budding foliage, rain, longer days, new growth | ❌ Not yet collected |
+| Summer | Jun-Aug | Full foliage, hot IR background, longest days | ❌ Not yet collected |
+| Fall | Sep-Nov | Leaf color change, falling leaves, deer rut season | ❌ Not yet collected |
+
+**By February 2027**, we'll have a full year of background images across all seasons — enough to train a robust model that handles every environmental condition.
+
+### 8.5 Positive Image Collection
+Deer appearances are opportunistic, but the two-tier threshold (Section 6) means:
+- Every detection at conf ≥ 0.3 gets saved (not just ≥ 0.6)
+- User reviews uncertain detections on the dashboard
+- Confirmed positives are automatically moved to `training_archive/positives/`
+- Over a year, we'll accumulate far more than 10 deer images
+
+---
+
+## 9. Summary of Recommendations
 
 | Priority | Action | Impact | Effort |
 |---|---|---|---|
 | **P0** | Re-annotate with MegaDetector | Fixes bbox quality (IoU=0.334 → IoU>0.7) | 1.5 hrs |
 | **P0** | Add 252 negative examples | Reduces false positives | 15 min |
 | **P0** | Add CLAHE preprocessing | Night-vision contrast for deer edges | 30 min |
-| **P1** | Upgrade YOLOv8n → YOLOv8s | 3.5× more model capacity | Config change |
+| **P1** | Upgrade to real YOLO26s | NMS-free, CPU-optimized, ~9M params | Config change + ultralytics upgrade |
 | **P1** | Annotate videos #31-34 | +114 recent frames from production camera | 1 hr |
 | **P1** | Offline augmentation (4×) | Expands dataset to ~1,900 images | 30 min |
 | **P1** | Train on Colab T4 with AdamW | Faster convergence, better generalization | 2-4 hrs |
-| **P2** | Export to OpenVINO FP16 | Inference ~100-150ms on i7-4790 | 15 min |
+| **P2** | Export to OpenVINO FP16 | Inference ~60-80ms on i7-4790 | 15 min |
 | **P2** | Two-tier confidence threshold | More recall + safety against false triggers | 30 min |
 | **P3** | Active learning pipeline | Continuous improvement from production | 2-3 hrs |
 | **P3** | INT8 quantization | Further speed (not needed yet) | 1 hr |

@@ -932,8 +932,15 @@ def unarchive_ring_snapshot(event_id: int) -> bool:
 
 
 def auto_archive_old_snapshots(days: int = 3) -> int:
-    """Archive snapshots older than specified days. Returns count of archived snapshots."""
+    """Archive snapshots older than specified days. 
+    
+    Before marking as archived, copies 1 per camera per hour to training archive.
+    Returns count of archived snapshots.
+    """
     from datetime import datetime, timedelta
+    import shutil
+    from pathlib import Path
+    from collections import defaultdict
     
     conn = get_connection()
     cursor = conn.cursor()
@@ -941,7 +948,60 @@ def auto_archive_old_snapshots(days: int = 3) -> int:
     # Calculate cutoff timestamp in local time
     cutoff = (datetime.now() - timedelta(days=days)).isoformat()
     
-    # Archive snapshots older than X days
+    # Find snapshots to archive that have files on disk
+    cursor.execute("""
+        SELECT id, snapshot_path, timestamp, camera_id
+        FROM ring_events 
+        WHERE snapshot_path IS NOT NULL 
+        AND archived = 0 
+        AND timestamp < ?
+        AND deer_detected = 0
+    """, (cutoff,))
+    rows = cursor.fetchall()
+    
+    # Archive 1 snapshot per camera per hour to training archive
+    archive_base = Path("/app/data/training_archive/negatives")
+    archived_hours = defaultdict(set)
+    training_archived = 0
+    
+    for row_id, snapshot_path, timestamp, camera_id in rows:
+        if not snapshot_path:
+            continue
+        
+        cam_id = camera_id or "unknown"
+        
+        # Create hour key from timestamp
+        try:
+            hour_key = timestamp[:13] if timestamp else str(row_id)
+        except (TypeError, IndexError):
+            hour_key = str(row_id)
+        
+        if hour_key not in archived_hours[cam_id]:
+            archive_dir = archive_base / cam_id
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            
+            source_paths = [
+                Path(f"/app/{snapshot_path}"),
+                Path(snapshot_path)
+            ]
+            filename = Path(snapshot_path).name
+            
+            for source_path in source_paths:
+                if source_path.exists():
+                    try:
+                        dest_path = archive_dir / filename
+                        if not dest_path.exists():
+                            shutil.copy2(str(source_path), str(dest_path))
+                            training_archived += 1
+                            archived_hours[cam_id].add(hour_key)
+                        break
+                    except Exception as e:
+                        logger.warning(f"Failed to archive {source_path}: {e}")
+    
+    if training_archived > 0:
+        logger.info(f"Copied {training_archived} snapshots to training archive before archiving")
+    
+    # Mark all as archived in database
     query = """
         UPDATE ring_events 
         SET archived = 1 
@@ -961,31 +1021,90 @@ def auto_archive_old_snapshots(days: int = 3) -> int:
 
 
 def cleanup_old_snapshots(event_type: str, deer_detected: bool, older_than: str) -> int:
-    """Delete old snapshots and their database entries based on criteria. Returns count of deleted snapshots."""
+    """Archive a sample of snapshots for training, then delete old ones.
+    
+    Before deleting, keeps 1 snapshot per camera per hour in the training archive.
+    This builds a diverse negative training set across all seasons and conditions.
+    """
     import os
+    import shutil
     from pathlib import Path
+    from collections import defaultdict
     
     conn = get_connection()
     cursor = conn.cursor()
     
     # Find snapshots matching criteria
     query = """
-        SELECT id, snapshot_path 
+        SELECT id, snapshot_path, timestamp
         FROM ring_events 
         WHERE event_type = ? 
         AND deer_detected = ? 
         AND timestamp < ?
         AND snapshot_path IS NOT NULL
+        ORDER BY timestamp
     """
     
     cursor.execute(query, (event_type, 1 if deer_detected else 0, older_than))
     snapshots = cursor.fetchall()
     
+    # Archive 1 snapshot per camera per hour before deleting
+    archive_base = Path("/app/data/training_archive/negatives")
+    archived_hours = defaultdict(set)  # camera_id -> set of hour keys already archived
+    archived_count = 0
+    
+    for snapshot_id, snapshot_path, timestamp in snapshots:
+        if not snapshot_path:
+            continue
+            
+        # Extract camera_id from filename (e.g., periodic_20260128_035517_10cea9e4511f.jpg)
+        filename = Path(snapshot_path).name
+        parts = filename.replace(".jpg", "").split("_")
+        camera_id = parts[-1] if len(parts) >= 4 else "unknown"
+        
+        # Create hour key for deduplication (YYYYMMDD_HH)
+        try:
+            # timestamp format: periodic_YYYYMMDD_HHMMSS_cameraid.jpg
+            if len(parts) >= 3:
+                date_part = parts[1]  # YYYYMMDD
+                time_part = parts[2]  # HHMMSS
+                hour_key = f"{date_part}_{time_part[:2]}"  # YYYYMMDD_HH
+            else:
+                hour_key = timestamp[:13] if timestamp else "unknown"
+        except (IndexError, TypeError):
+            hour_key = str(snapshot_id)
+        
+        # Archive 1 per camera per hour
+        if hour_key not in archived_hours[camera_id]:
+            archive_dir = archive_base / camera_id
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Try to copy the file to archive
+            source_paths = [
+                Path(f"/app/{snapshot_path}"),
+                Path(snapshot_path)
+            ]
+            
+            for source_path in source_paths:
+                if source_path.exists():
+                    try:
+                        dest_path = archive_dir / filename
+                        if not dest_path.exists():
+                            shutil.copy2(str(source_path), str(dest_path))
+                            archived_count += 1
+                            archived_hours[camera_id].add(hour_key)
+                        break
+                    except Exception as e:
+                        logger.warning(f"Failed to archive {source_path}: {e}")
+    
+    if archived_count > 0:
+        logger.info(f"Archived {archived_count} snapshots to training archive before cleanup")
+    
+    # Now delete all matching snapshots (including those we archived)
     deleted_count = 0
-    for snapshot_id, snapshot_path in snapshots:
+    for snapshot_id, snapshot_path, timestamp in snapshots:
         # Delete physical file if it exists
         if snapshot_path:
-            # Try both absolute and relative paths
             file_paths = [
                 Path(f"/app/{snapshot_path}"),
                 Path(snapshot_path)
