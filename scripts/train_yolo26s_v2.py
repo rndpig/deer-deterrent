@@ -150,9 +150,20 @@ def train(data_yaml: str, output_dir: str = "runs/train",
         save=True,
     )
     
-    phase1_best = Path(output_dir) / f"{run_name}_phase1" / "weights" / "best.pt"
-    if not phase1_best.exists():
-        phase1_best = Path(output_dir) / f"{run_name}_phase1" / "weights" / "last.pt"
+    # Find the actual phase1 output dir (YOLO may append a number if dir exists)
+    phase1_candidates = sorted(
+        Path(output_dir).glob(f"{run_name}_phase1*/weights/best.pt"),
+        key=lambda p: p.stat().st_mtime, reverse=True
+    )
+    if phase1_candidates:
+        phase1_best = phase1_candidates[0]
+    else:
+        # Fallback to last.pt
+        last_candidates = sorted(
+            Path(output_dir).glob(f"{run_name}_phase1*/weights/last.pt"),
+            key=lambda p: p.stat().st_mtime, reverse=True
+        )
+        phase1_best = last_candidates[0] if last_candidates else Path(output_dir) / f"{run_name}_phase1" / "weights" / "best.pt"
     
     print(f"\nPhase 1 complete. Best: {phase1_best}")
     
@@ -200,9 +211,19 @@ def train(data_yaml: str, output_dir: str = "runs/train",
             save=True,
         )
         
-        final_best = Path(output_dir) / f"{run_name}_phase2" / "weights" / "best.pt"
-        if not final_best.exists():
-            final_best = Path(output_dir) / f"{run_name}_phase2" / "weights" / "last.pt"
+        # Find the actual phase2 output dir (YOLO may append a number)
+        phase2_candidates = sorted(
+            Path(output_dir).glob(f"{run_name}_phase2*/weights/best.pt"),
+            key=lambda p: p.stat().st_mtime, reverse=True
+        )
+        if phase2_candidates:
+            final_best = phase2_candidates[0]
+        else:
+            last_candidates = sorted(
+                Path(output_dir).glob(f"{run_name}_phase2*/weights/last.pt"),
+                key=lambda p: p.stat().st_mtime, reverse=True
+            )
+            final_best = last_candidates[0] if last_candidates else Path(output_dir) / f"{run_name}_phase2" / "weights" / "best.pt"
     else:
         final_best = phase1_best
     
