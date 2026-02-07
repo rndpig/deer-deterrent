@@ -28,11 +28,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install additional ML dependencies
+# ultralytics >= 8.4.0 required for YOLO26 model support
 RUN pip install --no-cache-dir \
     fastapi==0.115.0 \
     uvicorn[standard]==0.32.0 \
     python-multipart==0.0.17 \
-    ultralytics==8.3.0 \
+    "ultralytics>=8.4.0" \
     opencv-python-headless==4.10.0.84 \
     aiohttp==3.9.0
 
@@ -64,6 +65,7 @@ import uvicorn
 from ultralytics import YOLO
 from PIL import Image
 import numpy as np
+import cv2
 
 # Configure logging
 logging.basicConfig(
@@ -90,6 +92,11 @@ CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.75"))
 IOU_THRESHOLD = float(os.getenv("IOU_THRESHOLD", "0.45"))
 DEVICE = os.getenv("DEVICE", "cpu")
 BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://backend:8000")
+
+# CLAHE preprocessing parameters — must match training export settings
+CLAHE_CLIP_LIMIT = 3.0
+CLAHE_TILE_SIZE = (8, 8)
+ENABLE_CLAHE = os.getenv("ENABLE_CLAHE", "true").lower() == "true"
 
 # Settings refresh task
 settings_refresh_task = None
@@ -212,7 +219,19 @@ async def detect_deer(file: UploadFile = File(...)) -> Dict[str, Any]:
         # Convert to numpy array
         image_np = np.array(image)
         
-        logger.info(f"Processing image: {image.size}, mode: {image.mode}")
+        # Apply CLAHE preprocessing to match training data
+        if ENABLE_CLAHE:
+            try:
+                lab = cv2.cvtColor(image_np, cv2.COLOR_RGB2LAB)
+                l_channel, a_channel, b_channel = cv2.split(lab)
+                clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_SIZE)
+                enhanced_l = clahe.apply(l_channel)
+                enhanced_lab = cv2.merge([enhanced_l, a_channel, b_channel])
+                image_np = cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2RGB)
+            except Exception as e:
+                logger.warning(f"CLAHE preprocessing failed, using original: {e}")
+        
+        logger.info(f"Processing image: {image.size}, mode: {image.mode}, clahe={ENABLE_CLAHE}")
         
         # Run inference
         results = model(

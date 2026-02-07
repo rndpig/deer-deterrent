@@ -233,8 +233,14 @@ def export_dataset():
     
     video_splits = {}
     n = len(video_ids)
-    n_train = max(1, int(n * TRAIN_RATIO))
-    n_val = max(1, int(n * VAL_RATIO))
+    # Ensure at least 2 videos in val and 2 in test
+    n_test = max(2, int(n * TEST_RATIO))
+    n_val = max(2, int(n * VAL_RATIO))
+    n_train = n - n_val - n_test
+    if n_train < 1:
+        n_train = max(1, n - 2)  # At least 1 train video
+        n_val = max(1, (n - n_train) // 2)
+        n_test = n - n_train - n_val
     
     for i, vid in enumerate(video_ids):
         if i < n_train:
@@ -381,9 +387,13 @@ def export_dataset():
     for snap in deer_snapshots:
         source_path = None
         snap_path = snap['snapshot_path'] or ''
+        # Try multiple path resolutions — DB stores various formats
         candidates = [
             SNAPSHOTS_DIR / Path(snap_path).name,
             Path(snap_path),
+            Path("/home/rndpig/deer-deterrent/backend") / snap_path,
+            Path("/home/rndpig/deer-deterrent") / snap_path,
+            Path("/home/rndpig/deer-deterrent/backend/data") / Path(snap_path).name,
         ]
         for candidate in candidates:
             if candidate.exists():
@@ -391,30 +401,50 @@ def export_dataset():
                 break
         
         if source_path is None:
+            print(f"  ⚠️  Snapshot {snap['id']}: file not found ({snap_path})")
             continue
         
-        # Parse detection bboxes if available
+        # Parse detection bboxes — handles multiple DB formats:
+        #   Format A: [{"confidence": 0.77, "bbox": {"x1": 320, "y1": 13, "x2": 500, "y2": 400}}]
+        #   Format B: [{"bbox_x1": 320, "bbox_y1": 13, "bbox_x2": 500, "bbox_y2": 400}]
+        #   Format C: [[x1, y1, x2, y2]]
         yolo_lines = []
         if snap['detection_bboxes']:
             try:
                 bboxes = json.loads(snap['detection_bboxes'])
-                for bbox in bboxes:
-                    if isinstance(bbox, dict) and all(k in bbox for k in ['bbox_x1', 'bbox_y1', 'bbox_x2', 'bbox_y2']):
-                        line = bbox_detection_to_yolo(bbox)
-                        if validate_yolo_line(line):
-                            yolo_lines.append(line)
-                    elif isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
-                        bbox_dict = {'bbox_x1': bbox[0], 'bbox_y1': bbox[1], 'bbox_x2': bbox[2], 'bbox_y2': bbox[3]}
+                for bbox_entry in bboxes:
+                    bbox_dict = None
+                    if isinstance(bbox_entry, dict):
+                        # Format A: nested {"confidence":..., "bbox":{"x1":...}}
+                        if 'bbox' in bbox_entry and isinstance(bbox_entry['bbox'], dict):
+                            inner = bbox_entry['bbox']
+                            bbox_dict = {'bbox_x1': inner.get('x1', 0), 'bbox_y1': inner.get('y1', 0),
+                                         'bbox_x2': inner.get('x2', 0), 'bbox_y2': inner.get('y2', 0)}
+                        # Format B: flat {"bbox_x1":...}
+                        elif all(k in bbox_entry for k in ['bbox_x1', 'bbox_y1', 'bbox_x2', 'bbox_y2']):
+                            bbox_dict = bbox_entry
+                        # Format B variant: {"x1":...} without nesting
+                        elif all(k in bbox_entry for k in ['x1', 'y1', 'x2', 'y2']):
+                            bbox_dict = {'bbox_x1': bbox_entry['x1'], 'bbox_y1': bbox_entry['y1'],
+                                         'bbox_x2': bbox_entry['x2'], 'bbox_y2': bbox_entry['y2']}
+                    elif isinstance(bbox_entry, (list, tuple)) and len(bbox_entry) >= 4:
+                        # Format C: [x1, y1, x2, y2]
+                        bbox_dict = {'bbox_x1': bbox_entry[0], 'bbox_y1': bbox_entry[1],
+                                     'bbox_x2': bbox_entry[2], 'bbox_y2': bbox_entry[3]}
+                    
+                    if bbox_dict:
                         line = bbox_detection_to_yolo(bbox_dict)
                         if validate_yolo_line(line):
                             yolo_lines.append(line)
-            except (json.JSONDecodeError, TypeError):
-                pass
+            except (json.JSONDecodeError, TypeError) as e:
+                print(f"  ⚠️  Snapshot {snap['id']}: bbox parse error: {e}")
         
-        # Even without bboxes, include as a known deer image (useful for semi-supervised)
-        # But for strict YOLO training, we need labels — skip if no bboxes
+        # Skip snapshots with no usable bboxes (0% confidence = model missed entirely)
         if not yolo_lines:
-            print(f"  ⚠️  Snapshot {snap['id']}: deer detected but no bbox data, skipping")
+            if snap['detection_confidence'] and snap['detection_confidence'] > 0:
+                print(f"  ⚠️  Snapshot {snap['id']}: has confidence {snap['detection_confidence']:.2f} but bbox parse failed")
+            else:
+                print(f"  ⚠️  Snapshot {snap['id']}: 0% confidence (model missed), skipping")
             continue
         
         # Assign Ring snapshots to val/test preferentially (these are production images)
