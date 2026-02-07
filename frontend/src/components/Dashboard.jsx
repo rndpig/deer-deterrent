@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import './Dashboard.css'
-import BoundingBoxImage from './BoundingBoxImage'
 
 function Dashboard({ stats, settings }) {
   const [snapshots, setSnapshots] = useState([])
@@ -287,22 +286,15 @@ function Dashboard({ stats, settings }) {
               onClick={() => setSelectedSnapshot(snapshot)}
             >
               <div className="snapshot-thumbnail">
-                {snapshot.deer_detected ? (
-                  <BoundingBoxImage
-                    src={`${apiUrl}/api/snapshots/${snapshot.id}/image`}
-                    alt={`Snapshot ${snapshot.id}`}
-                    detections={snapshot.detection_bboxes || []}
-                    className="snapshot-img"
-                  />
-                ) : (
-                  <img
-                    src={`${apiUrl}/api/snapshots/${snapshot.id}/image`}
-                    alt={`Snapshot ${snapshot.id}`}
-                    loading="lazy"
-                  />
-                )}
-                {!!snapshot.deer_detected && (
-                  <div className="deer-badge">🦌 Deer</div>
+                <img
+                  src={`${apiUrl}/api/snapshots/${snapshot.id}/image`}
+                  alt={`Snapshot ${snapshot.id}`}
+                  loading="lazy"
+                />
+                {snapshot.deer_detected && (snapshot.detection_bboxes?.length || 0) > 0 && (
+                  <div className="deer-count-badge">
+                    🦌 {snapshot.detection_bboxes.length}
+                  </div>
                 )}
               </div>
               <div className="snapshot-info">
@@ -398,19 +390,17 @@ function Dashboard({ stats, settings }) {
               ✕
             </button>
             <div className="modal-content">
-              {selectedSnapshot.deer_detected ? (
-                <BoundingBoxImage
-                  src={`${apiUrl}/api/snapshots/${selectedSnapshot.id}/image`}
-                  alt="Snapshot"
-                  detections={selectedSnapshot.detection_bboxes || []}
-                  className="modal-img"
-                />
-              ) : (
+              <div className="modal-image-wrapper">
                 <img 
                   src={`${apiUrl}/api/snapshots/${selectedSnapshot.id}/image`}
                   alt="Snapshot"
                 />
-              )}
+                {selectedSnapshot.deer_detected && (selectedSnapshot.detection_bboxes?.length || 0) > 0 && (
+                  <div className="deer-count-badge deer-count-badge-modal">
+                    🦌 {selectedSnapshot.detection_bboxes.length}
+                  </div>
+                )}
+              </div>
               <div className="image-info">
                 <div className="info-grid-compact">
                   <span className="label">ID:</span>
