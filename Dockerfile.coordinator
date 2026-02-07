@@ -89,8 +89,9 @@ CONFIG = {
     "CONFIDENCE_THRESHOLD": float(os.getenv("CONFIDENCE_THRESHOLD", "0.30")),
     "COOLDOWN_SECONDS": int(os.getenv("COOLDOWN_SECONDS", "300")),
     "ENABLE_IRRIGATION": os.getenv("ENABLE_IRRIGATION", "true").lower() == "true",
-    "ACTIVE_HOURS_START": int(os.getenv("ACTIVE_HOURS_START", "0")),
-    "ACTIVE_HOURS_END": int(os.getenv("ACTIVE_HOURS_END", "24")),
+    "ACTIVE_HOURS_ENABLED": True,  # Will be synced from backend settings
+    "ACTIVE_HOURS_START": int(os.getenv("ACTIVE_HOURS_START", "20")),
+    "ACTIVE_HOURS_END": int(os.getenv("ACTIVE_HOURS_END", "6")),
     "ENABLED_CAMERAS": [c.strip() for c in os.getenv("PERIODIC_SNAPSHOT_CAMERAS", "10cea9e4511f,587a624d3fae").split(",") if c.strip()],
     # Periodic snapshot polling (fixed 25-second cycle)
     "ENABLE_PERIODIC_SNAPSHOTS": os.getenv("ENABLE_PERIODIC_SNAPSHOTS", "false").lower() == "true",
@@ -129,6 +130,30 @@ async def fetch_settings_from_backend():
                     CONFIG["ENABLED_CAMERAS"] = new_cameras
                     if old_cameras != CONFIG["ENABLED_CAMERAS"]:
                         logger.info(f"Updated enabled cameras from {old_cameras} to {CONFIG['ENABLED_CAMERAS']}")
+                
+                # Sync active hours from backend (frontend is source of truth)
+                active_enabled = settings.get('active_hours_enabled')
+                active_start = settings.get('active_hours_start')
+                active_end = settings.get('active_hours_end')
+                
+                if active_enabled is not None:
+                    old_enabled = CONFIG.get("ACTIVE_HOURS_ENABLED", True)
+                    CONFIG["ACTIVE_HOURS_ENABLED"] = bool(active_enabled)
+                    if old_enabled != CONFIG["ACTIVE_HOURS_ENABLED"]:
+                        logger.info(f"Updated active_hours_enabled from {old_enabled} to {CONFIG['ACTIVE_HOURS_ENABLED']}")
+                
+                if active_start is not None:
+                    old_start = CONFIG["ACTIVE_HOURS_START"]
+                    CONFIG["ACTIVE_HOURS_START"] = int(active_start)
+                    if old_start != CONFIG["ACTIVE_HOURS_START"]:
+                        logger.info(f"Updated active_hours_start from {old_start} to {CONFIG['ACTIVE_HOURS_START']}")
+                
+                if active_end is not None:
+                    old_end = CONFIG["ACTIVE_HOURS_END"]
+                    CONFIG["ACTIVE_HOURS_END"] = int(active_end)
+                    if old_end != CONFIG["ACTIVE_HOURS_END"]:
+                        logger.info(f"Updated active_hours_end from {old_end} to {CONFIG['ACTIVE_HOURS_END']}")
+                
                 return True
     except httpx.TimeoutException:
         logger.warning("Timeout fetching settings from backend")
@@ -150,14 +175,18 @@ async def settings_refresh_loop():
 
 
 def is_active_hours() -> bool:
-    """Check if current time is within active hours"""
+    """Check if current time is within active hours (synced from backend/frontend settings)"""
+    # If active hours feature is disabled, always return True
+    if not CONFIG.get("ACTIVE_HOURS_ENABLED", True):
+        return True
+    
     current_hour = datetime.now().hour
     start = CONFIG["ACTIVE_HOURS_START"]
     end = CONFIG["ACTIVE_HOURS_END"]
     
     if start <= end:
         return start <= current_hour < end
-    else:  # Wraps midnight
+    else:  # Wraps midnight (e.g., 20:00 to 6:00)
         return current_hour >= start or current_hour < end
 
 
@@ -652,7 +681,7 @@ async def periodic_snapshot_poller():
         logger.error("RING_LOCATION_ID not configured, periodic snapshots disabled")
         return
     
-    logger.info(f"Periodic snapshots enabled for cameras: {CONFIG['ENABLED_CAMERAS']} (polling every 25 seconds)")
+    logger.info(f"Periodic snapshots enabled for cameras: {CONFIG['ENABLED_CAMERAS']} (polling every 25 seconds, active hours: {CONFIG['ACTIVE_HOURS_START']}:00-{CONFIG['ACTIVE_HOURS_END']}:00)")
     
     # Subscribe to snapshot response topics
     for camera_id in CONFIG["ENABLED_CAMERAS"]:
