@@ -195,7 +195,7 @@ class MissedDetection(BaseModel):
     reporter: str = "user"
 
 class SystemSettings(BaseModel):
-    confidence_threshold: float = 0.6
+    confidence_threshold: float = 0.55
     season_start: str = "04-01"
     season_end: str = "10-31"
     active_hours_enabled: bool = True
