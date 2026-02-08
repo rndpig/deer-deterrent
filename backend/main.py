@@ -346,8 +346,11 @@ async def update_ring_event(event_id: int, update: dict):
     """Update Ring event with detection results."""
     deer_detected = update.get("deer_detected")
     
-    # If user is marking this as having deer, run detection to get bounding boxes
-    if deer_detected == 1 or deer_detected == True:
+    # Only re-detect for USER-initiated "yes-deer" clicks (which send just {deer_detected: 1})
+    # Skip re-detection for coordinator updates (which include "confidence" and "detection_bboxes")
+    is_user_feedback = "confidence" not in update and "detection_bboxes" not in update
+    
+    if (deer_detected == 1 or deer_detected == True) and is_user_feedback:
         detector_obj = load_detector()
         if detector_obj:
             try:

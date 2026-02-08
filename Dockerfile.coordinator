@@ -461,7 +461,8 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
                     "processed": True,
                     "deer_detected": deer_detected,
                     "confidence": confidence,
-                    "detection_bboxes": detection_result.get("detections", []) if deer_detected else []
+                    "detection_bboxes": detection_result.get("detections", []) if deer_detected else [],
+                    "model_version": detection_result.get("model_version", "YOLO26s v2.0")
                 }
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     await client.patch(

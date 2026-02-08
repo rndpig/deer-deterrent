@@ -285,7 +285,8 @@ async def detect_deer(file: UploadFile = File(...)) -> Dict[str, Any]:
                 "width": image.width,
                 "height": image.height
             },
-            "confidence_threshold": CONFIDENCE_THRESHOLD
+            "confidence_threshold": CONFIDENCE_THRESHOLD,
+            "model_version": "YOLO26s v2.0"
         }
         
         logger.info(f"Detection complete: {len(detections)} objects found, deer={deer_detected}")
