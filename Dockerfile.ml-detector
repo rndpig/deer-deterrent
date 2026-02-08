@@ -89,7 +89,7 @@ app = FastAPI(
 model = None
 MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "/app/models/production/best.pt")
 CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.75"))
-IOU_THRESHOLD = float(os.getenv("IOU_THRESHOLD", "0.45"))
+IOU_THRESHOLD = float(os.getenv("IOU_THRESHOLD", "0.65"))
 DEVICE = os.getenv("DEVICE", "cpu")
 BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://backend:8000")
 

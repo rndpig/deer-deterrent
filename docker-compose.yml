@@ -183,7 +183,7 @@ services:
     environment:
       - YOLO_MODEL_PATH=${YOLO_MODEL_PATH:-/app/models/production/best.pt}
       - CONFIDENCE_THRESHOLD=${CONFIDENCE_THRESHOLD:-0.30}
-      - IOU_THRESHOLD=${IOU_THRESHOLD:-0.45}
+      - IOU_THRESHOLD=${IOU_THRESHOLD:-0.65}
       - DEVICE=${DEVICE:-cpu}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - TZ=${TIMEZONE:-America/New_York}

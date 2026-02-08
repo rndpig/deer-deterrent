@@ -700,65 +700,67 @@ async def periodic_snapshot_poller():
                 continue
             
             for camera_id in CONFIG["POLLING_CAMERAS"]:
-                # Clear stale snapshot to detect when new one arrives
-                old_snapshot = camera_snapshots.pop(camera_id, None)
-                
-                # Request snapshot via MQTT (ring-mqtt snapshot_interval/command topic)
+                # Request snapshot refresh via MQTT (ring-mqtt updates its interval)
                 topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{camera_id}/snapshot_interval/command"
                 mqtt_client.publish(topic, "10")
-                logger.info(f"Requested periodic snapshot from camera {camera_id}")
                 
-                # Wait a bit for snapshot to arrive, then queue for processing
-                await asyncio.sleep(2)  # Give Ring-MQTT time to publish snapshot
+            # Wait for all cameras to potentially deliver fresh snapshots
+            await asyncio.sleep(5)
+            
+            for camera_id in CONFIG["POLLING_CAMERAS"]:
+                # Use whatever snapshot is currently cached from the MQTT stream
+                # Ring-mqtt publishes snapshots every ~10s, so camera_snapshots
+                # should always have recent data if MQTT is connected
+                if camera_id not in camera_snapshots:
+                    logger.warning(f"No cached snapshot for camera {camera_id}")
+                    continue
                 
-                if camera_id in camera_snapshots:
-                    # Check if this is the same snapshot as last time (prevent duplicates)
-                    snapshot_bytes = camera_snapshots[camera_id]
-                    snapshot_hash = hashlib.md5(snapshot_bytes).hexdigest()
-                    
-                    if camera_id in last_snapshot_hash and last_snapshot_hash[camera_id] == snapshot_hash:
-                        logger.debug(f"Skipping duplicate snapshot for camera {camera_id} (same hash)")
-                        continue
-                    
-                    # Update hash tracker
-                    last_snapshot_hash[camera_id] = snapshot_hash
-                    
-                    # Log Ring event (synchronous)
-                    snapshot_size = len(snapshot_bytes)
-                    
-                    # Save snapshot to disk
-                    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    snapshot_filename = f"periodic_{timestamp_str}_{camera_id}.jpg"
-                    snapshot_path_obj = Path(f"/app/data/snapshots/{snapshot_filename}")
-                    snapshot_path_obj.parent.mkdir(parents=True, exist_ok=True)
-                    snapshot_path_obj.write_bytes(snapshot_bytes)
-                    snapshot_path = f"data/snapshots/{snapshot_filename}"
-                    
-                    logger.info(f"✓ Saved periodic snapshot to {snapshot_path}")
-                    
-                    ring_event_id = log_ring_event(
-                        camera_id=camera_id,
-                        event_type="periodic_snapshot",
-                        snapshot_available=True,
-                        snapshot_size=snapshot_size,
-                        snapshot_path=snapshot_path
-                    )
-                    
-                    if ring_event_id:
-                        logger.info(f"Logged periodic snapshot event #{ring_event_id}")
-                    
-                    # Queue for ML detection (lower priority than motion events)
-                    event_queue.put((1, next(event_counter), {  # Priority 1 = lower (periodic snapshots)
-                        "camera_id": camera_id,
-                        "snapshot_bytes": snapshot_bytes,
-                        "timestamp": datetime.now().isoformat(),
-                        "source": "periodic_snapshot",
-                        "ring_event_id": ring_event_id
-                    }))
-                    
-                    last_periodic_snapshot_time[camera_id] = datetime.now()
-                else:
-                    logger.warning(f"No snapshot received for periodic request from {camera_id}")
+                snapshot_bytes = camera_snapshots[camera_id]
+                
+                # Check if this is the same snapshot as last time (prevent duplicates)
+                snapshot_hash = hashlib.md5(snapshot_bytes).hexdigest()
+                
+                if camera_id in last_snapshot_hash and last_snapshot_hash[camera_id] == snapshot_hash:
+                    logger.debug(f"Skipping duplicate snapshot for camera {camera_id} (same hash)")
+                    continue
+                
+                # Update hash tracker
+                last_snapshot_hash[camera_id] = snapshot_hash
+                
+                # Log Ring event (synchronous)
+                snapshot_size = len(snapshot_bytes)
+                
+                # Save snapshot to disk
+                timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                snapshot_filename = f"periodic_{timestamp_str}_{camera_id}.jpg"
+                snapshot_path_obj = Path(f"/app/data/snapshots/{snapshot_filename}")
+                snapshot_path_obj.parent.mkdir(parents=True, exist_ok=True)
+                snapshot_path_obj.write_bytes(snapshot_bytes)
+                snapshot_path = f"data/snapshots/{snapshot_filename}"
+                
+                logger.info(f"✓ Saved periodic snapshot to {snapshot_path} ({snapshot_size} bytes)")
+                
+                ring_event_id = log_ring_event(
+                    camera_id=camera_id,
+                    event_type="periodic_snapshot",
+                    snapshot_available=True,
+                    snapshot_size=snapshot_size,
+                    snapshot_path=snapshot_path
+                )
+                
+                if ring_event_id:
+                    logger.info(f"Logged periodic snapshot event #{ring_event_id}")
+                
+                # Queue for ML detection (lower priority than motion events)
+                event_queue.put((1, next(event_counter), {  # Priority 1 = lower (periodic snapshots)
+                    "camera_id": camera_id,
+                    "snapshot_bytes": snapshot_bytes,
+                    "timestamp": datetime.now().isoformat(),
+                    "source": "periodic_snapshot",
+                    "ring_event_id": ring_event_id
+                }))
+                
+                last_periodic_snapshot_time[camera_id] = datetime.now()
         
         except Exception as e:
             logger.error(f"Error in periodic snapshot poller: {e}", exc_info=True)
