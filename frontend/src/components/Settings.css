@@ -205,6 +205,52 @@
   font-style: italic;
 }
 
+.inline-field {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.inline-field label {
+  margin-bottom: 0 !important;
+  white-space: nowrap;
+  min-width: fit-content;
+}
+
+.inline-field input[type="number"] {
+  width: 70px;
+}
+
+.settings-select {
+  padding: 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: white;
+  cursor: pointer;
+}
+
+.settings-select:hover {
+  border-color: #2563eb;
+}
+
+.settings-select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+@media (prefers-color-scheme: dark) {
+  .settings-select {
+    background: #1a1a1a;
+    border-color: #404040;
+    color: #e0e0e0;
+  }
+  .settings-select:hover {
+    border-color: #2563eb;
+  }
+}
+
 .value-badge {
   background: #2563eb;
   color: white;

@@ -110,11 +110,13 @@ The server has its own `.env` at `/home/rndpig/deer-deterrent/.env` with product
 ### Threshold Configuration
 - **CONFIDENCE_THRESHOLD**: 0.55 (synced from backend settings to ml-detector every 30s)
 - **IOU_THRESHOLD**: 0.65 (set via .env, NMS deduplication)
+- **SNAPSHOT_FREQUENCY**: 60 (Ring camera capture frequency in seconds; options: 15, 30, 60, 180)
 - ML-detector default from .env is overridden by backend settings via `fetch_settings_from_backend()`
 
 ### Settings Synchronization
 - Coordinator and ML-detector both poll `GET /api/settings` from backend every 30 seconds
-- This is how confidence_threshold, enabled_cameras, and active_hours propagate
+- This is how confidence_threshold, enabled_cameras, active_hours, and snapshot_frequency propagate
+- Coordinator derives its polling interval as `snapshot_frequency + 10s` buffer
 - To change settings: use the frontend Settings page or `PUT /api/settings`
 
 ---
@@ -176,7 +178,7 @@ Single-file Python app embedded in the Dockerfile (~900 lines). Key responsibili
 
 1. **MQTT Listener**: Subscribes to Ring motion and snapshot topics
 2. **Event Queue**: Queues motion events for processing
-4. **Periodic Snapshot Poller**: During active hours, requests snapshots from all 4 cameras every 70 seconds via MQTT (aligned with Ring's 60s capture frequency)
+4. **Periodic Snapshot Poller**: During active hours, requests snapshots from all 4 cameras at an interval of `snapshot_frequency + 10s` (configurable via Settings page; default 60s = polls every 70s)
 4. **Detection Orchestration**: Sends snapshots to ML-detector, reports results to backend
 5. **Irrigation Control**: If deer detected, triggers Rainbird zones (with cooldown)
 6. **Settings Sync**: Refreshes from backend every 30 seconds

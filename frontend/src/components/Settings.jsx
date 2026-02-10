@@ -391,41 +391,60 @@ function Settings({ settings, setSettings }) {
               </label>
               {localSettings.active_hours_enabled && (
                 <>
-                  <label htmlFor="hours-start">Start (24h)</label>
-                  <input
-                    id="hours-start"
-                    type="number"
-                    min="0"
-                    max="23"
-                    value={localSettings.active_hours_start || 20}
-                    onChange={(e) => handleChange('active_hours_start', parseInt(e.target.value))}
-                  />
-                  <label htmlFor="hours-end">End (24h)</label>
-                  <input
-                    id="hours-end"
-                    type="number"
-                    min="0"
-                    max="23"
-                    value={localSettings.active_hours_end || 6}
-                    onChange={(e) => handleChange('active_hours_end', parseInt(e.target.value))}
-                  />
+                  <div className="inline-field">
+                    <label htmlFor="hours-start">Start (24h)</label>
+                    <input
+                      id="hours-start"
+                      type="number"
+                      min="0"
+                      max="23"
+                      value={localSettings.active_hours_start || 20}
+                      onChange={(e) => handleChange('active_hours_start', parseInt(e.target.value))}
+                    />
+                  </div>
+                  <div className="inline-field">
+                    <label htmlFor="hours-end">End (24h)</label>
+                    <input
+                      id="hours-end"
+                      type="number"
+                      min="0"
+                      max="23"
+                      value={localSettings.active_hours_end || 6}
+                      onChange={(e) => handleChange('active_hours_end', parseInt(e.target.value))}
+                    />
+                  </div>
                 </>
               )}
-              <label htmlFor="archive-days">Auto-Archive After</label>
-              <div className="input-with-unit">
-                <input
-                  id="archive-days"
-                  type="number"
-                  min="1"
-                  max="30"
-                  step="1"
-                  value={localSettings.snapshot_archive_days || 3}
-                  onChange={(e) => handleChange('snapshot_archive_days', parseInt(e.target.value))}
-                  className="value-input"
-                />
-                <span className="unit-label">days</span>
+              <div className="inline-field">
+                <label htmlFor="snapshot-freq">Snapshot Frequency</label>
+                <select
+                  id="snapshot-freq"
+                  className="settings-select"
+                  value={localSettings.snapshot_frequency || 60}
+                  onChange={(e) => handleChange('snapshot_frequency', parseInt(e.target.value))}
+                >
+                  <option value={15}>15 sec</option>
+                  <option value={30}>30 sec</option>
+                  <option value={60}>1 min</option>
+                  <option value={180}>3 min</option>
+                </select>
               </div>
-              <p className="setting-hint">Snapshots older than this will be automatically archived</p>
+              <div className="inline-field">
+                <label htmlFor="archive-days">Auto-Archive After</label>
+                <div className="input-with-unit">
+                  <input
+                    id="archive-days"
+                    type="number"
+                    min="1"
+                    max="30"
+                    step="1"
+                    value={localSettings.snapshot_archive_days || 3}
+                    onChange={(e) => handleChange('snapshot_archive_days', parseInt(e.target.value))}
+                    className="value-input"
+                  />
+                  <span className="unit-label">days</span>
+                </div>
+              </div>
             </div>
           </div>
 

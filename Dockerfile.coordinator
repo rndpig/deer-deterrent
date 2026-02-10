@@ -94,8 +94,9 @@ CONFIG = {
     "ACTIVE_HOURS_END": int(os.getenv("ACTIVE_HOURS_END", "6")),
     "ENABLED_CAMERAS": [c.strip() for c in os.getenv("ENABLED_CAMERAS", "").split(",") if c.strip()],  # Detection filtering (synced from backend)
     "POLLING_CAMERAS": [c.strip() for c in os.getenv("PERIODIC_SNAPSHOT_CAMERAS", "10cea9e4511f,587a624d3fae").split(",") if c.strip()],  # Snapshot polling (NOT overwritten by backend sync)
-    # Periodic snapshot polling (fixed 70-second cycle, aligned with Ring's 60s capture frequency)
+    # Periodic snapshot polling (interval derived from snapshot_frequency setting)
     "ENABLE_PERIODIC_SNAPSHOTS": os.getenv("ENABLE_PERIODIC_SNAPSHOTS", "false").lower() == "true",
+    "SNAPSHOT_FREQUENCY": 60,  # Ring capture frequency in seconds, synced from backend settings
     "RING_LOCATION_ID": os.getenv("RING_LOCATION_ID", ""),  # Needed for MQTT topics
 }
 
@@ -154,6 +155,14 @@ async def fetch_settings_from_backend():
                     CONFIG["ACTIVE_HOURS_END"] = int(active_end)
                     if old_end != CONFIG["ACTIVE_HOURS_END"]:
                         logger.info(f"Updated active_hours_end from {old_end} to {CONFIG['ACTIVE_HOURS_END']}")
+                
+                # Sync snapshot frequency (drives polling interval)
+                new_freq = settings.get('snapshot_frequency')
+                if new_freq is not None:
+                    old_freq = CONFIG.get("SNAPSHOT_FREQUENCY", 60)
+                    CONFIG["SNAPSHOT_FREQUENCY"] = int(new_freq)
+                    if old_freq != CONFIG["SNAPSHOT_FREQUENCY"]:
+                        logger.info(f"Updated snapshot_frequency from {old_freq}s to {CONFIG['SNAPSHOT_FREQUENCY']}s (polling interval: {CONFIG['SNAPSHOT_FREQUENCY'] + 10}s)")
                 
                 return True
     except httpx.TimeoutException:
@@ -683,7 +692,8 @@ async def periodic_snapshot_poller():
         logger.error("RING_LOCATION_ID not configured, periodic snapshots disabled")
         return
     
-    logger.info(f"Periodic snapshots enabled for cameras: {CONFIG['POLLING_CAMERAS']} (polling every 70 seconds, active hours: {CONFIG['ACTIVE_HOURS_START']}:00-{CONFIG['ACTIVE_HOURS_END']}:00)")
+    polling_interval = CONFIG["SNAPSHOT_FREQUENCY"] + 10
+    logger.info(f"Periodic snapshots enabled for cameras: {CONFIG['POLLING_CAMERAS']} (snapshot frequency: {CONFIG['SNAPSHOT_FREQUENCY']}s, polling every {polling_interval}s, active hours: {CONFIG['ACTIVE_HOURS_START']}:00-{CONFIG['ACTIVE_HOURS_END']}:00)")
     
     # Subscribe to snapshot response topics
     for camera_id in CONFIG["POLLING_CAMERAS"]:
@@ -693,8 +703,9 @@ async def periodic_snapshot_poller():
     
     while True:
         try:
-            # Fixed 70-second polling cycle (Ring now captures every 60s)
-            await asyncio.sleep(70)
+            # Poll interval = snapshot_frequency + 10s buffer (dynamically updated via settings sync)
+            poll_interval = CONFIG["SNAPSHOT_FREQUENCY"] + 10
+            await asyncio.sleep(poll_interval)
             
             if not is_active_hours():
                 logger.debug("Outside active hours, skipping periodic snapshots")

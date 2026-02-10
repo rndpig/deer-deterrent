@@ -205,6 +205,7 @@ class SystemSettings(BaseModel):
     zone_cooldown: int = 300
     dry_run: bool = True
     snapshot_archive_days: int = 3
+    snapshot_frequency: int = 60  # Ring camera snapshot capture frequency in seconds (15, 30, 60, 180)
     enabled_cameras: List[str] = ["10cea9e4511f"]  # Default: Side camera only
 
 class ZoneConfig(BaseModel):
