@@ -176,7 +176,7 @@ Single-file Python app embedded in the Dockerfile (~900 lines). Key responsibili
 
 1. **MQTT Listener**: Subscribes to Ring motion and snapshot topics
 2. **Event Queue**: Queues motion events for processing
-3. **Periodic Snapshot Poller**: During active hours, requests snapshots from all 4 cameras every 25 seconds via MQTT
+4. **Periodic Snapshot Poller**: During active hours, requests snapshots from all 4 cameras every 70 seconds via MQTT (aligned with Ring's 60s capture frequency)
 4. **Detection Orchestration**: Sends snapshots to ML-detector, reports results to backend
 5. **Irrigation Control**: If deer detected, triggers Rainbird zones (with cooldown)
 6. **Settings Sync**: Refreshes from backend every 30 seconds

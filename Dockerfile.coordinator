@@ -94,7 +94,7 @@ CONFIG = {
     "ACTIVE_HOURS_END": int(os.getenv("ACTIVE_HOURS_END", "6")),
     "ENABLED_CAMERAS": [c.strip() for c in os.getenv("ENABLED_CAMERAS", "").split(",") if c.strip()],  # Detection filtering (synced from backend)
     "POLLING_CAMERAS": [c.strip() for c in os.getenv("PERIODIC_SNAPSHOT_CAMERAS", "10cea9e4511f,587a624d3fae").split(",") if c.strip()],  # Snapshot polling (NOT overwritten by backend sync)
-    # Periodic snapshot polling (fixed 25-second cycle)
+    # Periodic snapshot polling (fixed 70-second cycle, aligned with Ring's 60s capture frequency)
     "ENABLE_PERIODIC_SNAPSHOTS": os.getenv("ENABLE_PERIODIC_SNAPSHOTS", "false").lower() == "true",
     "RING_LOCATION_ID": os.getenv("RING_LOCATION_ID", ""),  # Needed for MQTT topics
 }
@@ -683,7 +683,7 @@ async def periodic_snapshot_poller():
         logger.error("RING_LOCATION_ID not configured, periodic snapshots disabled")
         return
     
-    logger.info(f"Periodic snapshots enabled for cameras: {CONFIG['POLLING_CAMERAS']} (polling every 25 seconds, active hours: {CONFIG['ACTIVE_HOURS_START']}:00-{CONFIG['ACTIVE_HOURS_END']}:00)")
+    logger.info(f"Periodic snapshots enabled for cameras: {CONFIG['POLLING_CAMERAS']} (polling every 70 seconds, active hours: {CONFIG['ACTIVE_HOURS_START']}:00-{CONFIG['ACTIVE_HOURS_END']}:00)")
     
     # Subscribe to snapshot response topics
     for camera_id in CONFIG["POLLING_CAMERAS"]:
@@ -693,8 +693,8 @@ async def periodic_snapshot_poller():
     
     while True:
         try:
-            # Fixed 25-second polling cycle
-            await asyncio.sleep(25)
+            # Fixed 70-second polling cycle (Ring now captures every 60s)
+            await asyncio.sleep(70)
             
             if not is_active_hours():
                 logger.debug("Outside active hours, skipping periodic snapshots")
@@ -706,7 +706,7 @@ async def periodic_snapshot_poller():
                 mqtt_client.publish(topic, "10")
                 
             # Wait for all cameras to potentially deliver fresh snapshots
-            await asyncio.sleep(5)
+            await asyncio.sleep(8)
             
             for camera_id in CONFIG["POLLING_CAMERAS"]:
                 # Use whatever snapshot is currently cached from the MQTT stream
