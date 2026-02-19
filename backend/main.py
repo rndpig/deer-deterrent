@@ -19,6 +19,7 @@ import tempfile
 import shutil
 import base64
 import os
+import httpx
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -687,11 +688,7 @@ async def test_detection(
     camera_id: str = Form(None),
     captured_at: str = Form(None)
 ):
-    """Test deer detection on an uploaded image and optionally save to database."""
-    detector_obj = load_detector()
-    if not detector_obj:
-        raise HTTPException(status_code=503, detail="Detector not initialized")
-    
+    """Test deer detection on an uploaded image using the ml-detector service (YOLO26s v2.0 with CLAHE)."""
     # Log parameters for debugging
     logger.info(f"test_detection called with threshold={threshold}, save_to_database={save_to_database}")
     
@@ -712,30 +709,35 @@ async def test_detection(
         if img is None:
             raise HTTPException(status_code=400, detail="Failed to decode image")
         
-        # Run detection with specified threshold
-        original_threshold = detector_obj.conf_threshold
-        detector_obj.conf_threshold = threshold
+        # Call ml-detector service (YOLO26s v2.0 with CLAHE preprocessing)
+        ml_detector_url = os.getenv("ML_DETECTOR_URL", "http://ml-detector:8001")
         
-        detections_list, _ = detector_obj.detect(img, return_annotated=False)
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # Re-encode image to JPEG bytes for sending to ml-detector
+                success, encoded_img = cv2.imencode('.jpg', img)
+                if not success:
+                    raise HTTPException(status_code=500, detail="Failed to encode image")
+                
+                files = {"file": ("upload.jpg", encoded_img.tobytes(), "image/jpeg")}
+                response = await client.post(f"{ml_detector_url}/detect", files=files)
+                response.raise_for_status()
+                ml_result = response.json()
+                
+                logger.info(f"ML detection result: {ml_result['num_detections']} objects, deer={ml_result['deer_detected']}")
+                
+        except httpx.RequestError as e:
+            logger.error(f"Failed to connect to ml-detector service: {e}")
+            raise HTTPException(status_code=503, detail="ML detector service unavailable")
+        except Exception as e:
+            logger.error(f"ML detection failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Detection failed: {str(e)}")
         
-        # Restore original threshold
-        detector_obj.conf_threshold = original_threshold
+        # Extract detection results from ml-detector response
+        deer_detected = ml_result['deer_detected']
+        max_confidence = ml_result.get('confidence', 0.0)
+        detections = ml_result.get('detections', [])
         
-        # Format results
-        detections = []
-        max_confidence = 0.0
-        
-        for det in detections_list:
-            confidence = det['confidence']
-            detections.append({
-                "confidence": confidence,
-                "bbox": det['bbox'],
-                "class_name": det.get('class_name', 'deer')
-            })
-            if confidence > max_confidence:
-                max_confidence = confidence
-        
-        deer_detected = len(detections) > 0
         saved_event_id = None
         
         # Save to database if requested
@@ -764,6 +766,14 @@ async def test_detection(
             # Use provided camera_id or default to 'manual_upload'
             final_camera_id = camera_id if camera_id else 'manual_upload'
             
+            # Format bboxes for database storage
+            detection_bboxes = None
+            if detections:
+                detection_bboxes = json.dumps([{
+                    'bbox': det['bbox'],
+                    'confidence': det['confidence']
+                } for det in detections])
+            
             # Create database entry
             event_data = {
                 'camera_id': final_camera_id,
@@ -775,11 +785,13 @@ async def test_detection(
                 'processed': 1,
                 'deer_detected': 1 if deer_detected else 0,
                 'detection_confidence': max_confidence,
+                'detection_bboxes': detection_bboxes,
+                'model_version': ml_result.get('model_version', 'YOLO26s v2.0'),
                 'archived': 0
             }
             
             saved_event_id = db.create_ring_event(event_data)
-            logger.info(f"Saved manual upload to database as event {saved_event_id} (camera: {final_camera_id}, time: {timestamp.isoformat()})")
+            logger.info(f"Saved manual upload to database as event {saved_event_id} (camera: {final_camera_id}, time: {timestamp.isoformat()}, deer: {deer_detected}, confidence: {max_confidence:.3f})")
         
         return {
             "deer_detected": deer_detected,
@@ -787,9 +799,12 @@ async def test_detection(
             "detections": detections,
             "detection_count": len(detections),
             "threshold_used": threshold,
-            "saved_event_id": saved_event_id
+            "saved_event_id": saved_event_id,
+            "model_version": ml_result.get('model_version', 'YOLO26s v2.0')
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error testing detection: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -135,6 +135,8 @@ services:
     depends_on:
       database:
         condition: service_healthy
+      ml-detector:
+        condition: service_started
     
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-deeruser}:${POSTGRES_PASSWORD:-changeme}@database:5432/${POSTGRES_DB:-deer_deterrent}
@@ -144,6 +146,7 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://${DELL_SERVER_IP:-192.168.1.200}:3000}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - TZ=${TIMEZONE:-America/New_York}
+      - ML_DETECTOR_URL=http://ml-detector:8001
     
     volumes:
       - ./backend:/app
