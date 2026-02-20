@@ -714,12 +714,8 @@ async def test_detection(
         
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                # Re-encode image to JPEG bytes for sending to ml-detector
-                success, encoded_img = cv2.imencode('.jpg', img)
-                if not success:
-                    raise HTTPException(status_code=500, detail="Failed to encode image")
-                
-                files = {"file": ("upload.jpg", encoded_img.tobytes(), "image/jpeg")}
+                # Send original uploaded image bytes to ml-detector (don't re-encode)
+                files = {"file": ("upload.jpg", contents, "image/jpeg")}
                 response = await client.post(f"{ml_detector_url}/detect", files=files)
                 response.raise_for_status()
                 ml_result = response.json()
