@@ -4,7 +4,9 @@ import './Dashboard.css'
 function Dashboard({ stats, settings }) {
   const [snapshots, setSnapshots] = useState([])
   const [loading, setLoading] = useState(true)
-  const [timeFilter, setTimeFilter] = useState('all') // last24h, last7d, all
+  const [timeFilter, setTimeFilter] = useState('last24h') // last24h, last7d, all
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(100)
   const [feedbackFilter, setFeedbackFilter] = useState('with_deer') // all, with_deer, without_deer
   const [cameraFilter, setCameraFilter] = useState('all') // all, or specific camera ID
   const [selectedSnapshot, setSelectedSnapshot] = useState(null)
@@ -45,6 +47,7 @@ function Dashboard({ stats, settings }) {
 
   useEffect(() => {
     loadSnapshots()
+    setCurrentPage(1) // Reset to page 1 when filters change
   }, [timeFilter, feedbackFilter, cameraFilter])
 
   // Listen for upload modal trigger from header
@@ -95,6 +98,7 @@ function Dashboard({ stats, settings }) {
       
       console.log('Final snapshots to display:', allSnapshots.length)
       setSnapshots(allSnapshots)
+      setCurrentPage(1) // Reset to first page
     } catch (error) {
       console.error('Error loading snapshots:', error)
       alert(`Failed to load snapshots: ${error.message}`)
@@ -200,10 +204,10 @@ function Dashboard({ stats, settings }) {
           <label className="filter-label">Time:</label>
           <div className="filter-buttons">
             <button
-              className={timeFilter === 'all' ? 'active' : ''}
-              onClick={() => setTimeFilter('all')}
+              className={timeFilter === 'last24h' ? 'active' : ''}
+              onClick={() => setTimeFilter('last24h')}
             >
-              All Time
+              Last 24h
             </button>
             <button
               className={timeFilter === 'last7d' ? 'active' : ''}
@@ -212,10 +216,10 @@ function Dashboard({ stats, settings }) {
               Last 7d
             </button>
             <button
-              className={timeFilter === 'last24h' ? 'active' : ''}
-              onClick={() => setTimeFilter('last24h')}
+              className={timeFilter === 'all' ? 'active' : ''}
+              onClick={() => setTimeFilter('all')}
             >
-              Last 24h
+              All Time
             </button>
           </div>
         </div>
@@ -278,8 +282,14 @@ function Dashboard({ stats, settings }) {
           <p>No snapshots match your filters.</p>
         </div>
       ) : (
-        <div className="snapshot-grid">
-          {snapshots.map((snapshot) => (
+        <>
+          {/* Pagination Info */}
+          <div className="pagination-info">
+            Showing {Math.min((currentPage - 1) * itemsPerPage + 1, snapshots.length)}-{Math.min(currentPage * itemsPerPage, snapshots.length)} of {snapshots.length} snapshots
+          </div>
+          
+          <div className="snapshot-grid">
+            {snapshots.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((snapshot) => (
             <div
               key={snapshot.id}
               className={`snapshot-card ${snapshot.deer_detected ? 'with-deer' : ''}`}
@@ -314,6 +324,40 @@ function Dashboard({ stats, settings }) {
             </div>
           ))}
         </div>
+        
+        {/* Pagination Controls */}
+        {snapshots.length > itemsPerPage && (
+          <div className="pagination-controls">
+            <button 
+              onClick={() => setCurrentPage(1)} 
+              disabled={currentPage === 1}
+            >
+              « First
+            </button>
+            <button 
+              onClick={() => setCurrentPage(currentPage - 1)} 
+              disabled={currentPage === 1}
+            >
+              ‹ Prev
+            </button>
+            <span className="page-indicator">
+              Page {currentPage} of {Math.ceil(snapshots.length / itemsPerPage)}
+            </span>
+            <button 
+              onClick={() => setCurrentPage(currentPage + 1)} 
+              disabled={currentPage >= Math.ceil(snapshots.length / itemsPerPage)}
+            >
+              Next ›
+            </button>
+            <button 
+              onClick={() => setCurrentPage(Math.ceil(snapshots.length / itemsPerPage))} 
+              disabled={currentPage >= Math.ceil(snapshots.length / itemsPerPage)}
+            >
+              Last »
+            </button>
+          </div>
+        )}
+        </>
       )}
 
       {/* Upload Modal */}
