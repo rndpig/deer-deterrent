@@ -57,7 +57,7 @@ function Dashboard({ stats, settings }) {
   const loadSnapshots = async () => {
     setLoading(true)
     try {
-      let url = `${apiUrl}/api/snapshots?limit=500`
+      let url = `${apiUrl}/api/snapshots?limit=5000`
       
       // Apply feedback filter
       if (feedbackFilter === 'with_deer') {

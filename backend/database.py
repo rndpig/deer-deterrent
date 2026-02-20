@@ -1145,6 +1145,22 @@ def get_ring_event_by_id(event_id: int) -> Optional[Dict]:
     return None
 
 
+def get_ring_event_by_snapshot_path(snapshot_path: str) -> Optional[Dict]:
+    """Get a Ring event by snapshot path."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM ring_events WHERE snapshot_path = ? OR snapshot_path = ?", 
+                   (snapshot_path, f"/app/{snapshot_path}"))
+    row = cursor.fetchone()
+    
+    conn.close()
+    
+    if row:
+        return dict(row)
+    return None
+
+
 def delete_ring_event(event_id: int) -> bool:
     """Delete a Ring event by ID."""
     conn = get_connection()

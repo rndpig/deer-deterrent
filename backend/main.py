@@ -430,24 +430,78 @@ async def update_ring_event(event_id: int, update: dict):
 
 @app.get("/api/snapshots")
 async def get_ring_snapshots(limit: int = 100, with_deer: bool = None):
-    """Get Ring snapshots with metadata."""
-    events = db.get_ring_events_with_snapshots(limit=limit, with_deer=with_deer)
+    """Get Ring snapshots - scans filesystem and merges with database metadata."""
+    from datetime import datetime
+    import re
     
-    # Add snapshot file info
-    for event in events:
-        snapshot_path = event.get('snapshot_path')
-        if snapshot_path:
-            snapshot_file = Path(snapshot_path)
-            if not snapshot_file.is_absolute():
-                snapshot_file = Path("/app") / snapshot_path
-            
-            event['snapshot_exists'] = snapshot_file.exists()
-            if event['snapshot_exists']:
-                event['snapshot_size_bytes'] = snapshot_file.stat().st_size
+    # Scan filesystem for all snapshots
+    snapshot_dir = Path("/app/snapshots")
+    if not snapshot_dir.exists():
+        snapshot_dir = Path("/app/dell-deployment/data/snapshots")
+    if not snapshot_dir.exists():
+        snapshot_dir = Path("/app/data/snapshots")
+    
+    snapshots = []
+    
+    if snapshot_dir.exists():
+        # Get all jpg files recursively
+        snapshot_files = sorted(snapshot_dir.rglob("*.jpg"), reverse=True)
+        
+        # Parse filename format: YYYYMMDD_HHMMSS_CAMERAID.jpg or manual_upload_YYYYMMDD_HHMMSS.jpg
+        for snapshot_file in snapshot_files[:limit*2]:  # Get extra to account for filtering
+            try:
+                filename = snapshot_file.name
+                
+                # Parse timestamp and camera from filename
+                if filename.startswith("manual_upload_"):
+                    # manual_upload_YYYYMMDD_HHMMSS.jpg
+                    match = re.match(r'manual_upload_(\d{8})_(\d{6})\.jpg', filename)
+                    if match:
+                        date_str, time_str = match.groups()
+                        timestamp = datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
+                        camera_id = "manual_upload"
+                else:
+                    # YYYYMMDD_HHMMSS_CAMERAID.jpg
+                    match = re.match(r'(\d{8})_(\d{6})_([a-f0-9]+)\.jpg', filename)
+                    if match:
+                        date_str, time_str, camera_id = match.groups()
+                        timestamp = datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
+                    else:
+                        continue
+                
+                # Check if this snapshot has database metadata
+                db_event = db.get_ring_event_by_snapshot_path(str(snapshot_file.relative_to(Path("/app"))))
+                
+                snapshot_data = {
+                    "id": db_event['id'] if db_event else f"fs_{hash(str(snapshot_file))}",
+                    "camera_id": camera_id,
+                    "timestamp": timestamp.isoformat(),
+                    "snapshot_path": str(snapshot_file.relative_to(Path("/app"))),
+                    "snapshot_exists": True,
+                    "snapshot_size": snapshot_file.stat().st_size,
+                    "deer_detected": db_event['deer_detected'] if db_event else 0,
+                    "detection_confidence": db_event.get('detection_confidence', 0.0) if db_event else 0.0,
+                    "archived": db_event.get('archived', 0) if db_event else 0,
+                    "processed": db_event.get('processed', 0) if db_event else 0,
+                    "event_type": db_event.get('event_type', 'periodic_snapshot') if db_event else 'periodic_snapshot',
+                }
+                
+                snapshots.append(snapshot_data)
+                
+            except Exception as e:
+                logger.warning(f"Error parsing snapshot {snapshot_file.name}: {e}")
+                continue
+    
+    # Apply with_deer filter if specified
+    if with_deer is not None:
+        snapshots = [s for s in snapshots if s['deer_detected'] == (1 if with_deer else 0)]
+    
+    # Limit results
+    snapshots = snapshots[:limit]
     
     return {
-        "snapshots": events,
-        "total_count": len(events),
+        "snapshots": snapshots,
+        "total_count": len(snapshots),
         "limit": limit,
         "filter": "with_deer" if with_deer else "all"
     }
