@@ -416,34 +416,31 @@ function Settings({ settings, setSettings }) {
                 </>
               )}
               <div className="inline-field">
-                <label htmlFor="snapshot-freq">Snapshot Frequency</label>
+                <label htmlFor="snapshot-freq">Frequency</label>
                 <select
                   id="snapshot-freq"
                   className="settings-select"
                   value={localSettings.snapshot_frequency || 60}
                   onChange={(e) => handleChange('snapshot_frequency', parseInt(e.target.value))}
                 >
-                  <option value={15}>15 sec</option>
-                  <option value={30}>30 sec</option>
-                  <option value={60}>1 min</option>
                   <option value={180}>3 min</option>
+                  <option value={60}>1 min</option>
+                  <option value={30}>30 sec</option>
+                  <option value={15}>15 sec</option>
                 </select>
               </div>
               <div className="inline-field">
-                <label htmlFor="archive-days">Auto-Archive After</label>
-                <div className="input-with-unit">
-                  <input
-                    id="archive-days"
-                    type="number"
-                    min="1"
-                    max="30"
-                    step="1"
-                    value={localSettings.snapshot_archive_days || 3}
-                    onChange={(e) => handleChange('snapshot_archive_days', parseInt(e.target.value))}
-                    className="value-input"
-                  />
-                  <span className="unit-label">days</span>
-                </div>
+                <label htmlFor="archive-days">Auto-archive (d)</label>
+                <input
+                  id="archive-days"
+                  type="number"
+                  min="1"
+                  max="30"
+                  step="1"
+                  value={localSettings.snapshot_archive_days || 3}
+                  onChange={(e) => handleChange('snapshot_archive_days', parseInt(e.target.value))}
+                  className="value-input"
+                />
               </div>
             </div>
           </div>
