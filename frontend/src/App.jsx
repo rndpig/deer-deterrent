@@ -118,17 +118,6 @@ function App() {
                 <button 
                   className="dropdown-item"
                   onClick={() => {
-                    setActiveTab('dashboard')
-                    setShowArchive(false)
-                    setShowMenu(false)
-                    window.dispatchEvent(new CustomEvent('show-upload-modal'))
-                  }}
-                >
-                  📤 Upload Image
-                </button>
-                <button 
-                  className="dropdown-item"
-                  onClick={() => {
                     setActiveTab('videos')
                     setShowArchive(false)
                     setShowMenu(false)

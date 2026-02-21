@@ -283,11 +283,6 @@ function Dashboard({ stats, settings }) {
         </div>
       ) : (
         <>
-          {/* Pagination Info */}
-          <div className="pagination-info">
-            Showing {Math.min((currentPage - 1) * itemsPerPage + 1, snapshots.length)}-{Math.min(currentPage * itemsPerPage, snapshots.length)} of {snapshots.length} snapshots
-          </div>
-          
           <div className="snapshot-grid">
             {snapshots.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((snapshot) => (
             <div
@@ -301,7 +296,7 @@ function Dashboard({ stats, settings }) {
                   alt={`Snapshot ${snapshot.id}`}
                   loading="lazy"
                 />
-                {snapshot.deer_detected && (snapshot.detection_bboxes?.length || 0) > 0 && (
+                {!!snapshot.deer_detected && (snapshot.detection_bboxes?.length || 0) > 0 && (
                   <div className="deer-count-badge">
                     🦌 {snapshot.detection_bboxes.length}
                   </div>
@@ -439,7 +434,7 @@ function Dashboard({ stats, settings }) {
                   src={`${apiUrl}/api/snapshots/${selectedSnapshot.id}/image`}
                   alt="Snapshot"
                 />
-                {selectedSnapshot.deer_detected && (selectedSnapshot.detection_bboxes?.length || 0) > 0 && (
+                {!!selectedSnapshot.deer_detected && (selectedSnapshot.detection_bboxes?.length || 0) > 0 && (
                   <div className="deer-count-badge deer-count-badge-modal">
                     🦌 {selectedSnapshot.detection_bboxes.length}
                   </div>
