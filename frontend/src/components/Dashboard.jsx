@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import './Dashboard.css'
 import BoundingBoxImage from './BoundingBoxImage'
+import AnnotationTool from './AnnotationTool'
 
 function Dashboard({ stats, settings }) {
   const [snapshots, setSnapshots] = useState([])
@@ -17,6 +18,7 @@ function Dashboard({ stats, settings }) {
   const [selectedFile, setSelectedFile] = useState(null)
   const [selectedCamera, setSelectedCamera] = useState('side')
   const [captureDateTime, setCaptureDateTime] = useState('')
+  const [showAnnotationTool, setShowAnnotationTool] = useState(false)
 
   const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
 
@@ -176,6 +178,76 @@ function Dashboard({ stats, settings }) {
       }
     } catch (error) {
       console.error('Error updating feedback:', error)
+    }
+  }
+
+  // Convert stored bboxes ({bbox: {x1,y1,x2,y2}}) to AnnotationTool format ({x,y,width,height} normalized 0-1)
+  const bboxesToAnnotationFormat = (bboxes, imgWidth, imgHeight) => {
+    if (!bboxes || !imgWidth || !imgHeight) return []
+    return bboxes.map(d => {
+      const b = d.bbox
+      if (!b || b.x1 === undefined) return null
+      return {
+        x: b.x1 / imgWidth,
+        y: b.y1 / imgHeight,
+        width: (b.x2 - b.x1) / imgWidth,
+        height: (b.y2 - b.y1) / imgHeight
+      }
+    }).filter(Boolean)
+  }
+
+  // Convert AnnotationTool format back to stored bbox format
+  const annotationToBboxFormat = (normalizedBoxes, imgWidth, imgHeight) => {
+    return normalizedBoxes.map(b => ({
+      bbox: {
+        x1: Math.round(b.x * imgWidth * 100) / 100,
+        y1: Math.round(b.y * imgHeight * 100) / 100,
+        x2: Math.round((b.x + b.width) * imgWidth * 100) / 100,
+        y2: Math.round((b.y + b.height) * imgHeight * 100) / 100
+      },
+      confidence: 1.0
+    }))
+  }
+
+  const handleOpenAnnotation = () => {
+    setShowAnnotationTool(true)
+  }
+
+  const handleSaveAnnotation = async (normalizedBoxes) => {
+    if (!selectedSnapshot) return
+
+    // Load image to get natural dimensions for coordinate conversion
+    const img = new window.Image()
+    img.crossOrigin = 'anonymous'
+    img.src = `${apiUrl}/api/snapshots/${selectedSnapshot.id}/image`
+
+    img.onload = async () => {
+      const bboxes = annotationToBboxFormat(normalizedBoxes, img.naturalWidth, img.naturalHeight)
+
+      try {
+        const response = await fetch(`${apiUrl}/api/snapshots/${selectedSnapshot.id}/bboxes`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ detection_bboxes: bboxes })
+        })
+
+        if (response.ok) {
+          // Update local state
+          setSelectedSnapshot({ ...selectedSnapshot, detection_bboxes: bboxes })
+          setSnapshots(prev => prev.map(s =>
+            s.id === selectedSnapshot.id ? { ...s, detection_bboxes: bboxes } : s
+          ))
+        }
+      } catch (error) {
+        console.error('Error saving annotations:', error)
+      }
+
+      setShowAnnotationTool(false)
+    }
+
+    img.onerror = () => {
+      console.error('Failed to load image for dimension calculation')
+      setShowAnnotationTool(false)
     }
   }
 
@@ -478,11 +550,30 @@ function Dashboard({ stats, settings }) {
                       ❌ No - False Positive
                     </button>
                   </div>
+                  <button
+                    className="btn-annotate"
+                    onClick={handleOpenAnnotation}
+                  >
+                    ✏️ Draw Bounding Boxes
+                  </button>
                 </div>
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Annotation Tool Modal */}
+      {showAnnotationTool && selectedSnapshot && (
+        <AnnotationTool
+          imageSrc={`${apiUrl}/api/snapshots/${selectedSnapshot.id}/image`}
+          existingBoxes={bboxesToAnnotationFormat(
+            selectedSnapshot.detection_bboxes,
+            640, 360
+          )}
+          onSave={handleSaveAnnotation}
+          onCancel={() => setShowAnnotationTool(false)}
+        />
       )}
     </div>
   )

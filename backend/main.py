@@ -600,11 +600,13 @@ async def regenerate_bboxes():
             detections = ml_result.get("detections", [])
             bboxes = [{"bbox": d["bbox"], "confidence": d["confidence"]} for d in detections]
             
-            # Only update bboxes — do NOT modify deer_detected or confidence
+            # Update bboxes and sync confidence to match — do NOT modify deer_detected
+            max_conf = max((d["confidence"] for d in detections), default=None)
             db.update_ring_event_result(
                 event_id=event_id,
                 processed=True,
-                detection_bboxes=bboxes
+                detection_bboxes=bboxes,
+                confidence=max_conf
             )
             
             results["updated"] += 1
@@ -621,6 +623,25 @@ async def regenerate_bboxes():
             logger.error(f"Failed to regenerate bboxes for event {event_id}: {e}")
     
     return results
+
+
+@app.put("/api/snapshots/{event_id}/bboxes")
+async def update_snapshot_bboxes(event_id: int, request: Request):
+    """Update bounding boxes for a snapshot (manual annotation)."""
+    body = await request.json()
+    bboxes = body.get("detection_bboxes", [])
+    
+    event = db.get_ring_event_by_id(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    db.update_ring_event_result(
+        event_id=event_id,
+        processed=True,
+        detection_bboxes=bboxes
+    )
+    
+    return {"status": "ok", "event_id": event_id, "num_bboxes": len(bboxes)}
 
 
 @app.post("/api/snapshots/{event_id}/rerun-detection")
