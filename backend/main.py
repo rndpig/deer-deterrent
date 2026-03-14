@@ -558,6 +558,71 @@ async def get_snapshot_image(event_id: int):
     )
 
 
+@app.post("/api/snapshots/regenerate-bboxes")
+async def regenerate_bboxes():
+    """Re-run ML detection on all confirmed-deer snapshots to generate bounding boxes.
+    
+    Only updates detection_bboxes — never changes deer_detected or confidence.
+    Uses the ML detector container (YOLO26s v2.0 with CLAHE preprocessing).
+    """
+    ml_detector_url = os.getenv("ML_DETECTOR_URL", "http://ml-detector:8001")
+    
+    # Get all deer-detected snapshots
+    events = db.get_ring_events_with_snapshots(limit=1000, with_deer=True)
+    
+    results = {"updated": 0, "skipped": 0, "failed": 0, "details": []}
+    
+    for event in events:
+        event_id = event["id"]
+        snapshot_path_str = event.get("snapshot_path")
+        if not snapshot_path_str:
+            results["skipped"] += 1
+            results["details"].append({"id": event_id, "status": "skipped", "reason": "no snapshot_path"})
+            continue
+        
+        snapshot_path = Path(snapshot_path_str)
+        if not snapshot_path.is_absolute():
+            snapshot_path = Path("/app") / snapshot_path
+        
+        if not snapshot_path.exists():
+            results["skipped"] += 1
+            results["details"].append({"id": event_id, "status": "skipped", "reason": "file not found"})
+            continue
+        
+        try:
+            image_bytes = snapshot_path.read_bytes()
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                files = {"file": ("snapshot.jpg", image_bytes, "image/jpeg")}
+                response = await client.post(f"{ml_detector_url}/detect", files=files)
+                response.raise_for_status()
+                ml_result = response.json()
+            
+            detections = ml_result.get("detections", [])
+            bboxes = [{"bbox": d["bbox"], "confidence": d["confidence"]} for d in detections]
+            
+            # Only update bboxes — do NOT modify deer_detected or confidence
+            db.update_ring_event_result(
+                event_id=event_id,
+                processed=True,
+                detection_bboxes=bboxes
+            )
+            
+            results["updated"] += 1
+            results["details"].append({
+                "id": event_id,
+                "status": "updated",
+                "num_bboxes": len(bboxes)
+            })
+            logger.info(f"Regenerated bboxes for event {event_id}: {len(bboxes)} detections")
+            
+        except Exception as e:
+            results["failed"] += 1
+            results["details"].append({"id": event_id, "status": "failed", "reason": str(e)})
+            logger.error(f"Failed to regenerate bboxes for event {event_id}: {e}")
+    
+    return results
+
+
 @app.post("/api/snapshots/{event_id}/rerun-detection")
 async def rerun_snapshot_detection(event_id: int, threshold: float = 0.15):
     """Re-run ML detection on a saved snapshot."""

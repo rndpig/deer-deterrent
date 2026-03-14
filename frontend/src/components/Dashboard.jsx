@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './Dashboard.css'
+import BoundingBoxImage from './BoundingBoxImage'
 
 function Dashboard({ stats, settings }) {
   const [snapshots, setSnapshots] = useState([])
@@ -291,10 +292,11 @@ function Dashboard({ stats, settings }) {
               onClick={() => setSelectedSnapshot(snapshot)}
             >
               <div className="snapshot-thumbnail">
-                <img
+                <BoundingBoxImage
                   src={`${apiUrl}/api/snapshots/${snapshot.id}/image`}
                   alt={`Snapshot ${snapshot.id}`}
-                  loading="lazy"
+                  detections={(snapshot.detection_bboxes?.length || 0) > 0 ? snapshot.detection_bboxes : null}
+                  className="snapshot-img"
                 />
                 {!!snapshot.deer_detected && (snapshot.detection_bboxes?.length || 0) > 0 && (
                   <div className="deer-count-badge">
@@ -430,9 +432,11 @@ function Dashboard({ stats, settings }) {
             </button>
             <div className="modal-content">
               <div className="modal-image-wrapper">
-                <img 
+                <BoundingBoxImage
                   src={`${apiUrl}/api/snapshots/${selectedSnapshot.id}/image`}
                   alt="Snapshot"
+                  detections={(selectedSnapshot.detection_bboxes?.length || 0) > 0 ? selectedSnapshot.detection_bboxes : null}
+                  className="modal-img"
                 />
                 {!!selectedSnapshot.deer_detected && (selectedSnapshot.detection_bboxes?.length || 0) > 0 && (
                   <div className="deer-count-badge deer-count-badge-modal">

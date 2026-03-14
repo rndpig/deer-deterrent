@@ -93,6 +93,22 @@ function BoundingBoxImage({ src, alt, detections, className, onClick }) {
       ctx.strokeStyle = '#00ff00'
       ctx.lineWidth = 2
       ctx.strokeRect(x, y, w, h)
+
+      // Draw confidence label
+      const conf = detection.confidence
+      if (conf !== undefined && conf !== null) {
+        const label = `${(conf * 100).toFixed(0)}%`
+        const fontSize = Math.max(12, Math.min(16, canvasW / 40))
+        ctx.font = `bold ${fontSize}px sans-serif`
+        const textWidth = ctx.measureText(label).width
+        const padding = 4
+        // Label background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'
+        ctx.fillRect(x, y - fontSize - padding * 2, textWidth + padding * 2, fontSize + padding * 2)
+        // Label text
+        ctx.fillStyle = '#00ff00'
+        ctx.fillText(label, x + padding, y - padding)
+      }
     })
   }, [detections])
 
