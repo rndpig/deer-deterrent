@@ -216,39 +216,30 @@ function Dashboard({ stats, settings }) {
   const handleSaveAnnotation = async (normalizedBoxes) => {
     if (!selectedSnapshot) return
 
-    // Load image to get natural dimensions for coordinate conversion
-    const img = new window.Image()
-    img.crossOrigin = 'anonymous'
-    img.src = `${apiUrl}/api/snapshots/${selectedSnapshot.id}/image`
+    // Ring snapshots are 640x360
+    const bboxes = annotationToBboxFormat(normalizedBoxes, 640, 360)
 
-    img.onload = async () => {
-      const bboxes = annotationToBboxFormat(normalizedBoxes, img.naturalWidth, img.naturalHeight)
+    try {
+      const response = await fetch(`${apiUrl}/api/snapshots/${selectedSnapshot.id}/bboxes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ detection_bboxes: bboxes })
+      })
 
-      try {
-        const response = await fetch(`${apiUrl}/api/snapshots/${selectedSnapshot.id}/bboxes`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ detection_bboxes: bboxes })
-        })
-
-        if (response.ok) {
-          // Update local state
-          setSelectedSnapshot({ ...selectedSnapshot, detection_bboxes: bboxes })
-          setSnapshots(prev => prev.map(s =>
-            s.id === selectedSnapshot.id ? { ...s, detection_bboxes: bboxes } : s
-          ))
-        }
-      } catch (error) {
-        console.error('Error saving annotations:', error)
+      if (response.ok) {
+        // Update local state so bboxes show immediately
+        setSelectedSnapshot({ ...selectedSnapshot, detection_bboxes: bboxes })
+        setSnapshots(prev => prev.map(s =>
+          s.id === selectedSnapshot.id ? { ...s, detection_bboxes: bboxes } : s
+        ))
+      } else {
+        console.error('Failed to save bboxes:', response.status)
       }
-
-      setShowAnnotationTool(false)
+    } catch (error) {
+      console.error('Error saving annotations:', error)
     }
 
-    img.onerror = () => {
-      console.error('Failed to load image for dimension calculation')
-      setShowAnnotationTool(false)
-    }
+    setShowAnnotationTool(false)
   }
 
   // Calculate stats from filtered snapshots
@@ -510,51 +501,58 @@ function Dashboard({ stats, settings }) {
                   detections={(selectedSnapshot.detection_bboxes?.length || 0) > 0 ? selectedSnapshot.detection_bboxes : null}
                   className="modal-img"
                 />
-                {!!selectedSnapshot.deer_detected && (selectedSnapshot.detection_bboxes?.length || 0) > 0 && (
-                  <div className="deer-count-badge deer-count-badge-modal">
-                    🦌 {selectedSnapshot.detection_bboxes.length}
-                  </div>
-                )}
               </div>
-              <div className="image-info">
-                <div className="info-grid-compact">
-                  <span className="label">ID:</span>
-                  <span className="value">#{selectedSnapshot.id}</span>
-                  <span className="label">Camera:</span>
-                  <span className="value">{formatCameraName(selectedSnapshot.camera_id)}</span>
-                  <span className="label">Confidence:</span>
-                  <span className="value">
-                    {selectedSnapshot.detection_confidence !== null
-                      ? `${(selectedSnapshot.detection_confidence * 100).toFixed(0)}%`
-                      : 'N/A'}
-                  </span>
-                  
-                  <span className="label">Time:</span>
-                  <span className="value time-value">{new Date(selectedSnapshot.timestamp).toLocaleString()}</span>
-                  <span className="label">Model:</span>
-                  <span className="value model-value">{selectedSnapshot.model_version || 'Unknown'}</span>
-                </div>
-                <div className="feedback-section">
-                  <p className="feedback-label">Is there a deer in this image?</p>
-                  <div className="feedback-buttons">
-                    <button
-                      className={`btn-feedback ${selectedSnapshot.deer_detected ? 'active' : ''}`}
-                      onClick={() => updateSnapshotFeedback(selectedSnapshot.id, true)}
-                    >
-                      ✅ Yes - Deer
-                    </button>
-                    <button
-                      className={`btn-feedback ${!selectedSnapshot.deer_detected ? 'active' : ''}`}
-                      onClick={() => updateSnapshotFeedback(selectedSnapshot.id, false)}
-                    >
-                      ❌ No - False Positive
-                    </button>
+              <div className="modal-sidebar">
+                <div className="modal-meta">
+                  <div className="meta-row">
+                    <span className="meta-label">ID</span>
+                    <span className="meta-value">#{selectedSnapshot.id}</span>
                   </div>
+                  <div className="meta-row">
+                    <span className="meta-label">Camera</span>
+                    <span className="meta-value">{formatCameraName(selectedSnapshot.camera_id)}</span>
+                  </div>
+                  <div className="meta-row">
+                    <span className="meta-label">Confidence</span>
+                    <span className="meta-value">
+                      {selectedSnapshot.detection_confidence !== null
+                        ? `${(selectedSnapshot.detection_confidence * 100).toFixed(0)}%`
+                        : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="meta-row">
+                    <span className="meta-label">Time</span>
+                    <span className="meta-value">{new Date(selectedSnapshot.timestamp).toLocaleString()}</span>
+                  </div>
+                  <div className="meta-row">
+                    <span className="meta-label">Model</span>
+                    <span className="meta-value">{selectedSnapshot.model_version || 'Unknown'}</span>
+                  </div>
+                  {(selectedSnapshot.detection_bboxes?.length || 0) > 0 && (
+                    <div className="meta-row">
+                      <span className="meta-label">Detections</span>
+                      <span className="meta-value">🦌 {selectedSnapshot.detection_bboxes.length}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="modal-actions-section">
+                  <button
+                    className={`btn-feedback ${selectedSnapshot.deer_detected ? 'active' : ''}`}
+                    onClick={() => updateSnapshotFeedback(selectedSnapshot.id, true)}
+                  >
+                    ✅ Deer
+                  </button>
+                  <button
+                    className={`btn-feedback ${!selectedSnapshot.deer_detected ? 'active' : ''}`}
+                    onClick={() => updateSnapshotFeedback(selectedSnapshot.id, false)}
+                  >
+                    ❌ False Positive
+                  </button>
                   <button
                     className="btn-annotate"
                     onClick={handleOpenAnnotation}
                   >
-                    ✏️ Draw Bounding Boxes
+                    ✏️ Draw Boxes
                   </button>
                 </div>
               </div>

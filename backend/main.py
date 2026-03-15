@@ -403,15 +403,23 @@ async def update_ring_event(event_id: int, update: dict):
                                     update["model_version"] = "YOLO26s v2.0 PyTorch"
                                 logger.info(f"Snapshot {event_id} re-detected with {len(detections)} boxes, confidence: {max_confidence:.2f}, model: {update['model_version']}")
                             else:
-                                # User says deer but detector didn't find any - still mark as deer with 0 confidence
-                                update["confidence"] = 0.0
-                                update["detection_bboxes"] = []
-                                model_name = type(detector_obj).__name__
-                                if 'OpenVINO' in model_name:
-                                    update["model_version"] = "YOLO26s v2.0 OpenVINO"
+                                # User says deer but detector didn't find any — preserve existing manual bboxes
+                                existing_event = db.get_ring_event_by_id(event_id)
+                                existing_bboxes = []
+                                if existing_event and existing_event.get('detection_bboxes'):
+                                    try:
+                                        existing_bboxes = json.loads(existing_event['detection_bboxes']) if isinstance(existing_event['detection_bboxes'], str) else existing_event['detection_bboxes']
+                                    except:
+                                        existing_bboxes = []
+                                if existing_bboxes:
+                                    # Keep manually drawn bboxes, update model version only
+                                    update["confidence"] = max(d.get('confidence', 0) for d in existing_bboxes)
+                                    # Don't overwrite detection_bboxes — keep existing
+                                    logger.info(f"Snapshot {event_id} marked as deer by user, keeping {len(existing_bboxes)} existing bboxes")
                                 else:
-                                    update["model_version"] = "YOLO26s v2.0 PyTorch"
-                                logger.warning(f"Snapshot {event_id} marked as deer by user but detector found none")
+                                    update["confidence"] = 0.0
+                                    update["detection_bboxes"] = []
+                                    logger.warning(f"Snapshot {event_id} marked as deer by user but detector found none")
             except Exception as e:
                 logger.error(f"Error running detection for user feedback on snapshot {event_id}: {e}")
                 # Continue with update even if detection fails
