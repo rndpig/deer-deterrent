@@ -191,7 +191,8 @@ function Dashboard({ stats, settings }) {
         x: b.x1 / imgWidth,
         y: b.y1 / imgHeight,
         width: (b.x2 - b.x1) / imgWidth,
-        height: (b.y2 - b.y1) / imgHeight
+        height: (b.y2 - b.y1) / imgHeight,
+        confidence: d.confidence  // preserve original model confidence
       }
     }).filter(Boolean)
   }
@@ -205,7 +206,7 @@ function Dashboard({ stats, settings }) {
         x2: Math.round((b.x + b.width) * imgWidth * 100) / 100,
         y2: Math.round((b.y + b.height) * imgHeight * 100) / 100
       },
-      confidence: 1.0
+      confidence: b.confidence ?? 1.0  // preserve original, default 1.0 for manual
     }))
   }
 
