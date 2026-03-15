@@ -206,7 +206,7 @@ function Dashboard({ stats, settings }) {
         x2: Math.round((b.x + b.width) * imgWidth * 100) / 100,
         y2: Math.round((b.y + b.height) * imgHeight * 100) / 100
       },
-      confidence: b.confidence ?? 1.0  // preserve original, default 1.0 for manual
+      confidence: b.confidence ?? null  // preserve original, null for manual
     }))
   }
 

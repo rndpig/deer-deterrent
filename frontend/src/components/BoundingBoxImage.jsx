@@ -96,8 +96,8 @@ function BoundingBoxImage({ src, alt, detections, className, onClick }) {
 
       // Draw confidence label
       const conf = detection.confidence
-      if (conf !== undefined && conf !== null) {
-        const label = `${(conf * 100).toFixed(0)}%`
+      if (conf !== undefined) {
+        const label = conf !== null ? `${(conf * 100).toFixed(0)}%` : 'Manual'
         const fontSize = Math.max(12, Math.min(16, canvasW / 40))
         ctx.font = `bold ${fontSize}px sans-serif`
         const textWidth = ctx.measureText(label).width
