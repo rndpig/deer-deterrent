@@ -368,61 +368,61 @@ async def update_ring_event(event_id: int, update: dict):
         else:
             detector_obj = load_detector()
             if detector_obj:
-            try:
-                # Get event and snapshot
-                event = existing_event
-                if event and event.get('snapshot_path'):
-                    snapshot_path = Path(event['snapshot_path'])
-                    if not snapshot_path.is_absolute():
-                        snapshot_path = Path("/app") / snapshot_path
-                    
-                    if snapshot_path.exists():
-                        import cv2
+                try:
+                    # Get event and snapshot
+                    event = existing_event
+                    if event and event.get('snapshot_path'):
+                        snapshot_path = Path(event['snapshot_path'])
+                        if not snapshot_path.is_absolute():
+                            snapshot_path = Path("/app") / snapshot_path
                         
-                        # Load image
-                        img = cv2.imread(str(snapshot_path))
-                        if img is not None:
-                            # Run detection with lower threshold to catch the deer user saw
-                            original_threshold = detector_obj.conf_threshold
-                            detector_obj.conf_threshold = 0.15  # Lower threshold for user-confirmed deer
+                        if snapshot_path.exists():
+                            import cv2
                             
-                            detections_list, _ = detector_obj.detect(img, return_annotated=False)
-                            
-                            # Restore original threshold
-                            detector_obj.conf_threshold = original_threshold
-                            
-                            # Format results
-                            detections = []
-                            max_confidence = 0.0
-                            
-                            for det in detections_list:
-                                confidence = det['confidence']
-                                detections.append({
-                                    "confidence": confidence,
-                                    "bbox": det['bbox']
-                                })
-                                if confidence > max_confidence:
-                                    max_confidence = confidence
-                            
-                            # Update with detection results
-                            if len(detections) > 0:
-                                update["confidence"] = max_confidence
-                                update["detection_bboxes"] = detections
-                                # Include model version
-                                model_name = type(detector_obj).__name__
-                                if 'OpenVINO' in model_name:
-                                    update["model_version"] = "YOLO26s v2.0 OpenVINO"
+                            # Load image
+                            img = cv2.imread(str(snapshot_path))
+                            if img is not None:
+                                # Run detection with lower threshold to catch the deer user saw
+                                original_threshold = detector_obj.conf_threshold
+                                detector_obj.conf_threshold = 0.15  # Lower threshold for user-confirmed deer
+                                
+                                detections_list, _ = detector_obj.detect(img, return_annotated=False)
+                                
+                                # Restore original threshold
+                                detector_obj.conf_threshold = original_threshold
+                                
+                                # Format results
+                                detections = []
+                                max_confidence = 0.0
+                                
+                                for det in detections_list:
+                                    confidence = det['confidence']
+                                    detections.append({
+                                        "confidence": confidence,
+                                        "bbox": det['bbox']
+                                    })
+                                    if confidence > max_confidence:
+                                        max_confidence = confidence
+                                
+                                # Update with detection results
+                                if len(detections) > 0:
+                                    update["confidence"] = max_confidence
+                                    update["detection_bboxes"] = detections
+                                    # Include model version
+                                    model_name = type(detector_obj).__name__
+                                    if 'OpenVINO' in model_name:
+                                        update["model_version"] = "YOLO26s v2.0 OpenVINO"
+                                    else:
+                                        update["model_version"] = "YOLO26s v2.0 PyTorch"
+                                    logger.info(f"Snapshot {event_id} re-detected with {len(detections)} boxes, confidence: {max_confidence:.2f}, model: {update['model_version']}")
                                 else:
-                                    update["model_version"] = "YOLO26s v2.0 PyTorch"
-                                logger.info(f"Snapshot {event_id} re-detected with {len(detections)} boxes, confidence: {max_confidence:.2f}, model: {update['model_version']}")
-                            else:
-                                # User says deer but detector didn't find any
-                                update["confidence"] = 0.0
-                                update["detection_bboxes"] = []
-                                logger.warning(f"Snapshot {event_id} marked as deer by user but detector found none")
-            except Exception as e:
-                logger.error(f"Error running detection for user feedback on snapshot {event_id}: {e}")
-                # Continue with update even if detection fails
+                                    # User says deer but detector didn't find any
+                                    update["confidence"] = 0.0
+                                    update["detection_bboxes"] = []
+                                    logger.warning(f"Snapshot {event_id} marked as deer by user but detector found none")
+                except Exception as e:
+                    logger.error(f"Error running detection for user feedback on snapshot {event_id}: {e}")
+                    # Continue with update even if detection fails
     
     db.update_ring_event_result(
         event_id=event_id,
