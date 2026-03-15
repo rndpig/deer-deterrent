@@ -1,7 +1,7 @@
 {
-  "registry_version": "2.0",
+  "registry_version": "3.0",
   "created_at": "2026-01-31T19:56:00Z",
-  "updated_at": "2026-02-07T00:00:00Z",
+  "updated_at": "2026-03-15T00:00:00Z",
   "description": "Model registry for deer detection models. Tracks all trained models, their performance, and deployment status.",
   "models": [
     {
@@ -99,17 +99,74 @@
         "clahe_tile_grid_size": [8, 8]
       },
       "deployment": {
-        "status": "deployed",
+        "status": "retired",
         "environment": "production",
         "service": "ml-detector",
         "deployed_at": "2026-02-07",
+        "retired_at": "2026-03-15",
         "container_image": "deer-ml-detector (sha256:69c4119f...)",
         "ultralytics_version": "8.4.12",
-        "notes": "Deployed via docker compose with CLAHE preprocessing enabled"
+        "notes": "Replaced by YOLO26s v3.0. Backup at best.pt.backup_yolo26s_v2.0_20260315"
       },
       "file_hash_md5": "cb50366cac8b5a5f5a445f3c85277da6",
       "git_commit": "750c360",
       "notes": "Trained on Dell server (i7-4790 CPU). Significant improvement over baseline: events previously missed (conf=0.0) now detected at conf=0.85+."
+    },
+    {
+      "model_id": "yolo26s_v3.0",
+      "name": "YOLO26s v3.0 - Production",
+      "version": "3.0.0",
+      "framework": "ultralytics",
+      "architecture": "yolo26s",
+      "model_path": "models/production/best.pt",
+      "dataset_version": "3.0",
+      "dataset_notes": "444 images: 258 video frames + 31 Ring deer snapshots + 155 negatives (Ring confirmed non-deer). CLAHE preprocessed.",
+      "training_date": "2026-03-14",
+      "training_config": {
+        "phase1_epochs": 20,
+        "phase2_epochs": 66,
+        "phase2_best_epoch": 36,
+        "phase2_early_stopping_patience": 30,
+        "batch_size": 8,
+        "image_size": 640,
+        "augmentation": "mosaic + mixup + copy_paste + CLAHE preprocessing",
+        "optimizer": "AdamW",
+        "lr0_phase1": 0.01,
+        "lr0_phase2": 0.001,
+        "lrf": 0.01,
+        "freeze_layers": "10 (phase1 only)"
+      },
+      "metrics": {
+        "validation": {
+          "mAP50": 0.855,
+          "mAP50_95": 0.425,
+          "precision": 0.942,
+          "recall": 0.770
+        },
+        "confidence_threshold": 0.55
+      },
+      "performance": {
+        "inference_format": "pytorch",
+        "device": "cpu (i7-4790)",
+        "avg_inference_time_ms": 101,
+        "model_size_mb": 20.3,
+        "parameters": 9465567
+      },
+      "preprocessing": {
+        "clahe_enabled": true,
+        "clahe_clip_limit": 2.0,
+        "clahe_tile_grid_size": [8, 8]
+      },
+      "deployment": {
+        "status": "deployed",
+        "environment": "production",
+        "service": "ml-detector",
+        "deployed_at": "2026-03-15",
+        "ultralytics_version": "8.4.9",
+        "notes": "Deployed via docker compose. Improved precision (+10.6%) and mAP50-95 (+6.4%) over v2.0."
+      },
+      "git_commit": null,
+      "notes": "Trained on Dell server (i7-4790 CPU). Dataset v3.0 adds 31 Ring deer snapshots with bboxes and 155 confirmed non-deer negatives. Major precision improvement reduces false positives."
     }
   ],
   "deployment_history": [
@@ -132,6 +189,20 @@
       "action": "deployed",
       "environment": "production",
       "notes": "Container rebuilt with ultralytics 8.4.12, CLAHE enabled, verified inside container"
+    },
+    {
+      "date": "2026-03-15",
+      "model_id": "yolo26s_v2.0",
+      "action": "retired",
+      "environment": "production",
+      "notes": "Backed up as best.pt.backup_yolo26s_v2.0_20260315"
+    },
+    {
+      "date": "2026-03-15",
+      "model_id": "yolo26s_v3.0",
+      "action": "deployed",
+      "environment": "production",
+      "notes": "Dataset v3.0 (444 images). mAP50=0.855, P=0.942, R=0.770"
     }
   ],
   "dataset_versions": [
@@ -184,6 +255,36 @@
       "preprocessing": {
         "clahe_applied": true,
         "clahe_clip_limit": 2.0,
+        "clahe_tile_grid_size": [8, 8]
+      }
+    },
+    {
+      "version": "3.0",
+      "name": "v3.0_20260314_194924",
+      "path": "data/training_datasets/v3.0_20260314_194924",
+      "created_at": "2026-03-14T19:49:24Z",
+      "description": "Extended dataset with Ring deer snapshots, confirmed non-deer negatives, and fixed bbox coordinate normalization",
+      "statistics": {
+        "total_images": 444,
+        "train_images": 335,
+        "val_images": 68,
+        "test_images": 41,
+        "positives": 289,
+        "negatives": 155,
+        "classes": ["deer"],
+        "cameras": ["Side", "Driveway", "Front Door", "Back"],
+        "temporal_coverage": "2025-11-15 to 2026-03-10",
+        "seasons": ["fall", "winter"]
+      },
+      "source": {
+        "video_frames": 258,
+        "ring_snapshots_deer": 31,
+        "ring_snapshots_negative": 155,
+        "videos_processed": 25
+      },
+      "preprocessing": {
+        "clahe_applied": true,
+        "clahe_clip_limit": 3.0,
         "clahe_tile_grid_size": [8, 8]
       }
     }
