@@ -77,6 +77,7 @@ def train(data_yaml: str, output_dir: str = "runs/train",
     from ultralytics import YOLO
     
     data_yaml = str(Path(data_yaml).resolve())
+    output_dir = str(Path(output_dir).resolve())
     run_timestamp = datetime.now().strftime('%Y%m%d_%H%M')
     run_name = f"deer_v2_{run_timestamp}"
     
