@@ -228,10 +228,18 @@ function Dashboard({ stats, settings }) {
 
       if (response.ok) {
         // Update local state so bboxes show immediately
-        setSelectedSnapshot({ ...selectedSnapshot, detection_bboxes: bboxes })
+        const updated = { ...selectedSnapshot, detection_bboxes: bboxes, deer_detected: 1 }
+        setSelectedSnapshot(updated)
         setSnapshots(prev => prev.map(s =>
-          s.id === selectedSnapshot.id ? { ...s, detection_bboxes: bboxes } : s
+          s.id === selectedSnapshot.id ? { ...s, detection_bboxes: bboxes, deer_detected: 1 } : s
         ))
+
+        // Also mark as deer in backend (drawing bboxes implies deer present)
+        await fetch(`${apiUrl}/api/ring-events/${selectedSnapshot.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deer_detected: 1 })
+        })
       } else {
         console.error('Failed to save bboxes:', response.status)
       }
@@ -240,6 +248,7 @@ function Dashboard({ stats, settings }) {
     }
 
     setShowAnnotationTool(false)
+    setSelectedSnapshot(null) // Return directly to dashboard
   }
 
   // Calculate stats from filtered snapshots

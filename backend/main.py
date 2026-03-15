@@ -353,11 +353,24 @@ async def update_ring_event(event_id: int, update: dict):
     is_user_feedback = "confidence" not in update and "detection_bboxes" not in update
     
     if (deer_detected == 1 or deer_detected == True) and is_user_feedback:
-        detector_obj = load_detector()
-        if detector_obj:
+        # Check if event already has bboxes (e.g. manually drawn) — skip re-detection
+        existing_event = db.get_ring_event_by_id(event_id)
+        existing_bboxes = []
+        if existing_event and existing_event.get('detection_bboxes'):
+            try:
+                existing_bboxes = json.loads(existing_event['detection_bboxes']) if isinstance(existing_event['detection_bboxes'], str) else existing_event['detection_bboxes']
+            except:
+                existing_bboxes = []
+
+        if existing_bboxes:
+            # Bboxes already exist — preserve them, just update deer_detected
+            logger.info(f"Snapshot {event_id} already has {len(existing_bboxes)} bboxes, skipping re-detection")
+        else:
+            detector_obj = load_detector()
+            if detector_obj:
             try:
                 # Get event and snapshot
-                event = db.get_ring_event_by_id(event_id)
+                event = existing_event
                 if event and event.get('snapshot_path'):
                     snapshot_path = Path(event['snapshot_path'])
                     if not snapshot_path.is_absolute():
@@ -403,23 +416,10 @@ async def update_ring_event(event_id: int, update: dict):
                                     update["model_version"] = "YOLO26s v2.0 PyTorch"
                                 logger.info(f"Snapshot {event_id} re-detected with {len(detections)} boxes, confidence: {max_confidence:.2f}, model: {update['model_version']}")
                             else:
-                                # User says deer but detector didn't find any — preserve existing manual bboxes
-                                existing_event = db.get_ring_event_by_id(event_id)
-                                existing_bboxes = []
-                                if existing_event and existing_event.get('detection_bboxes'):
-                                    try:
-                                        existing_bboxes = json.loads(existing_event['detection_bboxes']) if isinstance(existing_event['detection_bboxes'], str) else existing_event['detection_bboxes']
-                                    except:
-                                        existing_bboxes = []
-                                if existing_bboxes:
-                                    # Keep manually drawn bboxes, update model version only
-                                    update["confidence"] = max(d.get('confidence', 0) for d in existing_bboxes)
-                                    # Don't overwrite detection_bboxes — keep existing
-                                    logger.info(f"Snapshot {event_id} marked as deer by user, keeping {len(existing_bboxes)} existing bboxes")
-                                else:
-                                    update["confidence"] = 0.0
-                                    update["detection_bboxes"] = []
-                                    logger.warning(f"Snapshot {event_id} marked as deer by user but detector found none")
+                                # User says deer but detector didn't find any
+                                update["confidence"] = 0.0
+                                update["detection_bboxes"] = []
+                                logger.warning(f"Snapshot {event_id} marked as deer by user but detector found none")
             except Exception as e:
                 logger.error(f"Error running detection for user feedback on snapshot {event_id}: {e}")
                 # Continue with update even if detection fails
