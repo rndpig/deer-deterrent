@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import './App.css'
 import './components/Auth.css'
 import Dashboard from './components/Dashboard'
+import Stats from './components/Stats'
 import Settings from './components/Settings'
 import AuthButton from './components/AuthButton'
 import CombinedArchive from './components/CombinedArchive'
@@ -156,6 +157,12 @@ function App() {
             Dashboard
           </button>
           <button 
+            className={activeTab === 'stats' ? 'active' : ''}
+            onClick={() => setActiveTab('stats')}
+          >
+            Stats
+          </button>
+          <button 
             className={activeTab === 'settings' ? 'active' : ''}
             onClick={() => setActiveTab('settings')}
           >
@@ -188,6 +195,9 @@ function App() {
             onViewArchive={() => { setActiveTab('dashboard'); setShowArchive(true); }}
             hideSnapshotsButton={false}
           />
+        )}
+        {activeTab === 'stats' && (
+          <Stats />
         )}
         {activeTab === 'settings' && (
           <Settings 

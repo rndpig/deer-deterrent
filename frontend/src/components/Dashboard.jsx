@@ -254,21 +254,88 @@ function Dashboard({ stats, settings }) {
 
   // Calculate stats from filtered snapshots
   const deerCount = snapshots.filter(s => s.deer_detected).length
-  const irrigationCount = 0 // TODO: Add irrigation tracking if needed
+
+  // Compute deer detection metadata from ALL snapshots (not filtered)
+  const deerSnapshots = snapshots.filter(s => s.deer_detected)
+
+  // Detections this month
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const thisMonthCount = deerSnapshots.filter(s => new Date(s.timestamp) >= monthStart).length
+
+  // Mean sighting hour (circular mean to handle midnight crossing)
+  const meanSightingTime = (() => {
+    if (deerSnapshots.length === 0) return null
+    let sinSum = 0, cosSum = 0
+    for (const s of deerSnapshots) {
+      const d = new Date(s.timestamp)
+      const fractionalHour = d.getHours() + d.getMinutes() / 60
+      const angle = (fractionalHour / 24) * 2 * Math.PI
+      sinSum += Math.sin(angle)
+      cosSum += Math.cos(angle)
+    }
+    let meanAngle = Math.atan2(sinSum / deerSnapshots.length, cosSum / deerSnapshots.length)
+    if (meanAngle < 0) meanAngle += 2 * Math.PI
+    const meanHourFrac = (meanAngle / (2 * Math.PI)) * 24
+    const avgHours = Math.floor(meanHourFrac)
+    const avgMins = Math.round((meanHourFrac - avgHours) * 60)
+    const ampm = avgHours >= 12 ? 'PM' : 'AM'
+    const displayHour = avgHours % 12 || 12
+    return `${displayHour}:${String(avgMins).padStart(2, '0')} ${ampm}`
+  })()
+
+  // Most recent detection
+  const lastDetection = deerSnapshots.length > 0
+    ? formatTimestamp(deerSnapshots.reduce((latest, s) =>
+        new Date(s.timestamp) > new Date(latest.timestamp) ? s : latest
+      ).timestamp)
+    : null
+
+  // Average confidence
+  const avgConfidence = (() => {
+    const withConf = deerSnapshots.filter(s => s.detection_confidence != null)
+    if (withConf.length === 0) return null
+    const avg = withConf.reduce((sum, s) => sum + s.detection_confidence, 0) / withConf.length
+    return `${(avg * 100).toFixed(0)}%`
+  })()
 
   return (
     <div className="dashboard">
-      {/* Header with stats and time filters in single row */}
-      <div className="dashboard-header">
-        <div className="header-row">
-          <div className="stat-card">
-            <h3>Total Snapshots</h3>
-            <p className="stat-value">{snapshots.length}</p>
+      {/* Compact stats bar */}
+      <div className="flex items-center gap-6 px-6 py-3 border-b border-white/10">
+        {/* Primary stat */}
+        <div className="flex items-baseline gap-2">
+          <span className="text-3xl font-bold text-green-400">{deerCount}</span>
+          <span className="text-xs uppercase tracking-wide text-white/50">deer detected</span>
+        </div>
+
+        {/* Divider */}
+        <div className="w-px h-8 bg-white/15 shrink-0" />
+
+        {/* Secondary stats */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+          <div className="flex items-center gap-1.5">
+            <span className="text-white/40 text-xs">This Month</span>
+            <span className="font-semibold text-white/90">{thisMonthCount}</span>
           </div>
-          <div className="stat-card">
-            <h3>Deer Detected</h3>
-            <p className="stat-value">{deerCount}</p>
-          </div>
+          {meanSightingTime && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-white/40 text-xs">Avg Time</span>
+              <span className="font-semibold text-white/90">{meanSightingTime}</span>
+            </div>
+          )}
+          {avgConfidence && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-white/40 text-xs">Avg Conf</span>
+              <span className="font-semibold text-white/90">{avgConfidence}</span>
+            </div>
+          )}
+          {lastDetection && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-white/40 text-xs">Latest</span>
+              <span className="font-semibold text-white/90">{lastDetection}</span>
+            </div>
+          )}
         </div>
       </div>
 

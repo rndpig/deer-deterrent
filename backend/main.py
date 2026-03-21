@@ -4565,6 +4565,50 @@ async def sync_training_data_to_r2():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/stats/synopsis")
+async def generate_stats_synopsis(request: Request):
+    """Generate an AI-powered synopsis of deer activity stats using OpenAI."""
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if not api_key or api_key == "PASTE_YOUR_KEY_HERE":
+        raise HTTPException(status_code=503, detail="OpenAI API key not configured")
+
+    payload = await request.json()
+
+    # Build a concise prompt from the stats payload
+    prompt_parts = [
+        "You are an analyst for a residential deer detection system. Provide a concise, insightful synopsis (3-5 paragraphs) of the following deer activity data. Focus on patterns, anomalies, and actionable observations. Be specific with numbers.\n",
+        f"Selected years: {payload.get('selected_years', [])}",
+        f"Total sightings: {payload.get('total_sightings', 0)}",
+        f"Mean sighting time: {payload.get('mean_time', 'N/A')}",
+        f"Average detection confidence: {payload.get('avg_confidence', 'N/A')}",
+        f"Max deer in a single snapshot: {payload.get('max_deer_in_shot', 0)}",
+        f"Peak month: {payload.get('peak_month', 'N/A')}",
+        f"Peak hour: {payload.get('peak_hour', 'N/A')}",
+        f"Days with activity: {payload.get('active_days', 0)} of {payload.get('total_days', 0)} ({payload.get('frequency', 'N/A')})",
+        f"Camera breakdown: {json.dumps(payload.get('camera_breakdown', {}))}",
+        f"Monthly data: {json.dumps(payload.get('monthly_data', []))}",
+        f"Hourly distribution (0-23h): {json.dumps(payload.get('hourly_distribution', []))}",
+    ]
+
+    try:
+        import openai
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a wildlife activity analyst. Write in a direct, data-driven style. No markdown formatting."},
+                {"role": "user", "content": "\n".join(prompt_parts)}
+            ],
+            max_tokens=600,
+            temperature=0.7,
+        )
+        synopsis = response.choices[0].message.content
+        return {"synopsis": synopsis}
+    except Exception as e:
+        logger.error(f"OpenAI synopsis generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Synopsis generation failed: {e}")
+
+
 if __name__ == "__main__":
     import uvicorn
     print("Starting Deer Deterrent API server on http://localhost:8000")
