@@ -123,20 +123,16 @@ The server has its own `.env` at `/home/rndpig/deer-deterrent/.env` with product
 
 ## ML Model
 
-### Current Production Model: YOLO26s v2.0
+### Current Production Model: YOLO26s v3.0
 - **Architecture**: YOLO26s (from ultralytics >= 8.4.0)
-- **File**: `dell-deployment/models/production/best.pt` (19.35 MB)
-- **MD5**: cb50366cac8b5a5f5a445f3c85277da6
-- **Training**: Two-phase (20 frozen + 97 full) on Dell i7-4790 CPU
-- **Dataset v2.0**: 401 images (258 video frames + 3 Ring snapshots + 140 hard negatives), CLAHE preprocessed
-- **Metrics**: mAP50=0.806, Precision=0.836, Recall=0.765 (test set)
-- **Inference**: ~162ms on i7-4790 CPU (~6 FPS)
+- **File**: `dell-deployment/models/production/best.pt`
 - **CLAHE preprocessing**: clip_limit=2.0, tile_grid_size=(8,8) — applied at inference time in ml-detector
 
 ### Model Registry
 See `models/registry.json` for full model history, dataset versions, and deployment history.
 
-### Previous Model
+### Previous Models
+- YOLO26s v2.0 (19.35 MB) — retired, see registry.json for details
 - YOLOv8n baseline (5.94 MB) — retired 2026-02-07, backed up as `best.pt.backup_yolov8n_20260207`
 
 ### Training Pipeline
@@ -200,7 +196,7 @@ Single-file Python app embedded in the Dockerfile (~360 lines). Provides:
 - `POST /detect` — Accept image, apply CLAHE, run YOLO, return results
 - `GET /health` — Model status and current confidence_threshold
 - Background settings sync from backend every 30 seconds
-- Returns `model_version: "YOLO26s v2.0"` in detection responses
+- Returns `model_version: "YOLO26s v3.0"` in detection responses
 
 ---
 

@@ -50,7 +50,7 @@ def load_detector():
             # In Docker, main.py is at /app/main.py, so project root is /app
             project_root = Path(__file__).parent
             
-            # OpenVINO model (legacy - YOLO26s v2.0 uses PyTorch via ml-detector service)
+            # OpenVINO model (legacy - YOLO26s v3.0 uses PyTorch via ml-detector service)
             openvino_model = project_root / "models" / "production" / "openvino" / "best_fp16.xml"
             
             if openvino_model.exists():
@@ -105,7 +105,6 @@ def load_r2_storage():
 try:
     import cv2
     import numpy as np
-    import base64
     CV2_AVAILABLE = True
 except ImportError:
     print("⚠ OpenCV/NumPy not available - image processing disabled")
@@ -119,8 +118,8 @@ app = FastAPI(
 
 # Initialize database on startup
 @app.on_event("startup")
-async def startup_event():
-    """Initialize database and load detector."""
+async def startup_init_db():
+    """Initialize database."""
     print("Initializing database...")
     db.init_database()
     print("Database ready!")
@@ -140,19 +139,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Debug endpoint
-@app.get("/api/debug/env")
-async def debug_env():
-    """Debug endpoint to check environment variables"""
-    import os
-    from pathlib import Path
-    return {
-        "GOOGLE_DRIVE_CREDENTIALS_PATH": os.getenv('GOOGLE_DRIVE_CREDENTIALS_PATH'),
-        "GOOGLE_DRIVE_TRAINING_FOLDER_ID": os.getenv('GOOGLE_DRIVE_TRAINING_FOLDER_ID'),
-        "credentials_file_exists": Path(os.getenv('GOOGLE_DRIVE_CREDENTIALS_PATH', 'configs/google-credentials.json')).exists(),
-        "cwd": os.getcwd(),
-        "all_google_env": {k: v for k, v in os.environ.items() if 'GOOGLE' in k}
-    }
+# Debug endpoint removed — was exposing environment variables without authentication
 
 # Initialize detector
 detector = None
@@ -359,7 +346,7 @@ async def update_ring_event(event_id: int, update: dict):
         if existing_event and existing_event.get('detection_bboxes'):
             try:
                 existing_bboxes = json.loads(existing_event['detection_bboxes']) if isinstance(existing_event['detection_bboxes'], str) else existing_event['detection_bboxes']
-            except:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 existing_bboxes = []
 
         if existing_bboxes:
@@ -411,9 +398,9 @@ async def update_ring_event(event_id: int, update: dict):
                                     # Include model version
                                     model_name = type(detector_obj).__name__
                                     if 'OpenVINO' in model_name:
-                                        update["model_version"] = "YOLO26s v2.0 OpenVINO"
+                                        update["model_version"] = "YOLO26s v3.0 OpenVINO"
                                     else:
-                                        update["model_version"] = "YOLO26s v2.0 PyTorch"
+                                        update["model_version"] = "YOLO26s v3.0 PyTorch"
                                     logger.info(f"Snapshot {event_id} re-detected with {len(detections)} boxes, confidence: {max_confidence:.2f}, model: {update['model_version']}")
                                 else:
                                     # User says deer but detector didn't find any
@@ -571,7 +558,7 @@ async def regenerate_bboxes():
     """Re-run ML detection on all confirmed-deer snapshots to generate bounding boxes.
     
     Only updates detection_bboxes — never changes deer_detected or confidence.
-    Uses the ML detector container (YOLO26s v2.0 with CLAHE preprocessing).
+    Uses the ML detector container (YOLO26s v3.0 with CLAHE preprocessing).
     """
     ml_detector_url = os.getenv("ML_DETECTOR_URL", "http://ml-detector:8001")
     
@@ -864,7 +851,7 @@ async def test_detection(
     camera_id: str = Form(None),
     captured_at: str = Form(None)
 ):
-    """Test deer detection on an uploaded image using the ml-detector service (YOLO26s v2.0 with CLAHE)."""
+    """Test deer detection on an uploaded image using the ml-detector service (YOLO26s v3.0 with CLAHE)."""
     # Log parameters for debugging
     logger.info(f"test_detection called with threshold={threshold}, save_to_database={save_to_database}")
     
@@ -885,7 +872,7 @@ async def test_detection(
         if img is None:
             raise HTTPException(status_code=400, detail="Failed to decode image")
         
-        # Call ml-detector service (YOLO26s v2.0 with CLAHE preprocessing)
+        # Call ml-detector service (YOLO26s v3.0 with CLAHE preprocessing)
         ml_detector_url = os.getenv("ML_DETECTOR_URL", "http://ml-detector:8001")
         
         try:
@@ -923,7 +910,7 @@ async def test_detection(
                 try:
                     from dateutil import parser
                     timestamp = parser.parse(captured_at)
-                except:
+                except (ValueError, TypeError, OverflowError):
                     logger.warning(f"Failed to parse captured_at: {captured_at}, using current time")
                     timestamp = datetime.now()
             else:
@@ -958,7 +945,7 @@ async def test_detection(
                 'deer_detected': 1 if deer_detected else 0,
                 'detection_confidence': max_confidence,
                 'detection_bboxes': detection_bboxes,
-                'model_version': ml_result.get('model_version', 'YOLO26s v2.0'),
+                'model_version': ml_result.get('model_version', 'YOLO26s v3.0'),
                 'archived': 0
             }
             
@@ -972,7 +959,7 @@ async def test_detection(
             "detection_count": len(detections),
             "threshold_used": threshold,
             "saved_event_id": saved_event_id,
-            "model_version": ml_result.get('model_version', 'YOLO26s v2.0')
+            "model_version": ml_result.get('model_version', 'YOLO26s v3.0')
         }
         
     except HTTPException:
@@ -1067,8 +1054,10 @@ async def create_detection(event_data: dict):
     event_data.setdefault('irrigation_activated', False)
     event_data.setdefault('reviewed', False)
     
-    # Add to detection history
+    # Add to detection history (cap at 1000 entries)
     detection_history.append(event_data)
+    if len(detection_history) > 1000:
+        detection_history[:] = detection_history[-1000:]
     
     # Update stats
     stats['total_detections'] = len(detection_history)
@@ -1377,7 +1366,12 @@ async def run_video_detection(video: UploadFile = File(...)):
 @app.get("/api/video-frames/{frame_name}")
 async def get_video_frame(frame_name: str):
     """Serve extracted video frames with detections."""
-    frame_path = Path("temp/video_uploads") / frame_name
+    # Prevent path traversal
+    if ".." in frame_name or "/" in frame_name or "\\" in frame_name:
+        raise HTTPException(status_code=400, detail="Invalid frame name")
+    frame_path = (Path("temp/video_uploads") / frame_name).resolve()
+    if not str(frame_path).startswith(str(Path("temp/video_uploads").resolve())):
+        raise HTTPException(status_code=400, detail="Invalid frame path")
     if not frame_path.exists():
         raise HTTPException(status_code=404, detail="Frame not found")
     return FileResponse(frame_path)
@@ -1716,11 +1710,18 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
 @app.get("/api/training-frames/{frame_name}")
 async def get_training_frame(frame_name: str):
     """Serve training frames."""
+    # Prevent path traversal
+    if ".." in frame_name or "/" in frame_name or "\\" in frame_name:
+        raise HTTPException(status_code=400, detail="Invalid frame name")
     # Frames are stored in data/frames/ directory
-    frame_path = Path("data/frames") / frame_name
+    frame_path = (Path("data/frames") / frame_name).resolve()
+    if not str(frame_path).startswith(str(Path("data/frames").resolve())):
+        raise HTTPException(status_code=400, detail="Invalid frame path")
     if not frame_path.exists():
         # Also try training_frames directory for backward compatibility
-        frame_path = Path("data/training_frames") / frame_name
+        frame_path = (Path("data/training_frames") / frame_name).resolve()
+        if not str(frame_path).startswith(str(Path("data/training_frames").resolve())):
+            raise HTTPException(status_code=400, detail="Invalid frame path")
         if not frame_path.exists():
             logger.error(f"Frame not found: {frame_name}")
             raise HTTPException(status_code=404, detail="Frame not found")
@@ -1887,8 +1888,11 @@ async def get_snapshot(snapshot_name: str):
     """Serve snapshot images from coordinator"""
     from fastapi.responses import FileResponse
     
+    # Prevent path traversal
+    if ".." in snapshot_name or "/" in snapshot_name or "\\" in snapshot_name:
+        raise HTTPException(status_code=400, detail="Invalid snapshot name")
     # Snapshots are mounted to host at ./dell-deployment/data/snapshots
-    snapshot_path = Path(__file__).parent.parent / "dell-deployment" / "data" / "snapshots" / snapshot_name
+    snapshot_path = (Path(__file__).parent.parent / "dell-deployment" / "data" / "snapshots" / snapshot_name).resolve()
     
     if not snapshot_path.exists():
         logger.error(f"Snapshot not found: {snapshot_path}")
@@ -1904,7 +1908,12 @@ async def get_snapshot(snapshot_name: str):
 @app.get("/api/images/{image_name}")
 async def get_detection_image(image_name: str):
     """Serve detection images."""
-    image_path = Path("temp/demo_detections") / image_name
+    # Prevent path traversal
+    if ".." in image_name or "/" in image_name or "\\" in image_name:
+        raise HTTPException(status_code=400, detail="Invalid image name")
+    image_path = (Path("temp/demo_detections") / image_name).resolve()
+    if not str(image_path).startswith(str(Path("temp/demo_detections").resolve())):
+        raise HTTPException(status_code=400, detail="Invalid image path")
     if not image_path.exists():
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(image_path)
@@ -1936,10 +1945,16 @@ async def websocket_endpoint(websocket: WebSocket):
 
 async def broadcast_message(message: dict):
     """Broadcast message to all connected WebSocket clients."""
+    disconnected = []
     for ws in active_websockets:
         try:
             await ws.send_json(message)
-        except:
+        except Exception:
+            disconnected.append(ws)
+    for ws in disconnected:
+        try:
+            active_websockets.remove(ws)
+        except ValueError:
             pass
 
 

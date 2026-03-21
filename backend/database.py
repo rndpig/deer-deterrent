@@ -834,10 +834,10 @@ def get_ring_events(hours: int = 24, camera_id: str = None) -> List[Dict]:
     
     query = """
         SELECT * FROM ring_events 
-        WHERE datetime(timestamp) >= datetime('now', '-{} hours')
-    """.format(hours)
+        WHERE datetime(timestamp) >= datetime('now', ? || ' hours')
+    """
     
-    params = []
+    params = [f"-{int(hours)}"]
     if camera_id:
         query += " AND camera_id = ?"
         params.append(camera_id)
@@ -874,7 +874,7 @@ def get_ring_events_with_snapshots(limit: int = 100, with_deer: bool = None) -> 
         if event.get('detection_bboxes'):
             try:
                 event['detection_bboxes'] = json.loads(event['detection_bboxes'])
-            except:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 event['detection_bboxes'] = []
         else:
             event['detection_bboxes'] = []

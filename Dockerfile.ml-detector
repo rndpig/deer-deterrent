@@ -94,7 +94,7 @@ DEVICE = os.getenv("DEVICE", "cpu")
 BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://backend:8000")
 
 # CLAHE preprocessing parameters — must match training export settings
-CLAHE_CLIP_LIMIT = 3.0
+CLAHE_CLIP_LIMIT = 2.0
 CLAHE_TILE_SIZE = (8, 8)
 ENABLE_CLAHE = os.getenv("ENABLE_CLAHE", "true").lower() == "true"
 

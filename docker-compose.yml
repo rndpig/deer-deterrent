@@ -36,7 +36,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-deeruser}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
       - PGDATA=/var/lib/postgresql/data/pgdata
-      - TZ=${TIMEZONE:-America/New_York}
+      - TZ=${TIMEZONE:-America/Chicago}
     
     volumes:
       - ./dell-deployment/data/database:/var/lib/postgresql/data
@@ -72,7 +72,7 @@ services:
       - "9001:9001"
     
     environment:
-      - TZ=${TIMEZONE:-America/New_York}
+      - TZ=${TIMEZONE:-America/Chicago}
     
     healthcheck:
       test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3"]
@@ -97,7 +97,7 @@ services:
         condition: service_healthy
     
     environment:
-      - TZ=${TIMEZONE:-America/New_York}
+      - TZ=${TIMEZONE:-America/Chicago}
       - RINGTOKEN=${RING_REFRESH_TOKEN:-}
       - RINGENABLE2FA=${RING_2FA_METHOD:-email}
       - MQTTHOST=mosquitto
@@ -145,7 +145,7 @@ services:
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://${DELL_SERVER_IP:-192.168.1.200}:3000}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - TZ=${TIMEZONE:-America/New_York}
+      - TZ=${TIMEZONE:-America/Chicago}
       - ML_DETECTOR_URL=http://ml-detector:8001
     
     volumes:
@@ -185,11 +185,11 @@ services:
     
     environment:
       - YOLO_MODEL_PATH=${YOLO_MODEL_PATH:-/app/models/production/best.pt}
-      - CONFIDENCE_THRESHOLD=${CONFIDENCE_THRESHOLD:-0.30}
+      - CONFIDENCE_THRESHOLD=${CONFIDENCE_THRESHOLD:-0.55}
       - IOU_THRESHOLD=${IOU_THRESHOLD:-0.65}
       - DEVICE=${DEVICE:-cpu}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - TZ=${TIMEZONE:-America/New_York}
+      - TZ=${TIMEZONE:-America/Chicago}
     
     volumes:
       - ./src:/app/src
@@ -247,7 +247,7 @@ services:
       - RAINBIRD_PASSWORD=${RAINBIRD_PASSWORD:-}
       - RAINBIRD_ZONE=${RAINBIRD_ZONE:-1}
       - RAINBIRD_DURATION_SECONDS=${RAINBIRD_DURATION_SECONDS:-30}
-      - CONFIDENCE_THRESHOLD=${CONFIDENCE_THRESHOLD:-0.30}
+      - CONFIDENCE_THRESHOLD=${CONFIDENCE_THRESHOLD:-0.55}
       - COOLDOWN_SECONDS=${COOLDOWN_SECONDS:-300}
       - ENABLE_IRRIGATION=${ENABLE_IRRIGATION:-true}
       - ACTIVE_HOURS_START=${ACTIVE_HOURS_START:-20}
@@ -257,7 +257,7 @@ services:
       - PERIODIC_SNAPSHOT_CAMERAS=${PERIODIC_SNAPSHOT_CAMERAS:-10cea9e4511f,587a624d3fae,4439c4de7a79,f045dae9383a}
       - RING_LOCATION_ID=${RING_LOCATION_ID:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - TZ=${TIMEZONE:-America/New_York}
+      - TZ=${TIMEZONE:-America/Chicago}
     
     volumes:
       - ./dell-deployment/logs/coordinator:/app/logs
