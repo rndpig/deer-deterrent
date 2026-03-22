@@ -92,8 +92,7 @@ CONFIG = {
     "ACTIVE_HOURS_ENABLED": True,  # Will be synced from backend settings
     "ACTIVE_HOURS_START": int(os.getenv("ACTIVE_HOURS_START", "20")),
     "ACTIVE_HOURS_END": int(os.getenv("ACTIVE_HOURS_END", "6")),
-    "ENABLED_CAMERAS": [c.strip() for c in os.getenv("ENABLED_CAMERAS", "").split(",") if c.strip()],  # Detection filtering (synced from backend)
-    "POLLING_CAMERAS": [c.strip() for c in os.getenv("PERIODIC_SNAPSHOT_CAMERAS", "10cea9e4511f,587a624d3fae").split(",") if c.strip()],  # Snapshot polling (NOT overwritten by backend sync)
+    "ENABLED_CAMERAS": [c.strip() for c in os.getenv("ENABLED_CAMERAS", "").split(",") if c.strip()],  # Synced from backend settings
     # Periodic snapshot polling (interval derived from snapshot_frequency setting)
     "ENABLE_PERIODIC_SNAPSHOTS": os.getenv("ENABLE_PERIODIC_SNAPSHOTS", "false").lower() == "true",
     "SNAPSHOT_FREQUENCY": 60,  # Ring capture frequency in seconds, synced from backend settings
@@ -125,13 +124,13 @@ async def fetch_settings_from_backend():
                     if old_threshold != CONFIG["CONFIDENCE_THRESHOLD"]:
                         logger.info(f"Updated confidence threshold from {old_threshold} to {CONFIG['CONFIDENCE_THRESHOLD']}")
                 
-                # Update enabled cameras for detection filtering (does NOT affect POLLING_CAMERAS)
+                # Update enabled cameras (controls detection AND polling)
                 new_cameras = settings.get('enabled_cameras')
                 if new_cameras is not None:
                     old_cameras = CONFIG.get("ENABLED_CAMERAS", [])
                     CONFIG["ENABLED_CAMERAS"] = new_cameras
                     if old_cameras != CONFIG["ENABLED_CAMERAS"]:
-                        logger.info(f"Updated detection-enabled cameras from {old_cameras} to {CONFIG['ENABLED_CAMERAS']} (polling cameras unchanged: {CONFIG['POLLING_CAMERAS']})")
+                        logger.info(f"Updated enabled cameras from {old_cameras} to {CONFIG['ENABLED_CAMERAS']}")
                 
                 # Sync active hours from backend (frontend is source of truth)
                 active_enabled = settings.get('active_hours_enabled')
@@ -562,6 +561,12 @@ def on_mqtt_message(client, userdata, msg):
             if payload.upper() == "ON":
                 logger.info(f"⚡ INSTANT motion detected on camera {camera_id}")
                 
+                # Skip cameras not in enabled list
+                enabled_cameras = CONFIG.get("ENABLED_CAMERAS", [])
+                if enabled_cameras and camera_id not in enabled_cameras:
+                    logger.debug(f"Camera {camera_id} not enabled, skipping motion event")
+                    return
+                
                 # Log Ring event if within active hours (synchronous call)
                 ring_event_id = None
                 snapshot_path = None
@@ -693,12 +698,14 @@ async def periodic_snapshot_poller():
         return
     
     polling_interval = CONFIG["SNAPSHOT_FREQUENCY"] + 10
-    logger.info(f"Periodic snapshots enabled for cameras: {CONFIG['POLLING_CAMERAS']} (snapshot frequency: {CONFIG['SNAPSHOT_FREQUENCY']}s, polling every {polling_interval}s, active hours: {CONFIG['ACTIVE_HOURS_START']}:00-{CONFIG['ACTIVE_HOURS_END']}:00)")
+    logger.info(f"Periodic snapshots enabled for cameras: {CONFIG['ENABLED_CAMERAS']} (snapshot frequency: {CONFIG['SNAPSHOT_FREQUENCY']}s, polling every {polling_interval}s, active hours: {CONFIG['ACTIVE_HOURS_START']}:00-{CONFIG['ACTIVE_HOURS_END']}:00)")
     
-    # Subscribe to snapshot response topics
-    for camera_id in CONFIG["POLLING_CAMERAS"]:
+    # Subscribe to snapshot response topics for enabled cameras
+    subscribed_cameras = set()
+    for camera_id in CONFIG["ENABLED_CAMERAS"]:
         topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{camera_id}/snapshot/image"
         mqtt_client.subscribe(topic)
+        subscribed_cameras.add(camera_id)
         logger.info(f"Subscribed to periodic snapshots: {topic}")
     
     while True:
@@ -711,7 +718,23 @@ async def periodic_snapshot_poller():
                 logger.debug("Outside active hours, skipping periodic snapshots")
                 continue
             
-            for camera_id in CONFIG["POLLING_CAMERAS"]:
+            # Re-subscribe if enabled cameras changed
+            current_enabled = set(CONFIG.get("ENABLED_CAMERAS", []))
+            if current_enabled != subscribed_cameras:
+                # Unsubscribe removed cameras
+                for cam in subscribed_cameras - current_enabled:
+                    topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{cam}/snapshot/image"
+                    mqtt_client.unsubscribe(topic)
+                    logger.info(f"Unsubscribed from removed camera: {topic}")
+                # Subscribe new cameras
+                for cam in current_enabled - subscribed_cameras:
+                    topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{cam}/snapshot/image"
+                    mqtt_client.subscribe(topic)
+                    logger.info(f"Subscribed to new camera: {topic}")
+                subscribed_cameras = current_enabled
+                logger.info(f"Updated polling cameras to: {subscribed_cameras}")
+            
+            for camera_id in CONFIG["ENABLED_CAMERAS"]:
                 # Request snapshot refresh via MQTT (ring-mqtt updates its interval)
                 topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{camera_id}/snapshot_interval/command"
                 mqtt_client.publish(topic, "10")
@@ -719,7 +742,7 @@ async def periodic_snapshot_poller():
             # Wait for all cameras to potentially deliver fresh snapshots
             await asyncio.sleep(8)
             
-            for camera_id in CONFIG["POLLING_CAMERAS"]:
+            for camera_id in CONFIG["ENABLED_CAMERAS"]:
                 # Use whatever snapshot is currently cached from the MQTT stream
                 # Ring-mqtt publishes snapshots every ~10s, so camera_snapshots
                 # should always have recent data if MQTT is connected
