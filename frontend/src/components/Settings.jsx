@@ -93,10 +93,10 @@ function Settings({ settings, setSettings }) {
         console.error('Error fetching Ring cameras:', err)
         // Use fallback cameras in preferred order
         const fallbackCameras = [
-          { name: 'Side', id: 'side', type: 'camera' },
-          { name: 'Driveway', id: 'driveway', type: 'camera' },
-          { name: 'Front', id: 'front', type: 'camera' },
-          { name: 'Backyard', id: 'backyard', type: 'camera' }
+          { name: 'Side', id: '10cea9e4511f', type: 'camera' },
+          { name: 'Driveway', id: '587a624d3fae', type: 'camera' },
+          { name: 'Front', id: '4439c4de7a79', type: 'camera' },
+          { name: 'Backyard', id: 'f045dae9383a', type: 'camera' }
         ]
         setRingCameras(fallbackCameras)
         const initialZones = {}
