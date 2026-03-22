@@ -5,6 +5,7 @@ import AnnotationTool from './AnnotationTool'
 
 function Dashboard({ stats, settings }) {
   const [snapshots, setSnapshots] = useState([])
+  const [allTimeSnapshots, setAllTimeSnapshots] = useState([])
   const [loading, setLoading] = useState(true)
   const [timeFilter, setTimeFilter] = useState('last24h') // last24h, last7d, all
   const [currentPage, setCurrentPage] = useState(1)
@@ -85,18 +86,21 @@ function Dashboard({ stats, settings }) {
       let allSnapshots = data.snapshots || []
       console.log('Total snapshots from API:', allSnapshots.length)
       
+      // Apply camera filter
+      if (cameraFilter !== 'all') {
+        allSnapshots = allSnapshots.filter(s => s.camera_id === cameraFilter)
+        console.log('After camera filter:', allSnapshots.length)
+      }
+      
+      // Save all-time snapshots (before time filter) for consistent stats
+      setAllTimeSnapshots(allSnapshots)
+      
       // Apply time filter
       if (timeFilter !== 'all') {
         const hours = timeFilter === 'last24h' ? 24 : 168
         const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
         allSnapshots = allSnapshots.filter(s => new Date(s.timestamp) > cutoff)
         console.log('After time filter:', allSnapshots.length)
-      }
-      
-      // Apply camera filter
-      if (cameraFilter !== 'all') {
-        allSnapshots = allSnapshots.filter(s => s.camera_id === cameraFilter)
-        console.log('After camera filter:', allSnapshots.length)
       }
       
       console.log('Final snapshots to display:', allSnapshots.length)
@@ -258,10 +262,12 @@ function Dashboard({ stats, settings }) {
   // Compute deer detection metadata from ALL snapshots (not filtered)
   const deerSnapshots = snapshots.filter(s => s.deer_detected)
 
-  // Detections this month
+  // Detections this month (from all-time data, not affected by time filter)
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const thisMonthCount = deerSnapshots.filter(s => new Date(s.timestamp) >= monthStart).length
+  const monthName = now.toLocaleString('default', { month: 'short' })
+  const allTimeDeer = allTimeSnapshots.filter(s => s.deer_detected)
+  const thisMonthCount = allTimeDeer.filter(s => new Date(s.timestamp) >= monthStart).length
 
   // Mean sighting hour (circular mean to handle midnight crossing)
   const meanSightingTime = (() => {
@@ -315,7 +321,7 @@ function Dashboard({ stats, settings }) {
         {/* Secondary stats */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
           <div className="flex items-center gap-1.5">
-            <span className="text-white/40 text-xs">This Month</span>
+            <span className="text-white/40 text-xs">{monthName}</span>
             <span className="font-semibold text-white/90">{thisMonthCount}</span>
           </div>
           {meanSightingTime && (

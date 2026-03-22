@@ -171,22 +171,15 @@ function Stats() {
     return data
   }, [deerSnapshots, selectedYears])
 
-  // ── Hourly distribution data ──
+  // ── Hourly distribution data (active hours only: 8 PM – 6 AM) ──
   const hourlyChartData = useMemo(() => {
     if (!metrics) return []
-    return metrics.hourCounts.map((count, hour) => {
+    const activeHours = [20, 21, 22, 23, 0, 1, 2, 3, 4, 5]
+    return activeHours.map(hour => {
       const ampm = hour >= 12 ? 'PM' : 'AM'
       const display = hour % 12 || 12
-      return { hour: `${display}${ampm}`, count, hourIdx: hour }
+      return { hour: `${display}${ampm}`, count: metrics.hourCounts[hour], hourIdx: hour }
     })
-  }, [metrics])
-
-  // ── Camera breakdown data ──
-  const cameraChartData = useMemo(() => {
-    if (!metrics) return []
-    return Object.entries(metrics.cameraCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({ camera: name, count }))
   }, [metrics])
 
   // ── AI Synopsis ──
@@ -269,48 +262,48 @@ function Stats() {
           {/* ── Key Metrics Grid ── */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <MetricCard label="Total Sightings" value={metrics.total} />
-            <MetricCard label="Avg Time" value={metrics.meanTime} />
-            <MetricCard label="Avg Confidence" value={metrics.avgConfidence} />
-            <MetricCard label="Max Deer / Shot" value={metrics.maxDeerInShot} />
-            <MetricCard label="Peak Hour" value={metrics.peakHour} />
+            <MetricCard label="Mean Sighting Time" value={metrics.meanTime} />
+            <MetricCard label="Peak Sighting Hour" value={metrics.peakHour} />
+            <MetricCard label="Max Deer / Snapshot" value={metrics.maxDeerInShot} />
+            <MetricCard label="Mean Confidence" value={metrics.avgConfidence} />
             <MetricCard label="Activity Rate" value={metrics.frequency} sub={`${metrics.activeDays} of ${metrics.totalDays} days`} />
           </div>
 
-          {/* ── Monthly Sightings Chart ── */}
-          <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-white/70 uppercase tracking-wide mb-3">
-              Monthly Sightings
-            </h3>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={monthlyChartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="month" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} />
-                <YAxis allowDecimals={false} tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{ background: '#1e1e1e', border: '1px solid #333', borderRadius: 8 }}
-                  labelStyle={{ color: '#fff' }}
-                  itemStyle={{ color: '#fff' }}
-                />
-                {selectedYears.map((year, i) => (
-                  <Bar key={year} dataKey={year} name={String(year)}
-                    fill={YEAR_COLORS[i % YEAR_COLORS.length]} radius={[3, 3, 0, 0]} />
-                ))}
-                {selectedYears.length > 1 && <Legend wrapperStyle={{ color: 'rgba(255,255,255,0.7)' }} />}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* ── Two-Column: Hourly Distribution + Camera Breakdown ── */}
+          {/* ── Charts: Monthly Sightings + Hourly Distribution ── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Monthly sightings */}
+            <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-white/70 uppercase tracking-wide mb-3">
+                Monthly Sightings
+              </h3>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={monthlyChartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                  <XAxis dataKey="month" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} />
+                  <YAxis allowDecimals={false} tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{ background: '#1e1e1e', border: '1px solid #333', borderRadius: 8 }}
+                    labelStyle={{ color: '#fff' }}
+                    itemStyle={{ color: '#fff' }}
+                  />
+                  {selectedYears.map((year, i) => (
+                    <Bar key={year} dataKey={year} name={String(year)}
+                      fill={YEAR_COLORS[i % YEAR_COLORS.length]} radius={[3, 3, 0, 0]} />
+                  ))}
+                  {selectedYears.length > 1 && <Legend wrapperStyle={{ color: 'rgba(255,255,255,0.7)' }} />}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
             {/* Hourly distribution */}
             <div className="bg-white/5 border border-white/10 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-white/70 uppercase tracking-wide mb-3">
                 Hourly Distribution
               </h3>
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={hourlyChartData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                  <XAxis dataKey="hour" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 10 }} interval={1} />
+                  <XAxis dataKey="hour" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 10 }} interval={0} />
                   <YAxis allowDecimals={false} tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11 }} />
                   <Tooltip
                     contentStyle={{ background: '#1e1e1e', border: '1px solid #333', borderRadius: 8 }}
@@ -323,46 +316,6 @@ function Stats() {
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </div>
-
-            {/* Camera breakdown */}
-            <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-white/70 uppercase tracking-wide mb-3">
-                By Camera
-              </h3>
-              {cameraChartData.length > 0 ? (
-                <div className="flex flex-col gap-2">
-                  {cameraChartData.map(({ camera, count }) => {
-                    const pct = (count / filtered.length * 100).toFixed(0)
-                    return (
-                      <div key={camera} className="flex items-center gap-3">
-                        <span className="text-sm text-white/70 w-24 shrink-0">{camera}</span>
-                        <div className="flex-1 h-6 bg-white/5 rounded overflow-hidden">
-                          <div
-                            className="h-full bg-blue-500/60 rounded transition-all"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className="text-sm font-semibold text-white/80 w-16 text-right">{count} ({pct}%)</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <span className="text-white/30 text-sm">No data</span>
-              )}
-
-              {/* Additional metrics below camera bars */}
-              <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/10">
-                <div>
-                  <span className="text-xs text-white/40 uppercase">Peak Month</span>
-                  <p className="text-sm font-semibold text-white/90 mt-0.5">{metrics.peakMonth}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-white/40 uppercase">Top Camera</span>
-                  <p className="text-sm font-semibold text-white/90 mt-0.5">{metrics.topCamera}</p>
-                </div>
-              </div>
             </div>
           </div>
 
