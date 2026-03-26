@@ -1,5 +1,5 @@
 # Deer Deterrent System — Chat Instructions for AI Agents
-# Last Updated: 2026-02-08
+# Last Updated: 2026-03-25
 
 ## Project Overview
 
@@ -39,22 +39,24 @@ All services run via `docker compose` on the Dell server. The stack is defined i
 
 | Container | Port | Image | Purpose |
 |---|---|---|---|
-| deer-backend | 8000 | deer-deterrent-backend | FastAPI API server, SQLite training DB, WebSocket |
+| deer-backend | 8000 | deer-deterrent-backend | FastAPI API server, SQLite DB (ring events + training), WebSocket |
 | deer-ml-detector | 8001 | deer-deterrent-ml-detector | YOLO26s inference with CLAHE preprocessing |
 | deer-coordinator | 5000 | deer-deterrent-coordinator | Ring MQTT listener, orchestrates detection pipeline, irrigation |
-| deer-db | 5432 | postgres:16-alpine | PostgreSQL for Ring event data |
+| deer-db | 5432 | postgres:16-alpine | PostgreSQL (legacy — container exists but has no user tables; all data is in SQLite) |
 | deer-mosquitto | 1883, 9001 | eclipse-mosquitto:2.0 | MQTT message broker |
 | deer-ring-mqtt | 8554, 55123 | tsightler/ring-mqtt | Ring camera → MQTT bridge |
 
 ### Container Dependencies
 ```
-database (postgres) → backend → coordinator
 mosquitto → ring-mqtt → coordinator
 ml-detector → coordinator
+backend → coordinator
 ```
 
+> **Note**: The docker-compose.yml lists `database` (postgres) as a dependency of `backend`, but the backend does NOT use PostgreSQL. All data is stored in SQLite at `backend/data/training.db`. The postgres container is a legacy artifact.
+
 ### Key Volume Mounts
-- `./backend/data:/app/data` — SQLite training DB (backend + coordinator shared)
+- `./backend/data:/app/data` — SQLite DB (ring events + training data; backend + coordinator shared)
 - `./dell-deployment/data/snapshots:/app/snapshots` — Motion event snapshots
 - `./dell-deployment/models:/app/models` — YOLO model files
 - `./backend:/app` — Backend source code (live-mounted)
@@ -103,7 +105,7 @@ The server has its own `.env` at `/home/rndpig/deer-deterrent/.env` with product
 7. If deer_detected and confidence >= threshold:
    a. Coordinator PATCHes backend with results
    b. Coordinator triggers irrigation (if enabled and not in cooldown)
-8. Backend stores event in PostgreSQL ring_events table
+8. Backend stores event in SQLite ring_events table
 9. Frontend dashboard shows events via WebSocket push
 ```
 
@@ -156,15 +158,33 @@ The backend is a large FastAPI application (~4400 lines) serving multiple purpos
 - **Detections**: GET/POST `/api/detections` — legacy detection history
 - **WebSocket**: `/ws` — real-time updates to frontend
 
-### Databases
-1. **PostgreSQL** (deer-db container): Ring events, snapshots, detection results
-2. **SQLite** (`backend/data/training.db`): Video frames, annotations, training data
+### Database
+**SQLite** (`backend/data/training.db`): Single database for ALL data — ring events, snapshots, detection results, video frames, annotations, and training data. Despite the `deer-db` PostgreSQL container existing in docker-compose, it has no user tables and is not used.
 
-### PATCH Handler Bug Fix (2026-02-08)
+### ring_events Table Key Columns
+| Column | Type | Description |
+|---|---|---|
+| `deer_detected` | BOOLEAN | 1 if deer present (model or user) |
+| `detection_confidence` | REAL | Max confidence from detection (0-1) |
+| `detection_bboxes` | TEXT (JSON) | `[{"confidence": float|null, "bbox": {"x1","y1","x2","y2"}}]` — pixel coords for 640x360 images |
+| `model_version` | TEXT | e.g. "YOLO26s v3.0", "YOLO26s v3.0 OpenVINO" |
+| `false_positive` | BOOLEAN | User marked as false positive |
+| `user_confirmed` | BOOLEAN | User reviewed and confirmed/annotated this snapshot (added 2026-03-25) |
+| `archived` | BOOLEAN | Moved to archive |
+
+### User Confirmation Tracking (2026-03-25)
+- `user_confirmed` is set to 1 when:
+  - User clicks "yes-deer" in the dashboard (PATCH handler)
+  - User draws/saves manual bounding boxes (PUT `/api/snapshots/{id}/bboxes`)
+- Manual bboxes are distinguishable by `confidence: null` in the bbox JSON
+- The training export script (`scripts/export_dataset_v2.py`) logs user-confirmed counts and includes the flag in the manifest CSV
+
+### PATCH Handler Logic (2026-02-08)
 The PATCH `/api/ring-events/{event_id}` endpoint has special logic:
-- **User feedback** (clicking "yes-deer" in frontend): sends `{deer_detected: 1}` only → backend re-runs detection at low threshold (0.15) to find bboxes
+- **User feedback** (clicking "yes-deer" in frontend): sends `{deer_detected: 1}` only → backend re-runs detection at low threshold (0.15) to find bboxes, sets `user_confirmed = 1`
 - **Coordinator updates** (after ML detection): sends `{deer_detected, confidence, detection_bboxes, model_version}` → backend stores directly, NO re-detection
 - The distinction is: if the update payload contains "confidence" or "detection_bboxes", it's from the coordinator
+- **Caveat**: The backend's built-in detector (used for re-detection) does NOT apply CLAHE preprocessing, so it performs worse on dark images than the ml-detector container. At 0.15 threshold it can produce phantom detections in noisy areas (lights, sky). Users should draw manual bboxes rather than rely on re-detection results.
 
 ---
 
@@ -249,14 +269,13 @@ ssh dilger "curl -s http://localhost:8000/api/settings | python3 -m json.tool"
 # Check ml-detector health
 ssh dilger "curl -s http://localhost:8001/health | python3 -m json.tool"
 
-# Query database
-ssh dilger "python3 -c 'import sqlite3; ...'"  # For SQLite training DB
-ssh dilger "docker exec deer-db psql -U deeruser -d deer_deterrent -c 'SELECT ...'"  # For PostgreSQL
+# Query database (ALL data is in SQLite — there is no PostgreSQL data)
+ssh dilger "sqlite3 /home/rndpig/deer-deterrent/backend/data/training.db 'SELECT ...'"  # Direct SQLite access on host
 ```
 
 ### Database Access
-- **PostgreSQL** (ring events): Access via `docker exec deer-db psql -U deeruser -d deer_deterrent`
-- **SQLite** (training data): File at `/home/rndpig/deer-deterrent/backend/data/training.db` — access directly on host, NOT inside containers (no sqlite3 binary in container)
+- **SQLite** (all data): File at `/home/rndpig/deer-deterrent/backend/data/training.db` — access directly on host via `sqlite3`, NOT inside containers (no sqlite3 binary in container)
+- **PostgreSQL** (deer-db container): Exists but has no user tables. Do not use for ring event queries.
 
 ### Active Hours
 Periodic snapshot polling and detection only run during active hours (configurable via settings). Default is 20:00-6:00 (8 PM to 6 AM CST) — when deer are most active.
@@ -264,6 +283,12 @@ Periodic snapshot polling and detection only run during active hours (configurab
 ---
 
 ## Known Issues & Recent Fixes
+
+### Added (2026-03-25): User Confirmation Tracking
+Added `user_confirmed` column to `ring_events` table to track snapshots where a human reviewed and confirmed deer presence or drew manual bounding boxes. Previously, manually-drawn bboxes (with `confidence: null`) were indistinguishable from model detections for training purposes. The training export script now reports user-confirmed counts separately.
+
+### Known (2026-03-25): Backend Re-Detection Produces Phantom Bboxes
+When a user clicks "yes-deer" on a snapshot the model missed, the PATCH handler re-runs detection at 0.15 threshold using the backend's built-in detector (which lacks CLAHE). This can produce phantom detections in dark images — e.g., detecting "deer" in distant lights or sky. Users should draw manual bboxes to correct these. The manual bboxes overwrite the phantom ones via PUT `/api/snapshots/{id}/bboxes`.
 
 ### Fixed (2026-02-08): PATCH Handler Re-Detection Hijacking
 Backend PATCH handler was re-detecting ALL events marked as deer, including coordinator submissions. This overwrote valid detection results with the backend's built-in detector output (which lacks CLAHE and often misses). Fixed by checking for "confidence" in the update payload.
@@ -332,10 +357,10 @@ The project root contains many one-off Python scripts (check_*.py, fix_*.py, cle
 - **Code default changes**: Also update the Pydantic model default in `backend/main.py` class `SystemSettings`
 
 ### Working with the Database
-- Ring events live in PostgreSQL (`ring_events` table)
-- Training annotations live in SQLite (`backend/data/training.db`)
+- ALL data lives in SQLite (`backend/data/training.db`) — ring events, training annotations, video frames, everything
 - Use the backend API for reads when possible; direct DB access for bulk operations
-- SQLite must be accessed on the host filesystem, not inside containers
+- SQLite must be accessed on the host filesystem, not inside containers (no sqlite3 in container images)
+- The `user_confirmed` column tracks human-reviewed snapshots — useful for prioritizing training data
 
 ### Training a New Model
 1. Get more annotated data (user feedback in dashboard + annotation tool)
@@ -351,7 +376,7 @@ The project root contains many one-off Python scripts (check_*.py, fix_*.py, cle
 
 1. **ARCHITECTURE.md is outdated** — It describes a systemd-based backend deployment from Dec 2025. The current system uses Docker for ALL services. Do not follow its instructions for backend deployment.
 2. **Root-level scripts are mostly historical** — The 60+ Python scripts in the project root were one-off utilities. Don't assume they reflect current system behavior.
-3. **Two databases** — PostgreSQL for runtime Ring events, SQLite for training data. Don't confuse them.
+3. **Single database** — ALL data (ring events, training annotations, video frames) lives in SQLite at `backend/data/training.db`. The PostgreSQL container (`deer-db`) exists in docker-compose but has no user tables and is not used. Do not attempt to query ring events from PostgreSQL.
 4. **Coordinator and ml-detector are Dockerfile-embedded** — Their Python code is written inline in the Dockerfile via heredoc (`RUN cat > /app/service.py << 'EOF'`). Edits go in the Dockerfile, not separate .py files.
 5. **Settings sync delay** — After changing backend settings, wait up to 30 seconds for coordinator and ml-detector to pick up changes.
 6. **Server disk fills up** — Docker image cache grows quickly on the 98GB drive. Run `docker image prune -a -f` before builds if space is low.
