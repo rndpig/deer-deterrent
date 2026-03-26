@@ -172,6 +172,12 @@ def init_database():
         print("✓ Added 'model_version' column to ring_events table")
         logger.info("Added 'model_version' column to ring_events table")
     
+    # Migration: Add user_confirmed flag for human-reviewed snapshots
+    if 'user_confirmed' not in ring_columns:
+        cursor.execute("ALTER TABLE ring_events ADD COLUMN user_confirmed BOOLEAN DEFAULT 0")
+        print("✓ Added 'user_confirmed' column to ring_events table")
+        logger.info("Added 'user_confirmed' column to ring_events table")
+    
     conn.commit()
     conn.close()
     
@@ -790,7 +796,7 @@ def create_ring_event(event_data: dict) -> int:
 def update_ring_event_result(event_id: int, processed: bool = True, 
                              deer_detected: bool = None, confidence: float = None,
                              error_message: str = None, detection_bboxes: list = None,
-                             model_version: str = None):
+                             model_version: str = None, user_confirmed: bool = None):
     """Update Ring event with detection results."""
     conn = get_connection()
     cursor = conn.cursor()
@@ -817,6 +823,10 @@ def update_ring_event_result(event_id: int, processed: bool = True,
     if model_version is not None:
         updates.append("model_version = ?")
         params.append(model_version)
+    
+    if user_confirmed is not None:
+        updates.append("user_confirmed = ?")
+        params.append(user_confirmed)
     
     params.append(event_id)
     

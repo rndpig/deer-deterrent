@@ -371,7 +371,7 @@ def export_dataset():
     cursor.execute("""
         SELECT 
             id, camera_id, timestamp, snapshot_path,
-            detection_confidence, detection_bboxes
+            detection_confidence, detection_bboxes, user_confirmed
         FROM ring_events
         WHERE deer_detected = 1
         AND snapshot_available = 1
@@ -380,7 +380,8 @@ def export_dataset():
     """)
     
     deer_snapshots = cursor.fetchall()
-    print(f"Found {len(deer_snapshots)} Ring deer snapshots")
+    user_confirmed_count = sum(1 for s in deer_snapshots if s['user_confirmed'])
+    print(f"Found {len(deer_snapshots)} Ring deer snapshots ({user_confirmed_count} user-confirmed)")
     
     exported_deer_snapshots = 0
     
@@ -469,6 +470,7 @@ def export_dataset():
             'camera_name': snap['camera_id'],
             'num_annotations': len(yolo_lines),
             'is_positive': True,
+            'user_confirmed': bool(snap['user_confirmed']),
         })
         
         exported_deer_snapshots += 1

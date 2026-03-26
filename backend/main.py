@@ -418,7 +418,8 @@ async def update_ring_event(event_id: int, update: dict):
         confidence=update.get("confidence"),
         error_message=update.get("error_message"),
         detection_bboxes=update.get("detection_bboxes"),
-        model_version=update.get("model_version")
+        model_version=update.get("model_version"),
+        user_confirmed=True if is_user_feedback else None
     )
     return {"status": "success"}
 
@@ -633,7 +634,8 @@ async def update_snapshot_bboxes(event_id: int, request: Request):
     db.update_ring_event_result(
         event_id=event_id,
         processed=True,
-        detection_bboxes=bboxes
+        detection_bboxes=bboxes,
+        user_confirmed=True
     )
     
     return {"status": "ok", "event_id": event_id, "num_bboxes": len(bboxes)}
