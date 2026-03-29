@@ -5,7 +5,7 @@
 # and Rainbird irrigation activation
 # =============================================================================
 
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Set working directory
 WORKDIR /app
@@ -25,7 +25,9 @@ RUN pip install --no-cache-dir \
     paho-mqtt==2.1.0 \
     python-multipart==0.0.17 \
     pyyaml==6.0.2 \
-    python-dateutil==2.9.0
+    python-dateutil==2.9.0 \
+    pyrainbird==6.1.2 \
+    aiohttp>=3.9.0
 
 # Create directories
 RUN mkdir -p /app/logs /app/snapshots /app/config
@@ -322,7 +324,12 @@ async def detect_deer(image_bytes: bytes) -> Dict[str, Any]:
 
 
 async def activate_rainbird(zone: str, duration: int) -> bool:
-    """Activate Rainbird irrigation zone"""
+    """Activate Rainbird irrigation zone via pyrainbird library.
+    
+    Args:
+        zone: Zone number as string (e.g. "1")
+        duration: Duration in seconds
+    """
     if not CONFIG["RAINBIRD_IP"]:
         logger.warning("Rainbird IP not configured, skipping activation")
         return False
@@ -332,29 +339,56 @@ async def activate_rainbird(zone: str, duration: int) -> bool:
         return True
     
     try:
-        # TODO: Implement actual Rainbird API call
-        # This is a placeholder - we'll implement after reverse-engineering the API
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            payload = {
-                "zone": zone,
-                "duration": duration
-            }
-            
-            # Example endpoint (will be customized based on your Rainbird model)
-            url = f"http://{CONFIG['RAINBIRD_IP']}/api/irrigation"
-            
-            logger.info(f"Activating Rainbird zone {zone} for {duration}s (simulated)")
-            # response = await client.post(url, json=payload)
-            # response.raise_for_status()
-            
-            # For now, just simulate success
-            await asyncio.sleep(0.1)
-            
-            logger.info(f"✓ Irrigation zone {zone} activated for {duration}s")
-            return True
+        import aiohttp
+        from pyrainbird import async_client
+        
+        zone_num = int(zone)
+        # pyrainbird expects duration in minutes, minimum 1
+        duration_minutes = max(1, round(duration / 60))
+        
+        logger.info(f"Activating Rainbird zone {zone_num} for {duration_minutes} min ({duration}s requested)")
+        
+        async with aiohttp.ClientSession() as session:
+            controller = await async_client.create_controller(
+                session,
+                CONFIG["RAINBIRD_IP"],
+                CONFIG["RAINBIRD_PASSWORD"]
+            )
+            await controller.irrigate(zone_num, duration_minutes)
+        
+        logger.info(f"✓ Irrigation zone {zone_num} activated for {duration_minutes} min")
+        return True
             
     except Exception as e:
         logger.error(f"Failed to activate irrigation: {e}")
+        return False
+
+
+async def stop_rainbird() -> bool:
+    """Stop all Rainbird irrigation zones."""
+    if not CONFIG["RAINBIRD_IP"]:
+        logger.warning("Rainbird IP not configured")
+        return False
+    
+    try:
+        import aiohttp
+        from pyrainbird import async_client
+        
+        logger.info("Stopping all irrigation zones")
+        
+        async with aiohttp.ClientSession() as session:
+            controller = await async_client.create_controller(
+                session,
+                CONFIG["RAINBIRD_IP"],
+                CONFIG["RAINBIRD_PASSWORD"]
+            )
+            await controller.stop_irrigation()
+        
+        logger.info("✓ All irrigation zones stopped")
+        return True
+            
+    except Exception as e:
+        logger.error(f"Failed to stop irrigation: {e}")
         return False
 
 
@@ -1223,6 +1257,46 @@ async def health_check():
             "confidence_threshold": CONFIG["CONFIDENCE_THRESHOLD"]
         }
     }
+
+
+@app.post("/test-irrigation")
+async def test_irrigation(request: Request):
+    """Test irrigation by activating a specific zone."""
+    try:
+        payload = await request.json()
+        zone = payload.get("zone", "1")
+        duration = payload.get("duration", 60)  # seconds
+        
+        if not CONFIG["RAINBIRD_IP"]:
+            return {"status": "error", "message": "Rainbird IP not configured in server .env"}
+        
+        success = await activate_rainbird(str(zone), int(duration))
+        
+        if success:
+            return {"status": "success", "message": f"Zone {zone} activated for {max(1, round(int(duration)/60))} min"}
+        else:
+            return {"status": "error", "message": f"Failed to activate zone {zone}"}
+    except Exception as e:
+        logger.error(f"Test irrigation error: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/stop-irrigation")
+async def stop_irrigation_endpoint():
+    """Stop all irrigation zones."""
+    try:
+        if not CONFIG["RAINBIRD_IP"]:
+            return {"status": "error", "message": "Rainbird IP not configured in server .env"}
+        
+        success = await stop_rainbird()
+        
+        if success:
+            return {"status": "success", "message": "All irrigation zones stopped"}
+        else:
+            return {"status": "error", "message": "Failed to stop irrigation"}
+    except Exception as e:
+        logger.error(f"Stop irrigation error: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 @app.post("/webhook/test")

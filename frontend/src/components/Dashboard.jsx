@@ -380,12 +380,6 @@ function Dashboard({ stats, settings }) {
           <label className="filter-label">Show:</label>
           <div className="filter-buttons">
             <button
-              className={feedbackFilter === 'all' ? 'active' : ''}
-              onClick={() => setFeedbackFilter('all')}
-            >
-              All
-            </button>
-            <button
               className={feedbackFilter === 'with_deer' ? 'active' : ''}
               onClick={() => setFeedbackFilter('with_deer')}
             >
@@ -402,31 +396,20 @@ function Dashboard({ stats, settings }) {
 
         <div className="filter-section">
           <label className="filter-label">Camera:</label>
-          <div className="filter-buttons">
-            <button
-              className={cameraFilter === 'all' ? 'active' : ''}
-              onClick={() => setCameraFilter('all')}
+          <div className="camera-select-wrapper">
+            <select
+              className="camera-select"
+              value={cameraFilter}
+              onChange={(e) => setCameraFilter(e.target.value)}
             >
-              All
-            </button>
-            <button
-              className={cameraFilter === '10cea9e4511f' ? 'active' : ''}
-              onClick={() => setCameraFilter('10cea9e4511f')}
-            >
-              Woods
-            </button>
-            <button
-              className={cameraFilter === 'c4dbad08f862' ? 'active' : ''}
-              onClick={() => setCameraFilter('c4dbad08f862')}
-            >
-              Side
-            </button>
-            <button
-              className={cameraFilter === '587a624d3fae' ? 'active' : ''}
-              onClick={() => setCameraFilter('587a624d3fae')}
-            >
-              Driveway
-            </button>
+              <option value="all">All Cameras</option>
+              <option value="10cea9e4511f">Woods</option>
+              <option value="c4dbad08f862">Side</option>
+              <option value="587a624d3fae">Driveway</option>
+              <option value="4439c4de7a79">Front Door</option>
+              <option value="f045dae9383a">Back</option>
+            </select>
+            <span className="camera-select-arrow">▾</span>
           </div>
         </div>
       </div>

@@ -235,8 +235,8 @@ function Settings({ settings, setSettings }) {
     setTestMessage('')
     
     try {
-      const coordinatorUrl = 'http://192.168.7.215:5000'
-      const response = await fetch(`${coordinatorUrl}/test-irrigation`, {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+      const response = await fetch(`${apiUrl}/api/test-irrigation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

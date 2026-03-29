@@ -55,6 +55,53 @@
   border-color: #3b82f6;
 }
 
+/* Camera Select Dropdown */
+.camera-select-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.camera-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding: 0.5rem 2.2rem 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  outline: none;
+  min-width: 140px;
+}
+
+.camera-select:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.camera-select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.camera-select option {
+  background: #1e1e2e;
+  color: #e0e0e0;
+  padding: 0.5rem;
+}
+
+.camera-select-arrow {
+  position: absolute;
+  right: 0.7rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+
 /* Snapshot Grid */
 .snapshot-grid {
   display: grid;

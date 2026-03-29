@@ -988,6 +988,41 @@ async def get_coordinator_stats():
         raise HTTPException(status_code=503, detail="Coordinator unavailable")
 
 
+@app.post("/api/test-irrigation")
+async def test_irrigation(request: Request):
+    """Proxy irrigation test to coordinator."""
+    import requests as req
+    try:
+        payload = await request.json()
+        response = req.post(
+            "http://deer-coordinator:5000/test-irrigation",
+            json=payload,
+            timeout=30
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.error(f"Failed to test irrigation: {e}")
+        raise HTTPException(status_code=503, detail=f"Irrigation test failed: {str(e)}")
+
+
+@app.post("/api/stop-irrigation")
+async def stop_irrigation():
+    """Proxy irrigation stop to coordinator."""
+    import requests as req
+    try:
+        response = req.post(
+            "http://deer-coordinator:5000/stop-irrigation",
+            json={},
+            timeout=15
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.error(f"Failed to stop irrigation: {e}")
+        raise HTTPException(status_code=503, detail=f"Stop irrigation failed: {str(e)}")
+
+
 @app.get("/api/coordinator/logs")
 async def get_coordinator_logs(lines: int = 100):
     """Get recent coordinator logs."""
