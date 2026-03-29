@@ -107,7 +107,46 @@ event_counter = itertools.count()  # Monotonic counter for PriorityQueue tiebrea
 camera_snapshots: Dict[str, bytes] = {}  # Store latest snapshot for each camera
 last_periodic_snapshot_time: Dict[str, datetime] = {}  # Track last periodic snapshot per camera
 last_snapshot_hash: Dict[str, str] = {}  # Track snapshot hashes to prevent duplicate processing
-video_processing_lock: Dict[str, datetime] = {}  # Prevent duplicate video processing per camera
+
+# Video queue: accumulate recording URLs during active hours, process after
+PENDING_VIDEOS_FILE = Path("/app/data/pending_videos.json")
+
+
+def load_pending_videos() -> list:
+    """Load pending video queue from disk (crash-resilient)."""
+    try:
+        if PENDING_VIDEOS_FILE.exists():
+            data = json.loads(PENDING_VIDEOS_FILE.read_text())
+            if isinstance(data, list):
+                return data
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"Failed to load pending videos file: {e}")
+    return []
+
+
+def save_pending_videos(queue_list: list):
+    """Persist pending video queue to disk."""
+    try:
+        PENDING_VIDEOS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        PENDING_VIDEOS_FILE.write_text(json.dumps(queue_list, indent=2))
+    except OSError as e:
+        logger.error(f"Failed to save pending videos file: {e}")
+
+
+def queue_video_for_processing(camera_id: str, recording_url: str):
+    """Append a video URL to the pending queue (persisted to disk)."""
+    pending = load_pending_videos()
+    # Deduplicate by URL
+    if any(v.get("url") == recording_url for v in pending):
+        logger.debug(f"Video URL already queued for camera {camera_id}, skipping")
+        return
+    pending.append({
+        "camera_id": camera_id,
+        "url": recording_url,
+        "queued_at": datetime.now().isoformat()
+    })
+    save_pending_videos(pending)
+    logger.info(f"📹 Queued video for deferred processing (camera {camera_id}, queue size: {len(pending)})")
 
 
 async def fetch_settings_from_backend():
@@ -517,18 +556,12 @@ async def process_video_frames(camera_id: str, recording_url: str):
     Extracts frames at the configured snapshot_frequency cadence, runs ML detection
     on each, and logs results as ring_events with event_type='video_frame'.
     No irrigation is triggered from video frames — this is purely for model improvement.
+    Called from the batch processor after active hours end.
     """
     import subprocess
     
     try:
-        # Debounce: skip if we processed a video for this camera in the last 60 seconds
         now = datetime.now()
-        if camera_id in video_processing_lock:
-            elapsed = (now - video_processing_lock[camera_id]).total_seconds()
-            if elapsed < 60:
-                logger.debug(f"Skipping video for camera {camera_id} — processed {elapsed:.0f}s ago")
-                return
-        video_processing_lock[camera_id] = now
         
         logger.info(f"📹 Downloading motion video for camera {camera_id}: {recording_url[:80]}...")
         
@@ -818,18 +851,18 @@ def on_mqtt_message(client, userdata, msg):
                     logger.info(f"Outside active hours ({CONFIG['ACTIVE_HOURS_START']}-{CONFIG['ACTIVE_HOURS_END']}), skipping motion event")
             return
         
-        # Handle event_select messages — extract video frames for training data
+        # Handle event_select messages — queue video URLs for deferred processing
         if "event_select" in topic and len(parts) >= 6 and parts[4] == "event_select":
             camera_id = parts[3]
             
-            # Only process for enabled cameras during active hours
+            # Only queue for enabled cameras during active hours
             enabled_cameras = CONFIG.get("ENABLED_CAMERAS", [])
             if enabled_cameras and camera_id not in enabled_cameras:
-                logger.debug(f"Camera {camera_id} not enabled, skipping video frame extraction")
+                logger.debug(f"Camera {camera_id} not enabled, skipping video queuing")
                 return
             
             if not is_active_hours():
-                logger.debug(f"Outside active hours, skipping video frame extraction")
+                logger.debug(f"Outside active hours, skipping video queuing")
                 return
             
             try:
@@ -848,10 +881,7 @@ def on_mqtt_message(client, userdata, msg):
                     )
                 
                 if recording_url and '.mp4' in recording_url.lower():
-                    logger.info(f"📹 Received video URL for camera {camera_id}, launching frame extraction")
-                    # Run in background — don't block MQTT message processing
-                    loop = asyncio.get_event_loop()
-                    loop.create_task(process_video_frames(camera_id, recording_url))
+                    queue_video_for_processing(camera_id, recording_url)
                 elif recording_url:
                     logger.info(f"event_select URL is not MP4 for camera {camera_id}: {recording_url[:120]}")
                 else:
@@ -859,9 +889,7 @@ def on_mqtt_message(client, userdata, msg):
             except (json.JSONDecodeError, TypeError) as e:
                 # Payload might be a direct URL string
                 if payload and '.mp4' in payload.lower() and payload.startswith('http'):
-                    logger.info(f"📹 event_select payload is a direct URL for camera {camera_id}")
-                    loop = asyncio.get_event_loop()
-                    loop.create_task(process_video_frames(camera_id, payload))
+                    queue_video_for_processing(camera_id, payload)
                 else:
                     logger.warning(f"Could not parse event_select payload: {e} — raw: {payload[:200]}")
             return
@@ -1078,6 +1106,47 @@ async def cleanup_no_deer_snapshots():
             logger.error(f"Error in snapshot cleanup task: {e}", exc_info=True)
 
 
+async def video_batch_processor():
+    """Process queued videos after active hours end.
+    
+    Monitors for the active→inactive transition and then batch-processes
+    all accumulated video URLs. This avoids CPU contention with real-time
+    snapshot detection during the nightly monitoring window.
+    """
+    logger.info("Video batch processor started")
+    was_active = is_active_hours()
+    
+    while True:
+        try:
+            await asyncio.sleep(60)  # Check every minute
+            
+            currently_active = is_active_hours()
+            
+            if was_active and not currently_active:
+                # Transition: active hours just ended — process the queue
+                pending = load_pending_videos()
+                if pending:
+                    logger.info(f"🎬 Active hours ended — processing {len(pending)} queued videos")
+                    processed = 0
+                    for entry in pending:
+                        cam = entry.get("camera_id", "unknown")
+                        url = entry.get("url", "")
+                        if url:
+                            await process_video_frames(cam, url)
+                            processed += 1
+                    logger.info(f"🎬 Batch video processing complete: {processed}/{len(pending)} videos processed")
+                    # Clear the queue
+                    save_pending_videos([])
+                else:
+                    logger.info("Active hours ended — no videos queued")
+            
+            was_active = currently_active
+            
+        except Exception as e:
+            logger.error(f"Error in video batch processor: {e}", exc_info=True)
+            await asyncio.sleep(60)
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize on startup"""
@@ -1096,6 +1165,12 @@ async def startup_event():
         asyncio.create_task(periodic_snapshot_poller())
         asyncio.create_task(cleanup_no_deer_snapshots())
         logger.info("Started periodic snapshot polling and cleanup tasks")
+    
+    # Start video batch processor (processes queued videos after active hours end)
+    asyncio.create_task(video_batch_processor())
+    pending_count = len(load_pending_videos())
+    if pending_count > 0:
+        logger.info(f"📹 {pending_count} videos pending from previous session")
 
 
 @app.on_event("shutdown")
@@ -1120,11 +1195,13 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check"""
+    pending_videos = load_pending_videos()
     return {
         "status": "healthy",
         "mqtt_connected": mqtt_client and mqtt_client.is_connected() if mqtt_client else False,
         "last_activation": last_activation_time.isoformat() if last_activation_time else None,
         "active_hours": is_active_hours(),
+        "pending_videos": len(pending_videos),
         "config": {
             "rainbird_configured": bool(CONFIG["RAINBIRD_IP"]),
             "irrigation_enabled": CONFIG["ENABLE_IRRIGATION"],
