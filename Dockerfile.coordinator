@@ -107,6 +107,7 @@ event_counter = itertools.count()  # Monotonic counter for PriorityQueue tiebrea
 camera_snapshots: Dict[str, bytes] = {}  # Store latest snapshot for each camera
 last_periodic_snapshot_time: Dict[str, datetime] = {}  # Track last periodic snapshot per camera
 last_snapshot_hash: Dict[str, str] = {}  # Track snapshot hashes to prevent duplicate processing
+video_processing_lock: Dict[str, datetime] = {}  # Prevent duplicate video processing per camera
 
 
 async def fetch_settings_from_backend():
@@ -510,6 +511,204 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
         logger.error(f"Error processing camera event: {e}", exc_info=True)
 
 
+async def process_video_frames(camera_id: str, recording_url: str):
+    """Download Ring motion video and extract frames for training data collection.
+    
+    Extracts frames at the configured snapshot_frequency cadence, runs ML detection
+    on each, and logs results as ring_events with event_type='video_frame'.
+    No irrigation is triggered from video frames — this is purely for model improvement.
+    """
+    import subprocess
+    
+    try:
+        # Debounce: skip if we processed a video for this camera in the last 60 seconds
+        now = datetime.now()
+        if camera_id in video_processing_lock:
+            elapsed = (now - video_processing_lock[camera_id]).total_seconds()
+            if elapsed < 60:
+                logger.debug(f"Skipping video for camera {camera_id} — processed {elapsed:.0f}s ago")
+                return
+        video_processing_lock[camera_id] = now
+        
+        logger.info(f"📹 Downloading motion video for camera {camera_id}: {recording_url[:80]}...")
+        
+        # Download the MP4 file
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+            response = await client.get(recording_url)
+            response.raise_for_status()
+            video_bytes = response.content
+        
+        if len(video_bytes) < 1000:
+            logger.warning(f"Video too small ({len(video_bytes)} bytes), likely invalid — skipping")
+            return
+        
+        logger.info(f"Downloaded video: {len(video_bytes)} bytes")
+        
+        # Save video to temp file
+        ts = now.strftime("%Y%m%d_%H%M%S")
+        temp_video = Path(f"/app/snapshots/video_{ts}_{camera_id}.mp4")
+        temp_video.parent.mkdir(parents=True, exist_ok=True)
+        temp_video.write_bytes(video_bytes)
+        
+        # Get video duration and fps via ffprobe
+        probe_result = subprocess.run([
+            'ffprobe', '-v', 'quiet', '-print_format', 'json',
+            '-show_format', '-show_streams', str(temp_video)
+        ], capture_output=True, text=True)
+        
+        duration = 0.0
+        fps = 15.0
+        if probe_result.returncode == 0:
+            try:
+                probe_data = json.loads(probe_result.stdout)
+                duration = float(probe_data.get('format', {}).get('duration', 0))
+                for stream in probe_data.get('streams', []):
+                    if stream.get('codec_type') == 'video':
+                        # Parse fps from r_frame_rate (e.g., "15/1")
+                        r_fps = stream.get('r_frame_rate', '15/1')
+                        if '/' in r_fps:
+                            num, den = r_fps.split('/')
+                            fps = float(num) / float(den) if float(den) > 0 else 15.0
+                        else:
+                            fps = float(r_fps)
+                        break
+            except (json.JSONDecodeError, ValueError, KeyError) as e:
+                logger.warning(f"Failed to parse ffprobe output: {e}")
+        
+        if duration <= 0:
+            logger.warning(f"Could not determine video duration, cleaning up")
+            temp_video.unlink(missing_ok=True)
+            return
+        
+        logger.info(f"Video info: duration={duration:.1f}s, fps={fps:.1f}")
+        
+        # Determine frame extraction cadence from snapshot_frequency setting
+        cadence = max(CONFIG.get("SNAPSHOT_FREQUENCY", 60), 10)  # At least every 10s
+        
+        # Calculate frame extraction times (seconds into the video)
+        # Always extract the first frame at t=2s (skip initial black frames)
+        extract_times = [2.0]
+        t = 2.0 + cadence
+        while t < duration - 1:
+            extract_times.append(t)
+            t += cadence
+        
+        # Also extract a frame at the midpoint if cadence is very long relative to video
+        if cadence >= duration and duration > 5:
+            mid = duration / 2
+            if mid not in extract_times:
+                extract_times.append(mid)
+                extract_times.sort()
+        
+        logger.info(f"Extracting {len(extract_times)} frames at cadence={cadence}s from {duration:.1f}s video")
+        
+        frames_processed = 0
+        deer_found = 0
+        
+        for frame_time in extract_times:
+            try:
+                # Extract single frame at specific timestamp using ffmpeg
+                frame_filename = f"video_{ts}_{camera_id}_f{frame_time:.0f}.jpg"
+                frame_path = Path(f"/app/data/snapshots/{frame_filename}")
+                frame_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                extract_result = subprocess.run([
+                    'ffmpeg', '-ss', str(frame_time),
+                    '-i', str(temp_video),
+                    '-vframes', '1', '-q:v', '2',
+                    '-y', str(frame_path)
+                ], capture_output=True, text=True, timeout=15)
+                
+                if extract_result.returncode != 0 or not frame_path.exists():
+                    logger.warning(f"Failed to extract frame at t={frame_time:.1f}s: {extract_result.stderr[:200]}")
+                    continue
+                
+                frame_bytes = frame_path.read_bytes()
+                if len(frame_bytes) < 500:
+                    logger.warning(f"Extracted frame too small ({len(frame_bytes)} bytes) at t={frame_time:.1f}s, skipping")
+                    frame_path.unlink(missing_ok=True)
+                    continue
+                
+                # Compute frame timestamp: video capture time + offset
+                frame_timestamp = now + timedelta(seconds=frame_time - duration)  # Approximate: motion started ~duration ago
+                
+                # Log ring event for this frame
+                snapshot_rel_path = f"data/snapshots/{frame_filename}"
+                ring_event_id = log_ring_event(
+                    camera_id=camera_id,
+                    event_type="video_frame",
+                    snapshot_available=True,
+                    snapshot_size=len(frame_bytes),
+                    snapshot_path=snapshot_rel_path,
+                    recording_url=recording_url
+                )
+                
+                if not ring_event_id:
+                    logger.error(f"Failed to log ring event for video frame at t={frame_time:.1f}s")
+                    continue
+                
+                # Run ML detection
+                detection_result = await detect_deer(frame_bytes)
+                
+                deer_detected = detection_result.get("deer_detected", False)
+                confidence = 0.0
+                if deer_detected and detection_result.get("detections"):
+                    deer_detections = [
+                        d for d in detection_result["detections"]
+                        if d["class"].lower() == 'deer'
+                    ]
+                    if deer_detections:
+                        confidence = max(d["confidence"] for d in deer_detections)
+                
+                # Update ring event with detection results (same as periodic snapshots)
+                try:
+                    update_payload = {
+                        "processed": True,
+                        "deer_detected": deer_detected,
+                        "confidence": confidence,
+                        "detection_bboxes": detection_result.get("detections", []) if deer_detected else [],
+                        "model_version": detection_result.get("model_version", "YOLO26s v3.0")
+                    }
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        await client.patch(
+                            f"{CONFIG['BACKEND_API_URL']}/api/ring-events/{ring_event_id}",
+                            json=update_payload
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to update ring event #{ring_event_id}: {e}")
+                
+                frames_processed += 1
+                if deer_detected:
+                    deer_found += 1
+                    logger.info(f"🦌 Deer detected in video frame at t={frame_time:.1f}s (confidence={confidence:.2f})")
+                else:
+                    logger.debug(f"No deer in video frame at t={frame_time:.1f}s")
+                
+            except subprocess.TimeoutExpired:
+                logger.warning(f"ffmpeg timed out extracting frame at t={frame_time:.1f}s")
+            except Exception as e:
+                logger.error(f"Error processing video frame at t={frame_time:.1f}s: {e}")
+        
+        # Clean up temp video file
+        temp_video.unlink(missing_ok=True)
+        
+        logger.info(f"📹 Video frame extraction complete: {frames_processed} frames processed, {deer_found} with deer")
+        
+    except httpx.TimeoutException:
+        logger.error(f"Timeout downloading video for camera {camera_id}")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error downloading video for camera {camera_id}: {e.response.status_code}")
+    except Exception as e:
+        logger.error(f"Error in video frame extraction for camera {camera_id}: {e}", exc_info=True)
+    finally:
+        # Clean up temp file if it still exists
+        try:
+            temp_video = Path(f"/app/snapshots/video_{now.strftime('%Y%m%d_%H%M%S')}_{camera_id}.mp4")
+            temp_video.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
 def on_mqtt_connect(client, userdata, flags, rc):
     """MQTT connection callback"""
     logger.info(f"MQTT on_connect callback fired with rc={rc}")
@@ -619,10 +818,52 @@ def on_mqtt_message(client, userdata, msg):
                     logger.info(f"Outside active hours ({CONFIG['ACTIVE_HOURS_START']}-{CONFIG['ACTIVE_HOURS_END']}), skipping motion event")
             return
         
-        # Handle event_select messages (SLOW - 30-60 seconds, skip for now since we use instant snapshots)
+        # Handle event_select messages — extract video frames for training data
         if "event_select" in topic and len(parts) >= 6 and parts[4] == "event_select":
-            # Skip processing recording URLs - we already processed instant snapshot
-            logger.debug(f"Skipping event_select (already processed instant snapshot): {topic}")
+            camera_id = parts[3]
+            
+            # Only process for enabled cameras during active hours
+            enabled_cameras = CONFIG.get("ENABLED_CAMERAS", [])
+            if enabled_cameras and camera_id not in enabled_cameras:
+                logger.debug(f"Camera {camera_id} not enabled, skipping video frame extraction")
+                return
+            
+            if not is_active_hours():
+                logger.debug(f"Outside active hours, skipping video frame extraction")
+                return
+            
+            try:
+                payload_json = json.loads(payload)
+                logger.info(f"📹 event_select payload for camera {camera_id}: {json.dumps(payload_json)[:500]}")
+                # Ring-MQTT event_select/attributes payload contains recording URL
+                recording_url = None
+                
+                # Try common ring-mqtt payload structures
+                if isinstance(payload_json, dict):
+                    recording_url = (
+                        payload_json.get("recording", {}).get("url") or
+                        payload_json.get("videoUrl") or
+                        payload_json.get("ding_url") or
+                        payload_json.get("url")
+                    )
+                
+                if recording_url and '.mp4' in recording_url.lower():
+                    logger.info(f"📹 Received video URL for camera {camera_id}, launching frame extraction")
+                    # Run in background — don't block MQTT message processing
+                    loop = asyncio.get_event_loop()
+                    loop.create_task(process_video_frames(camera_id, recording_url))
+                elif recording_url:
+                    logger.info(f"event_select URL is not MP4 for camera {camera_id}: {recording_url[:120]}")
+                else:
+                    logger.info(f"No recording URL found in event_select payload for camera {camera_id}")
+            except (json.JSONDecodeError, TypeError) as e:
+                # Payload might be a direct URL string
+                if payload and '.mp4' in payload.lower() and payload.startswith('http'):
+                    logger.info(f"📹 event_select payload is a direct URL for camera {camera_id}")
+                    loop = asyncio.get_event_loop()
+                    loop.create_task(process_video_frames(camera_id, payload))
+                else:
+                    logger.warning(f"Could not parse event_select payload: {e} — raw: {payload[:200]}")
             return
         
     except Exception as e:
