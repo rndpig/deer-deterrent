@@ -77,19 +77,20 @@ The server has its own `.env` at `/home/rndpig/deer-deterrent/.env` with product
 
 ---
 
-## Ring Cameras (4 cameras)
+## Ring Cameras (5 cameras)
 
-| Camera | Ring-MQTT ID | Name | Detection Enabled |
+| Camera | Ring-MQTT ID | Product | Detection Enabled |
 |---|---|---|---|
-| Side | 10cea9e4511f | Side | YES (primary) |
-| Driveway | 587a624d3fae | Driveway | No |
-| Front Door | 4439c4de7a79 | Front Door | No |
-| Back | f045dae9383a | Back | No |
+| Woods | 10cea9e4511f | Floodlight Cam | YES (moved to barn, formerly Side) |
+| Side | c4dbad08f862 | Floodlight Cam Pro (2nd Gen) | YES (new, 4K, 3D radar motion) |
+| Driveway | 587a624d3fae | Floodlight Cam | No |
+| Front Door | 4439c4de7a79 | Wired Doorbell Plus / Video Doorbell Pro | No |
+| Back | f045dae9383a | Floodlight Cam | No |
 
 - Ring-MQTT publishes snapshots to `ring/dp1hu9-2i94c-0/camera/{camera_id}/snapshot/image`
 - Motion events come via `ring/+/camera/+/motion` topics
 - Periodic snapshot polling runs during active hours (configurable, default 20:00-6:00 CST)
-- All 4 cameras are polled for snapshots, but only the Side camera runs through ML detection
+- All 5 cameras are polled for snapshots, but only enabled cameras run through ML detection
 
 ---
 

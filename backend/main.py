@@ -194,7 +194,7 @@ class SystemSettings(BaseModel):
     dry_run: bool = True
     snapshot_archive_days: int = 3
     snapshot_frequency: int = 60  # Ring camera snapshot capture frequency in seconds (15, 30, 60, 180)
-    enabled_cameras: List[str] = ["10cea9e4511f"]  # Default: Side camera only
+    enabled_cameras: List[str] = ["10cea9e4511f", "c4dbad08f862"]  # Default: Woods + Side cameras
     camera_zones: Dict[str, int] = {}  # Camera ID → Rainbird zone number
 
 class ZoneConfig(BaseModel):
@@ -208,8 +208,8 @@ class ZoneConfig(BaseModel):
 # We only use the camera_id part (middle section between periods)
 RING_DEVICE_ID_MAP = {
     "27c3cea0rmpl": "Driveway",  # Main camera ID for Driveway
-    "768534ffrmpl": "Side",      # Main camera ID for Side
-    "0268c865rmpl": "Side",      # Alternate device ID for Side camera
+    "768534ffrmpl": "Woods",     # Main camera ID for Woods (formerly Side)
+    "0268c865rmpl": "Woods",     # Alternate device ID for Woods camera
 }
 
 # Ring-MQTT camera ID mapping (from MQTT topics)
@@ -217,16 +217,17 @@ RING_CAMERA_ID_MAP = {
     "587a624d3fae": "Driveway",
     "4439c4de7a79": "Front Door",
     "f045dae9383a": "Back",
-    "10cea9e4511f": "Side"
+    "10cea9e4511f": "Woods",
+    "c4dbad08f862": "Side"
 }
 
 # Manual overrides for specific videos where device ID mapping is wrong
 # Format: {filename: "CameraName"}
 VIDEO_CAMERA_OVERRIDES = {
-    "RingVideo_20251205_075319.mp4": "Side",  # Actually shows green/side area
-    "RingVideo_20251205_075329.mp4": "Side",  # Actually shows green/side area
-    "RingVideo_20251115_064703.MP4": "Driveway",  # Device ID says Side but shows driveway
-    "RingVideo_20251120_064019.mp4": "Side",  # Device ID says Driveway but shows side
+    "RingVideo_20251205_075319.mp4": "Woods",  # Actually shows woods/side area (old Side camera location)
+    "RingVideo_20251205_075329.mp4": "Woods",  # Actually shows woods/side area (old Side camera location)
+    "RingVideo_20251115_064703.MP4": "Driveway",  # Device ID says Woods but shows driveway
+    "RingVideo_20251120_064019.mp4": "Woods",  # Device ID says Driveway but shows woods area
 }
 
 # In-memory storage (will move to SQLite later)
@@ -1173,7 +1174,8 @@ async def get_ring_cameras():
             "status": "error",
             "message": str(e),
             "cameras": [
-                {"name": "Side", "id": "10cea9e4511f", "type": "camera"},
+                {"name": "Woods", "id": "10cea9e4511f", "type": "camera"},
+                {"name": "Side", "id": "c4dbad08f862", "type": "camera"},
                 {"name": "Driveway", "id": "587a624d3fae", "type": "camera"},
                 {"name": "Front", "id": "4439c4de7a79", "type": "camera"},
                 {"name": "Backyard", "id": "f045dae9383a", "type": "camera"}

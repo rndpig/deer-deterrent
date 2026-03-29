@@ -2,7 +2,8 @@
 # Last Updated: 2026-03-28
 #
 # Ring Camera IDs:
-#   Side:       10cea9e4511f  (primary detection camera)
+#   Woods:      10cea9e4511f  (formerly Side, moved to barn — Floodlight Cam)
+#   Side:       c4dbad08f862  (new Floodlight Cam Pro 2nd Gen)
 #   Driveway:   587a624d3fae
 #   Front Door: 4439c4de7a79
 #   Back:       f045dae9383a
@@ -17,8 +18,17 @@
 # The coordinator syncs this mapping every 30 seconds. This file is reference only.
 
 zones:
-  - name: "Side Yard - Woods"
+  - name: "Woods"
     camera_id: "10cea9e4511f"
+    detection_area:
+      x_min: 0.0
+      y_min: 0.0
+      x_max: 1.0
+      y_max: 1.0
+    irrigation_zones: [5, 6]
+
+  - name: "Side Yard"
+    camera_id: "c4dbad08f862"
     detection_area:
       x_min: 0.0
       y_min: 0.0
@@ -56,6 +66,10 @@ zones:
 # Camera configuration
 cameras:
   - id: "10cea9e4511f"
+    name: "Woods"
+    enabled: true
+
+  - id: "c4dbad08f862"
     name: "Side"
     enabled: true
 

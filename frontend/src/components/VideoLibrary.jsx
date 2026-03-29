@@ -391,6 +391,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
     const cameraMap = {
       'Front': 'front',
       'Side': 'side',
+      'Woods': 'woods',
       'Driveway': 'driveway',
       'Backyard': 'backyard'
     }
@@ -725,6 +726,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
                   onChange={(e) => setSelectedCamera(e.target.value)}
                   className="form-select"
                 >
+                  <option value="woods">Woods</option>
                   <option value="side">Side</option>
                   <option value="driveway">Driveway</option>
                   <option value="front">Front</option>

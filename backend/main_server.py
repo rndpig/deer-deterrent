@@ -182,7 +182,7 @@ class SystemSettings(BaseModel):
     zone_cooldown: int = 300
     dry_run: bool = True
     snapshot_archive_days: int = 3
-    enabled_cameras: List[str] = ["10cea9e4511f"]  # Default: Side camera only
+    enabled_cameras: List[str] = ["10cea9e4511f", "c4dbad08f862"]  # Default: Woods + Side cameras
 
 class ZoneConfig(BaseModel):
     name: str
@@ -195,8 +195,8 @@ class ZoneConfig(BaseModel):
 # We only use the camera_id part (middle section between periods)
 RING_DEVICE_ID_MAP = {
     "27c3cea0rmpl": "Driveway",  # Main camera ID for Driveway
-    "768534ffrmpl": "Side",      # Main camera ID for Side
-    "0268c865rmpl": "Side",      # Alternate device ID for Side camera
+    "768534ffrmpl": "Woods",     # Main camera ID for Woods (formerly Side)
+    "0268c865rmpl": "Woods",     # Alternate device ID for Woods camera
 }
 
 # Ring-MQTT camera ID mapping (from MQTT topics)
@@ -204,7 +204,8 @@ RING_CAMERA_ID_MAP = {
     "587a624d3fae": "Driveway",
     "4439c4de7a79": "Front Door",
     "f045dae9383a": "Back",
-    "10cea9e4511f": "Side"
+    "10cea9e4511f": "Woods",
+    "c4dbad08f862": "Side"
 }
 
 # Manual overrides for specific videos where device ID mapping is wrong

@@ -11,7 +11,8 @@ const CAMERA_NAMES = {
   '587a624d3fae': 'Driveway',
   '4439c4de7a79': 'Front Door',
   'f045dae9383a': 'Back',
-  '10cea9e4511f': 'Side',
+  '10cea9e4511f': 'Woods',
+  'c4dbad08f862': 'Side',
   'manual_upload': 'Manual Upload'
 }
 

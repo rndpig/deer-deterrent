@@ -10,8 +10,9 @@ function ArchivedVideos({ onBack, onAnnotate }) {
     '587a624d3fae': 'Driveway',
     '4439c4de7a79': 'Front Door',
     'f045dae9383a': 'Back',
-    '10cea9e4511f': 'Side',
-    'gml.27c3cea0rmpl.ab1ef9f8': 'Side' // Legacy ID format
+    '10cea9e4511f': 'Woods',
+    'c4dbad08f862': 'Side',
+    'gml.27c3cea0rmpl.ab1ef9f8': 'Driveway' // Legacy ID format
   }
 
   useEffect(() => {

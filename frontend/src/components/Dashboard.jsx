@@ -28,7 +28,8 @@ function Dashboard({ stats, settings }) {
     '587a624d3fae': 'Driveway',
     '4439c4de7a79': 'Front Door',
     'f045dae9383a': 'Back',
-    '10cea9e4511f': 'Side',
+    '10cea9e4511f': 'Woods',
+    'c4dbad08f862': 'Side',
     'manual_upload': 'Manual Upload'
   }
 
@@ -133,7 +134,7 @@ function Dashboard({ stats, settings }) {
       formData.append('image', selectedFile)
       formData.append('threshold', settings?.detection_threshold || 0.75)
       formData.append('save_to_database', 'true')
-      formData.append('camera_id', selectedCamera === 'side' ? '10cea9e4511f' : '587a624d3fae')
+      formData.append('camera_id', selectedCamera === 'side' ? 'c4dbad08f862' : '587a624d3fae')
       formData.append('captured_at', captureDateTime)
 
       const response = await fetch(`${apiUrl}/api/test-detection`, {
@@ -411,6 +412,12 @@ function Dashboard({ stats, settings }) {
             <button
               className={cameraFilter === '10cea9e4511f' ? 'active' : ''}
               onClick={() => setCameraFilter('10cea9e4511f')}
+            >
+              Woods
+            </button>
+            <button
+              className={cameraFilter === 'c4dbad08f862' ? 'active' : ''}
+              onClick={() => setCameraFilter('c4dbad08f862')}
             >
               Side
             </button>

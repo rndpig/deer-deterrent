@@ -15,7 +15,7 @@ function Settings({ settings, setSettings }) {
     dry_run: true,
     default_sampling_rate: 1.0,  // frames per second
     snapshot_archive_days: 3,  // days before auto-archiving
-    enabled_cameras: ['10cea9e4511f'],  // Default: Side camera only
+    enabled_cameras: ['10cea9e4511f', 'c4dbad08f862'],  // Default: Woods + Side cameras
     camera_zones: {}  // Camera ID → Rainbird zone number
   }
 
@@ -39,7 +39,8 @@ function Settings({ settings, setSettings }) {
     '587a624d3fae': 'Driveway',
     '4439c4de7a79': 'Front Door',
     'f045dae9383a': 'Back',
-    '10cea9e4511f': 'Side'
+    '10cea9e4511f': 'Woods',
+    'c4dbad08f862': 'Side'
   }
 
   const formatCameraName = (cameraId) => {
@@ -74,7 +75,7 @@ function Settings({ settings, setSettings }) {
         
         if (data.cameras && data.cameras.length > 0) {
           // Sort cameras in preferred order: Side > Driveway > Front > Backyard
-          const cameraOrder = ['side', 'driveway', 'front', 'backyard']
+          const cameraOrder = ['woods', 'side', 'driveway', 'front', 'backyard']
           const sortedCameras = data.cameras.sort((a, b) => {
             const aIndex = cameraOrder.findIndex(name => a.name.toLowerCase().includes(name))
             const bIndex = cameraOrder.findIndex(name => b.name.toLowerCase().includes(name))
@@ -94,7 +95,8 @@ function Settings({ settings, setSettings }) {
         console.error('Error fetching Ring cameras:', err)
         // Use fallback cameras in preferred order
         const fallbackCameras = [
-          { name: 'Side', id: '10cea9e4511f', type: 'camera' },
+          { name: 'Woods', id: '10cea9e4511f', type: 'camera' },
+          { name: 'Side', id: 'c4dbad08f862', type: 'camera' },
           { name: 'Driveway', id: '587a624d3fae', type: 'camera' },
           { name: 'Front', id: '4439c4de7a79', type: 'camera' },
           { name: 'Backyard', id: 'f045dae9383a', type: 'camera' }
