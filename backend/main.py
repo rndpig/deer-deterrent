@@ -195,6 +195,7 @@ class SystemSettings(BaseModel):
     snapshot_archive_days: int = 3
     snapshot_frequency: int = 60  # Ring camera snapshot capture frequency in seconds (15, 30, 60, 180)
     enabled_cameras: List[str] = ["10cea9e4511f"]  # Default: Side camera only
+    camera_zones: Dict[str, int] = {}  # Camera ID → Rainbird zone number
 
 class ZoneConfig(BaseModel):
     name: str
@@ -419,7 +420,8 @@ async def update_ring_event(event_id: int, update: dict):
         error_message=update.get("error_message"),
         detection_bboxes=update.get("detection_bboxes"),
         model_version=update.get("model_version"),
-        user_confirmed=True if is_user_feedback else None
+        user_confirmed=True if is_user_feedback else None,
+        irrigation_activated=update.get("irrigation_activated")
     )
     return {"status": "success"}
 

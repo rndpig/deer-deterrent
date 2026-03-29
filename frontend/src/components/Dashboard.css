@@ -125,6 +125,29 @@
   user-select: none;
 }
 
+.irrigation-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #60a5fa;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  line-height: 1.4;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  z-index: 2;
+  pointer-events: none;
+  user-select: none;
+}
+
+.irrigation-fired {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
 .deer-count-badge-modal {
   font-size: 1.1rem;
   padding: 4px 12px;
@@ -1092,8 +1115,9 @@
 .pagination-controls {
   position: sticky;
   bottom: 1rem;
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   background: rgba(26, 26, 26, 0.95);
   backdrop-filter: blur(8px);
@@ -1102,8 +1126,7 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
   z-index: 100;
   margin: 1rem auto;
-  left: 50%;
-  transform: translateX(-50%);
+  width: fit-content;
 }
 
 .pagination-controls button {

@@ -15,7 +15,8 @@ function Settings({ settings, setSettings }) {
     dry_run: true,
     default_sampling_rate: 1.0,  // frames per second
     snapshot_archive_days: 3,  // days before auto-archiving
-    enabled_cameras: ['10cea9e4511f']  // Default: Side camera only
+    enabled_cameras: ['10cea9e4511f'],  // Default: Side camera only
+    camera_zones: {}  // Camera ID → Rainbird zone number
   }
 
   // Initialize settings from API (passed as prop) or defaults
@@ -110,17 +111,12 @@ function Settings({ settings, setSettings }) {
     fetchRingCameras()
   }, [])
 
-  // Load camera-zone mappings from localStorage
+  // Load camera-zone mappings from backend settings
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('deer-deterrent-camera-zones')
-      if (saved) {
-        setCameraZones(JSON.parse(saved))
-      }
-    } catch (err) {
-      console.error('Error loading camera zones:', err)
+    if (settings && settings.camera_zones) {
+      setCameraZones(prev => ({ ...prev, ...settings.camera_zones }))
     }
-  }, [])
+  }, [settings])
 
   useEffect(() => {
     if (settings) {
@@ -175,10 +171,10 @@ function Settings({ settings, setSettings }) {
   }
 
   const setZoneForCamera = (cameraId, zoneNumber) => {
-    setCameraZones(prev => ({
-      ...prev,
-      [cameraId]: zoneNumber
-    }))
+    const newZones = { ...cameraZones, [cameraId]: zoneNumber }
+    setCameraZones(newZones)
+    // Also update localSettings so it gets included in the save payload
+    setLocalSettings(prev => ({ ...prev, camera_zones: newZones }))
   }
 
   const handleSave = async () => {
@@ -217,7 +213,6 @@ function Settings({ settings, setSettings }) {
       // Cache to localStorage only after successful backend save
       try {
         localStorage.setItem('deer-deterrent-settings', JSON.stringify(data.settings))
-        localStorage.setItem('deer-deterrent-camera-zones', JSON.stringify(cameraZones))
       } catch (err) {
         console.error('Error caching to localStorage:', err)
       }

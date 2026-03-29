@@ -67,49 +67,52 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
     
     // Draw current box being drawn
     if (currentBox) {
-      ctx.strokeStyle = '#2563eb'
-      ctx.lineWidth = 2
-      ctx.setLineDash([5, 5])
+      ctx.strokeStyle = '#10b981'
+      ctx.lineWidth = 5
+      ctx.setLineDash([8, 6])
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.15)'
+      ctx.fillRect(currentBox.x, currentBox.y, currentBox.width, currentBox.height)
       ctx.strokeRect(currentBox.x, currentBox.y, currentBox.width, currentBox.height)
       ctx.setLineDash([])
     }
   }
 
-  const handleMouseDown = (e) => {
+  const handlePointerDown = (e) => {
     const canvas = canvasRef.current
+    canvas.setPointerCapture(e.pointerId)
     const rect = canvas.getBoundingClientRect()
     
-    // Get mouse position relative to canvas display
-    const mouseX = e.clientX - rect.left
-    const mouseY = e.clientY - rect.top
+    // Get pointer position relative to canvas display
+    const pointerX = e.clientX - rect.left
+    const pointerY = e.clientY - rect.top
     
     // Scale from display size to canvas internal size
     const scaleX = canvas.width / rect.width
     const scaleY = canvas.height / rect.height
     
-    const x = mouseX * scaleX
-    const y = mouseY * scaleY
+    const x = pointerX * scaleX
+    const y = pointerY * scaleY
     
     setDrawing(true)
     setCurrentBox({ x, y, width: 0, height: 0 })
   }
 
-  const handleMouseMove = (e) => {
+  const handlePointerMove = (e) => {
     if (!drawing || !currentBox) return
     
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
     
-    // Get mouse position relative to canvas display
-    const mouseX = e.clientX - rect.left
-    const mouseY = e.clientY - rect.top
+    // Get pointer position relative to canvas display
+    const pointerX = e.clientX - rect.left
+    const pointerY = e.clientY - rect.top
     
     // Scale from display size to canvas internal size
     const scaleX = canvas.width / rect.width
     const scaleY = canvas.height / rect.height
     
-    const x = mouseX * scaleX
-    const y = mouseY * scaleY
+    const x = pointerX * scaleX
+    const y = pointerY * scaleY
     
     const width = x - currentBox.x
     const height = y - currentBox.y
@@ -118,8 +121,11 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
     redrawCanvas()
   }
 
-  const handleMouseUp = () => {
+  const handlePointerUp = (e) => {
     if (!drawing || !currentBox) return
+    
+    const canvas = canvasRef.current
+    canvas.releasePointerCapture(e.pointerId)
     
     // Only add box if it has meaningful size
     if (Math.abs(currentBox.width) > 10 && Math.abs(currentBox.height) > 10) {
@@ -135,8 +141,6 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
       }
       
       // Convert canvas coordinates to normalized coordinates (0-1 range)
-      const canvas = canvasRef.current
-      
       const normalizedBox = {
         x: x / canvas.width,
         y: y / canvas.height,
@@ -178,17 +182,16 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
               ref={canvasRef}
               width={1920}
               height={1080}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
               style={{ cursor: drawing ? 'crosshair' : 'default' }}
             />
           </div>
           
           <div className="annotation-sidebar-compact">
             <div className="annotation-instructions-compact">
-              <p>🖱️ Click and drag to draw a box around each deer</p>
+              <p>🖱️ Click/touch and drag to draw a box around each deer</p>
               <p>📐 Draw tight boxes around the deer's body</p>
               <p>🗑️ Click "Remove" to undo mistakes</p>
             </div>

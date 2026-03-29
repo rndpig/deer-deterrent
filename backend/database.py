@@ -178,6 +178,12 @@ def init_database():
         print("✓ Added 'user_confirmed' column to ring_events table")
         logger.info("Added 'user_confirmed' column to ring_events table")
     
+    # Migration: Add irrigation_activated flag to track when sprinklers fired
+    if 'irrigation_activated' not in ring_columns:
+        cursor.execute("ALTER TABLE ring_events ADD COLUMN irrigation_activated BOOLEAN DEFAULT 0")
+        print("✓ Added 'irrigation_activated' column to ring_events table")
+        logger.info("Added 'irrigation_activated' column to ring_events table")
+    
     conn.commit()
     conn.close()
     
@@ -796,7 +802,8 @@ def create_ring_event(event_data: dict) -> int:
 def update_ring_event_result(event_id: int, processed: bool = True, 
                              deer_detected: bool = None, confidence: float = None,
                              error_message: str = None, detection_bboxes: list = None,
-                             model_version: str = None, user_confirmed: bool = None):
+                             model_version: str = None, user_confirmed: bool = None,
+                             irrigation_activated: bool = None):
     """Update Ring event with detection results."""
     conn = get_connection()
     cursor = conn.cursor()
@@ -827,6 +834,10 @@ def update_ring_event_result(event_id: int, processed: bool = True,
     if user_confirmed is not None:
         updates.append("user_confirmed = ?")
         params.append(user_confirmed)
+    
+    if irrigation_activated is not None:
+        updates.append("irrigation_activated = ?")
+        params.append(irrigation_activated)
     
     params.append(event_id)
     

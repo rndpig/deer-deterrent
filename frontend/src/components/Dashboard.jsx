@@ -5,7 +5,7 @@ import AnnotationTool from './AnnotationTool'
 
 function Dashboard({ stats, settings }) {
   const [snapshots, setSnapshots] = useState([])
-  const [allTimeSnapshots, setAllTimeSnapshots] = useState([])
+  const [allDeerSnapshots, setAllDeerSnapshots] = useState([]) // all deer detections (all-time) for accurate stats
   const [loading, setLoading] = useState(true)
   const [timeFilter, setTimeFilter] = useState('last24h') // last24h, last7d, all
   const [currentPage, setCurrentPage] = useState(1)
@@ -64,48 +64,48 @@ function Dashboard({ stats, settings }) {
   const loadSnapshots = async () => {
     setLoading(true)
     try {
-      let url = `${apiUrl}/api/snapshots?limit=5000`
-      
-      // Apply feedback filter
-      if (feedbackFilter === 'with_deer') {
-        url += '&with_deer=true'
-      } else if (feedbackFilter === 'without_deer') {
-        url += '&with_deer=false'
+      // Fetch display snapshots and all deer snapshots (for stats) in parallel
+      const [displayRes, deerRes] = await Promise.all([
+        fetch(`${apiUrl}/api/snapshots?limit=5000`),
+        fetch(`${apiUrl}/api/snapshots?limit=50000&with_deer=true`)
+      ])
+
+      if (!displayRes.ok) throw new Error(`HTTP ${displayRes.status}: ${displayRes.statusText}`)
+      if (!deerRes.ok) throw new Error(`Deer fetch HTTP ${deerRes.status}: ${deerRes.statusText}`)
+
+      const [displayData, deerData] = await Promise.all([displayRes.json(), deerRes.json()])
+
+      // Store all deer snapshots for stats (apply camera filter only)
+      let allDeer = deerData.snapshots || []
+      if (cameraFilter !== 'all') {
+        allDeer = allDeer.filter(s => s.camera_id === cameraFilter)
       }
-      
-      console.log('Fetching snapshots from:', url)
-      const response = await fetch(url)
-      console.log('Response status:', response.status)
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-      
-      const data = await response.json()
-      console.log('Received data:', data)
-      let allSnapshots = data.snapshots || []
-      console.log('Total snapshots from API:', allSnapshots.length)
-      
+      setAllDeerSnapshots(allDeer)
+
+      // Process display snapshots
+      let allSnapshots = displayData.snapshots || []
+
       // Apply camera filter
       if (cameraFilter !== 'all') {
         allSnapshots = allSnapshots.filter(s => s.camera_id === cameraFilter)
-        console.log('After camera filter:', allSnapshots.length)
       }
-      
-      // Save all-time snapshots (before time filter) for consistent stats
-      setAllTimeSnapshots(allSnapshots)
       
       // Apply time filter
       if (timeFilter !== 'all') {
         const hours = timeFilter === 'last24h' ? 24 : 168
         const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
         allSnapshots = allSnapshots.filter(s => new Date(s.timestamp) > cutoff)
-        console.log('After time filter:', allSnapshots.length)
       }
       
-      console.log('Final snapshots to display:', allSnapshots.length)
+      // Apply deer/no-deer filter for display only
+      if (feedbackFilter === 'with_deer') {
+        allSnapshots = allSnapshots.filter(s => s.deer_detected)
+      } else if (feedbackFilter === 'without_deer') {
+        allSnapshots = allSnapshots.filter(s => !s.deer_detected)
+      }
+      
       setSnapshots(allSnapshots)
-      setCurrentPage(1) // Reset to first page
+      setCurrentPage(1)
     } catch (error) {
       console.error('Error loading snapshots:', error)
       alert(`Failed to load snapshots: ${error.message}`)
@@ -235,9 +235,10 @@ function Dashboard({ stats, settings }) {
         // Update local state so bboxes show immediately
         const updated = { ...selectedSnapshot, detection_bboxes: bboxes, deer_detected: 1 }
         setSelectedSnapshot(updated)
-        setSnapshots(prev => prev.map(s =>
+        const updateSnapshot = s =>
           s.id === selectedSnapshot.id ? { ...s, detection_bboxes: bboxes, deer_detected: 1 } : s
-        ))
+        setSnapshots(prev => prev.map(updateSnapshot))
+        setAllDeerSnapshots(prev => prev.map(updateSnapshot))
 
         // Also mark as deer in backend (drawing bboxes implies deer present)
         await fetch(`${apiUrl}/api/ring-events/${selectedSnapshot.id}`, {
@@ -256,31 +257,34 @@ function Dashboard({ stats, settings }) {
     setSelectedSnapshot(null) // Return directly to dashboard
   }
 
-  // Calculate stats from filtered snapshots
-  const deerCount = snapshots.filter(s => s.deer_detected).length
+  // Stats computed from ALL deer snapshots (separate fetch, not limited by display window)
+  // Apply time filter for time-dependent stats, but "This Month" always uses all-time
+  const timeFilteredDeer = (() => {
+    if (timeFilter === 'all') return allDeerSnapshots
+    const hours = timeFilter === 'last24h' ? 24 : 168
+    const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
+    return allDeerSnapshots.filter(s => new Date(s.timestamp) > cutoff)
+  })()
 
-  // Compute deer detection metadata from ALL snapshots (not filtered)
-  const deerSnapshots = snapshots.filter(s => s.deer_detected)
+  const deerCount = timeFilteredDeer.length
 
-  // Detections this month (from all-time data, not affected by time filter)
+  // Detections this month (from all deer data, not affected by time filter)
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const monthName = now.toLocaleString('default', { month: 'short' })
-  const allTimeDeer = allTimeSnapshots.filter(s => s.deer_detected)
-  const thisMonthCount = allTimeDeer.filter(s => new Date(s.timestamp) >= monthStart).length
+  const thisMonthCount = allDeerSnapshots.filter(s => new Date(s.timestamp) >= monthStart).length
 
   // Mean sighting hour (circular mean to handle midnight crossing)
   const meanSightingTime = (() => {
-    if (deerSnapshots.length === 0) return null
+    if (timeFilteredDeer.length === 0) return null
     let sinSum = 0, cosSum = 0
-    for (const s of deerSnapshots) {
+    for (const s of timeFilteredDeer) {
       const d = new Date(s.timestamp)
       const fractionalHour = d.getHours() + d.getMinutes() / 60
       const angle = (fractionalHour / 24) * 2 * Math.PI
       sinSum += Math.sin(angle)
       cosSum += Math.cos(angle)
     }
-    let meanAngle = Math.atan2(sinSum / deerSnapshots.length, cosSum / deerSnapshots.length)
+    let meanAngle = Math.atan2(sinSum / timeFilteredDeer.length, cosSum / timeFilteredDeer.length)
     if (meanAngle < 0) meanAngle += 2 * Math.PI
     const meanHourFrac = (meanAngle / (2 * Math.PI)) * 24
     const avgHours = Math.floor(meanHourFrac)
@@ -291,15 +295,15 @@ function Dashboard({ stats, settings }) {
   })()
 
   // Most recent detection
-  const lastDetection = deerSnapshots.length > 0
-    ? formatTimestamp(deerSnapshots.reduce((latest, s) =>
+  const lastDetection = timeFilteredDeer.length > 0
+    ? formatTimestamp(timeFilteredDeer.reduce((latest, s) =>
         new Date(s.timestamp) > new Date(latest.timestamp) ? s : latest
       ).timestamp)
     : null
 
   // Average confidence
   const avgConfidence = (() => {
-    const withConf = deerSnapshots.filter(s => s.detection_confidence != null)
+    const withConf = timeFilteredDeer.filter(s => s.detection_confidence != null)
     if (withConf.length === 0) return null
     const avg = withConf.reduce((sum, s) => sum + s.detection_confidence, 0) / withConf.length
     return `${(avg * 100).toFixed(0)}%`
@@ -321,7 +325,7 @@ function Dashboard({ stats, settings }) {
         {/* Secondary stats */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
           <div className="flex items-center gap-1.5">
-            <span className="text-white/40 text-xs">{monthName}</span>
+            <span className="text-white/40 text-xs">This Month</span>
             <span className="font-semibold text-white/90">{thisMonthCount}</span>
           </div>
           {meanSightingTime && (
@@ -449,6 +453,11 @@ function Dashboard({ stats, settings }) {
                     🦌 {snapshot.detection_bboxes.length}
                   </div>
                 )}
+                {!!snapshot.irrigation_activated && (
+                  <div className="irrigation-badge">
+                    💦
+                  </div>
+                )}
               </div>
               <div className="snapshot-info">
                 <div className="snapshot-meta">
@@ -472,31 +481,29 @@ function Dashboard({ stats, settings }) {
         {snapshots.length > itemsPerPage && (
           <div className="pagination-controls">
             <button 
-              onClick={() => setCurrentPage(1)} 
+              onClick={() => { setCurrentPage(currentPage - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
               disabled={currentPage === 1}
             >
-              « First
+              « Prev
             </button>
             <button 
-              onClick={() => setCurrentPage(currentPage - 1)} 
-              disabled={currentPage === 1}
+              onClick={() => { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }}
             >
-              ‹ Prev
+              ↓ Bottom
             </button>
             <span className="page-indicator">
               Page {currentPage} of {Math.ceil(snapshots.length / itemsPerPage)}
             </span>
             <button 
-              onClick={() => setCurrentPage(currentPage + 1)} 
-              disabled={currentPage >= Math.ceil(snapshots.length / itemsPerPage)}
+              onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }}
             >
-              Next ›
+              ↑ Top
             </button>
             <button 
-              onClick={() => setCurrentPage(Math.ceil(snapshots.length / itemsPerPage))} 
+              onClick={() => { setCurrentPage(currentPage + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
               disabled={currentPage >= Math.ceil(snapshots.length / itemsPerPage)}
             >
-              Last »
+              Next »
             </button>
           </div>
         )}
@@ -615,6 +622,12 @@ function Dashboard({ stats, settings }) {
                     <div className="meta-row">
                       <span className="meta-label">Detections</span>
                       <span className="meta-value">🦌 {selectedSnapshot.detection_bboxes.length}</span>
+                    </div>
+                  )}
+                  {!!selectedSnapshot.irrigation_activated && (
+                    <div className="meta-row">
+                      <span className="meta-label">Irrigation</span>
+                      <span className="meta-value irrigation-fired">💦 Activated</span>
                     </div>
                   )}
                 </div>

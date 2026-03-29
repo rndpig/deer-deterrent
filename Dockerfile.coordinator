@@ -97,6 +97,7 @@ CONFIG = {
     "ENABLE_PERIODIC_SNAPSHOTS": os.getenv("ENABLE_PERIODIC_SNAPSHOTS", "false").lower() == "true",
     "SNAPSHOT_FREQUENCY": 60,  # Ring capture frequency in seconds, synced from backend settings
     "RING_LOCATION_ID": os.getenv("RING_LOCATION_ID", ""),  # Needed for MQTT topics
+    "CAMERA_ZONES": {},  # Camera ID → Rainbird zone number, synced from backend settings
 }
 
 # State tracking
@@ -202,6 +203,14 @@ async def fetch_settings_from_backend():
                     CONFIG["SNAPSHOT_FREQUENCY"] = int(new_freq)
                     if old_freq != CONFIG["SNAPSHOT_FREQUENCY"]:
                         logger.info(f"Updated snapshot_frequency from {old_freq}s to {CONFIG['SNAPSHOT_FREQUENCY']}s (polling interval: {CONFIG['SNAPSHOT_FREQUENCY'] + 10}s)")
+                
+                # Sync per-camera irrigation zone mapping
+                new_zones = settings.get('camera_zones')
+                if new_zones is not None:
+                    old_zones = CONFIG.get("CAMERA_ZONES", {})
+                    CONFIG["CAMERA_ZONES"] = new_zones
+                    if old_zones != CONFIG["CAMERA_ZONES"]:
+                        logger.info(f"Updated camera_zones: {CONFIG['CAMERA_ZONES']}")
                 
                 return True
     except httpx.TimeoutException:
@@ -502,24 +511,6 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
             "irrigation_activated": False
         }
         
-        # Update Ring event with detection result (including bboxes for frontend overlay)
-        if ring_event_id:
-            try:
-                update_payload = {
-                    "processed": True,
-                    "deer_detected": deer_detected,
-                    "confidence": confidence,
-                    "detection_bboxes": detection_result.get("detections", []) if deer_detected else [],
-                    "model_version": detection_result.get("model_version", "YOLO26s v3.0")
-                }
-                async with httpx.AsyncClient(timeout=5.0) as client:
-                    await client.patch(
-                        f"{CONFIG['BACKEND_API_URL']}/api/ring-events/{ring_event_id}",
-                        json=update_payload
-                    )
-            except Exception as e:
-                logger.error(f"Failed to update Ring event: {e}")
-        
         # If deer detected, check cooldown and activate irrigation
         if deer_detected:
             now = datetime.now()
@@ -529,19 +520,42 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
                 elapsed = (now - last_activation_time).total_seconds()
                 if elapsed < CONFIG["COOLDOWN_SECONDS"]:
                     logger.info(f"Cooldown active: {elapsed:.0f}s/{CONFIG['COOLDOWN_SECONDS']}s")
-                    await log_to_backend(event_data)
-                    return
+                else:
+                    last_activation_time = None  # Cooldown expired, allow activation
             
-            # Activate irrigation
-            success = await activate_rainbird(
-                CONFIG["RAINBIRD_ZONE"],
-                CONFIG["RAINBIRD_DURATION_SECONDS"]
-            )
-            
-            if success:
-                last_activation_time = now
-                event_data["irrigation_activated"] = True
-                logger.info("✓✓✓ DEER DETERRENT ACTIVATED ✓✓✓")
+            if last_activation_time is None:
+                # Determine zone: per-camera mapping from settings, fallback to env var
+                camera_zone = CONFIG.get("CAMERA_ZONES", {}).get(camera_id)
+                zone = str(camera_zone) if camera_zone else CONFIG["RAINBIRD_ZONE"]
+                # Activate irrigation
+                success = await activate_rainbird(
+                    zone,
+                    CONFIG["RAINBIRD_DURATION_SECONDS"]
+                )
+                
+                if success:
+                    last_activation_time = now
+                    event_data["irrigation_activated"] = True
+                    logger.info("✓✓✓ DEER DETERRENT ACTIVATED ✓✓✓")
+        
+        # Update Ring event with detection result (including bboxes and irrigation status)
+        if ring_event_id:
+            try:
+                update_payload = {
+                    "processed": True,
+                    "deer_detected": deer_detected,
+                    "confidence": confidence,
+                    "detection_bboxes": detection_result.get("detections", []) if deer_detected else [],
+                    "model_version": detection_result.get("model_version", "YOLO26s v3.0"),
+                    "irrigation_activated": event_data["irrigation_activated"]
+                }
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    await client.patch(
+                        f"{CONFIG['BACKEND_API_URL']}/api/ring-events/{ring_event_id}",
+                        json=update_payload
+                    )
+            except Exception as e:
+                logger.error(f"Failed to update Ring event: {e}")
         
         # Log to backend
         await log_to_backend(event_data)
