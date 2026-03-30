@@ -549,6 +549,21 @@ async def get_snapshot_image(event_id: int):
         snapshot_path = Path("/app") / snapshot_path
     
     if not snapshot_path.exists():
+        # Try alternate locations and name variants
+        filename = Path(event['snapshot_path']).name
+        no_prefix = filename.replace("periodic_", "")
+        candidates = []
+        for name in [filename, no_prefix]:
+            candidates.extend([
+                Path("/app/data/snapshots") / name,
+                Path("/app/snapshots") / name,
+            ])
+        for alt in candidates:
+            if alt.exists():
+                snapshot_path = alt
+                break
+    
+    if not snapshot_path.exists():
         raise HTTPException(status_code=404, detail="Snapshot file not found")
     
     return FileResponse(
