@@ -360,7 +360,7 @@ async def activate_rainbird(zone: str, duration: int) -> bool:
     
     if not CONFIG["ENABLE_IRRIGATION"]:
         logger.info("Irrigation activation disabled (dry-run mode)")
-        return True
+        return False
     
     try:
         import aiohttp
@@ -946,6 +946,8 @@ def on_mqtt_message(client, userdata, msg):
                 # Try common ring-mqtt payload structures
                 if isinstance(payload_json, dict):
                     recording_url = (
+                        payload_json.get("recordingUrl") or
+                        payload_json.get("recording_url") or
                         payload_json.get("recording", {}).get("url") or
                         payload_json.get("videoUrl") or
                         payload_json.get("ding_url") or

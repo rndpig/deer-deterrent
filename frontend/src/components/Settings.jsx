@@ -143,7 +143,8 @@ function Settings({ settings, setSettings }) {
     console.log(`📝 Field '${field}' changed to:`, value)
     
     // Auto-save to backend for critical camera settings
-    if (field === 'enabled_cameras') {
+    // Only auto-save if we have loaded settings from the API (not just defaults)
+    if (field === 'enabled_cameras' && settings) {
       const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
       const cleanUpdated = {
         ...updated,
