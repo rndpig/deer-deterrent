@@ -145,10 +145,16 @@ function Settings({ settings, setSettings }) {
     // Auto-save to backend for critical camera settings
     if (field === 'enabled_cameras') {
       const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+      const cleanUpdated = {
+        ...updated,
+        camera_zones: Object.fromEntries(
+          Object.entries(updated.camera_zones || {}).filter(([, v]) => v != null)
+        )
+      }
       fetch(`${apiUrl}/api/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated)
+        body: JSON.stringify(cleanUpdated)
       }).then(response => {
         if (response.ok) {
           return response.json()
@@ -186,15 +192,24 @@ function Settings({ settings, setSettings }) {
     // Save to backend API first - this is the definitive source of truth
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+      
+      // Filter out null zone values — backend expects Dict[str, int]
+      const cleanSettings = {
+        ...localSettings,
+        camera_zones: Object.fromEntries(
+          Object.entries(localSettings.camera_zones || {}).filter(([, v]) => v != null)
+        )
+      }
+      
       console.log('💾 Saving settings to backend (definitive source):', `${apiUrl}/api/settings`)
-      console.log('Settings data:', localSettings)
+      console.log('Settings data:', cleanSettings)
       
       const response = await fetch(`${apiUrl}/api/settings`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(localSettings),
+        body: JSON.stringify(cleanSettings),
       })
       
       console.log('Response status:', response.status)
