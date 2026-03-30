@@ -10,7 +10,7 @@ function Settings({ settings, setSettings }) {
     active_hours_enabled: true,
     active_hours_start: 20,
     active_hours_end: 6,
-    irrigation_duration: 30,
+    irrigation_duration: 60,
     zone_cooldown: 300,
     dry_run: true,
     default_sampling_rate: 1.0,  // frames per second
@@ -503,15 +503,15 @@ function Settings({ settings, setSettings }) {
                 value={localSettings.season_end || '10-31'}
                 onChange={(e) => handleChange('season_end', e.target.value)}
               />
-              <label htmlFor="duration">Duration (sec)</label>
+              <label htmlFor="duration">Duration (min)</label>
               <input
                 id="duration"
                 type="number"
-                min="5"
-                max="300"
-                step="5"
-                value={localSettings.irrigation_duration || 30}
-                onChange={(e) => handleChange('irrigation_duration', parseInt(e.target.value))}
+                min="1"
+                max="10"
+                step="1"
+                value={Math.round((localSettings.irrigation_duration || 60) / 60)}
+                onChange={(e) => handleChange('irrigation_duration', parseInt(e.target.value) * 60)}
               />
               <label htmlFor="cooldown">Cooldown (min)</label>
               <input
