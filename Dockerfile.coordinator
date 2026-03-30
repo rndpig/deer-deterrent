@@ -214,6 +214,30 @@ async def fetch_settings_from_backend():
                     if old_zones != CONFIG["CAMERA_ZONES"]:
                         logger.info(f"Updated camera_zones: {CONFIG['CAMERA_ZONES']}")
                 
+                # Sync irrigation duration (stored in seconds in backend)
+                new_duration = settings.get('irrigation_duration')
+                if new_duration is not None:
+                    old_duration = CONFIG["RAINBIRD_DURATION_SECONDS"]
+                    CONFIG["RAINBIRD_DURATION_SECONDS"] = int(new_duration)
+                    if old_duration != CONFIG["RAINBIRD_DURATION_SECONDS"]:
+                        logger.info(f"Updated irrigation_duration from {old_duration}s to {CONFIG['RAINBIRD_DURATION_SECONDS']}s")
+                
+                # Sync zone cooldown (stored in seconds in backend)
+                new_cooldown = settings.get('zone_cooldown')
+                if new_cooldown is not None:
+                    old_cooldown = CONFIG["COOLDOWN_SECONDS"]
+                    CONFIG["COOLDOWN_SECONDS"] = int(new_cooldown)
+                    if old_cooldown != CONFIG["COOLDOWN_SECONDS"]:
+                        logger.info(f"Updated cooldown from {old_cooldown}s to {CONFIG['COOLDOWN_SECONDS']}s")
+                
+                # Sync dry_run → ENABLE_IRRIGATION (dry_run=true means irrigation disabled)
+                new_dry_run = settings.get('dry_run')
+                if new_dry_run is not None:
+                    old_enabled = CONFIG["ENABLE_IRRIGATION"]
+                    CONFIG["ENABLE_IRRIGATION"] = not bool(new_dry_run)
+                    if old_enabled != CONFIG["ENABLE_IRRIGATION"]:
+                        logger.info(f"Updated ENABLE_IRRIGATION from {old_enabled} to {CONFIG['ENABLE_IRRIGATION']} (dry_run={new_dry_run})")
+                
                 return True
     except httpx.TimeoutException:
         logger.warning("Timeout fetching settings from backend")
