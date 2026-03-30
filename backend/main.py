@@ -194,6 +194,7 @@ class SystemSettings(BaseModel):
     dry_run: bool = True
     snapshot_archive_days: int = 3
     snapshot_frequency: int = 60  # Ring camera snapshot capture frequency in seconds (15, 30, 60, 180)
+    default_sampling_rate: float = 1.0  # Video frame extraction rate (frames/sec)
     enabled_cameras: List[str] = ["10cea9e4511f", "c4dbad08f862"]  # Default: Woods + Side cameras
     camera_zones: Dict[str, int] = {}  # Camera ID → Rainbird zone number
 

@@ -68,3 +68,5 @@ tmp/
 # Firebase
 .firebase/
 frontend/.firebase/
+
+.rainbird_password

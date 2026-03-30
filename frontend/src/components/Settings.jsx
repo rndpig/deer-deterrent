@@ -260,6 +260,30 @@ function Settings({ settings, setSettings }) {
     }
   }
 
+  const stopIrrigation = async () => {
+    setTestingIrrigation(true)
+    setTestMessage('')
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+      const response = await fetch(`${apiUrl}/api/stop-irrigation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const data = await response.json()
+      if (data.status === 'success') {
+        setTestMessage(`✅ ${data.message}`)
+      } else {
+        setTestMessage(`⚠️ ${data.message}`)
+      }
+    } catch (err) {
+      console.error('Stop irrigation error:', err)
+      setTestMessage(`❌ Failed to stop irrigation: ${err.message}`)
+    } finally {
+      setTestingIrrigation(false)
+      setTimeout(() => setTestMessage(''), 8000)
+    }
+  }
+
   const loadCoordinatorStats = async () => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
@@ -549,23 +573,46 @@ function Settings({ settings, setSettings }) {
           )}
 
           <div className="testing-grid">
-            {/* Irrigation Test */}
-            <div className="test-card">
+            {/* Irrigation Test - Full Width */}
+            <div className="test-card test-card-full">
               <h4>💧 Test Irrigation</h4>
-              <p>Manually trigger irrigation to verify zone operation</p>
-              <div className="test-controls">
+              <p>Tap a zone to run for 1 minute. Use Stop All to cancel.</p>
+              <div className="irrigation-zone-grid">
                 {rainbirdZones.map(zone => (
                   <button
                     key={zone.number}
-                    className="btn-test"
-                    onClick={() => testIrrigation(zone.number, 10)}
+                    className="btn-zone"
+                    onClick={() => testIrrigation(zone.number, 60)}
                     disabled={testingIrrigation}
-                    title={`Test ${zone.name} for 10 seconds`}
+                    title={`Test ${zone.name} for 1 minute`}
                   >
-                    {testingIrrigation ? '⏳' : '▶️'} Zone {zone.number}
+                    <span className="zone-number">Zone {zone.number}</span>
+                    <span className="zone-name">{zone.name}</span>
                   </button>
                 ))}
               </div>
+              <div className="irrigation-actions">
+                <button
+                  className="btn-stop-all"
+                  onClick={stopIrrigation}
+                  disabled={testingIrrigation}
+                  title="Stop all irrigation zones"
+                >
+                  {testingIrrigation ? '⏳' : '⏹️'} Stop All Zones
+                </button>
+              </div>
+            </div>
+
+            {/* Recent Events */}
+            <div className="test-card">
+              <h4>📜 Recent Events</h4>
+              <p>View Ring camera motion events from the past 24 hours</p>
+              <button 
+                className="btn-test"
+                onClick={viewRecentEvents}
+              >
+                🔗 Open Event Log
+              </button>
             </div>
 
             {/* System Status */}
@@ -601,18 +648,6 @@ function Settings({ settings, setSettings }) {
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* Recent Events */}
-            <div className="test-card">
-              <h4>📜 Recent Events</h4>
-              <p>View Ring camera motion events from the past 24 hours</p>
-              <button 
-                className="btn-test"
-                onClick={viewRecentEvents}
-              >
-                🔗 Open Event Log
-              </button>
             </div>
           </div>
         </div>
