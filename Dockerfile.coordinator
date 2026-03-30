@@ -354,7 +354,7 @@ async def activate_rainbird(zone: str, duration: int) -> bool:
                 CONFIG["RAINBIRD_IP"],
                 CONFIG["RAINBIRD_PASSWORD"]
             )
-            await controller.irrigate(zone_num, duration_minutes)
+            await controller.irrigate_zone(zone_num, duration_minutes)
         
         logger.info(f"✓ Irrigation zone {zone_num} activated for {duration_minutes} min")
         return True
