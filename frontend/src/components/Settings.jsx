@@ -518,9 +518,9 @@ function Settings({ settings, setSettings }) {
               <input
                 id="cooldown"
                 type="number"
-                min="1"
+                min="0"
                 max="60"
-                value={Math.floor((localSettings.zone_cooldown || 300) / 60)}
+                value={Math.floor((localSettings.zone_cooldown ?? 300) / 60)}
                 onChange={(e) => handleChange('zone_cooldown', parseInt(e.target.value) * 60)}
               />
               <label className="checkbox-inline">

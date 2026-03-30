@@ -573,11 +573,12 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
         if deer_detected:
             now = datetime.now()
             
-            # Check cooldown
+            # Check cooldown — effective minimum is irrigation duration so zones don't overlap
             if last_activation_time:
+                effective_cooldown = max(CONFIG["COOLDOWN_SECONDS"], CONFIG["RAINBIRD_DURATION_SECONDS"])
                 elapsed = (now - last_activation_time).total_seconds()
-                if elapsed < CONFIG["COOLDOWN_SECONDS"]:
-                    logger.info(f"Cooldown active: {elapsed:.0f}s/{CONFIG['COOLDOWN_SECONDS']}s")
+                if elapsed < effective_cooldown:
+                    logger.info(f"Cooldown active: {elapsed:.0f}s/{effective_cooldown}s")
                 else:
                     last_activation_time = None  # Cooldown expired, allow activation
             
@@ -909,6 +910,9 @@ def on_mqtt_message(client, userdata, msg):
                     
                     # Use instant snapshot for real-time detection (low-res but fast)
                     if camera_id in camera_snapshots:
+                        # Update snapshot hash so periodic poller skips this same image
+                        motion_hash = hashlib.md5(camera_snapshots[camera_id]).hexdigest()
+                        last_snapshot_hash[camera_id] = motion_hash
                         logger.info(f"✓ Using instant snapshot for real-time detection")
                         event_queue.put((0, next(event_counter), {  # Priority 0 = highest (motion events)
                             "camera_id": camera_id,
