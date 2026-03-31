@@ -142,8 +142,12 @@ function Stats() {
     const lastDate = new Date(Math.max(...filtered.map(s => new Date(s.timestamp))))
     const totalDays = Math.max(1, Math.ceil((lastDate - firstDate) / (1000 * 60 * 60 * 24)) + 1)
 
+    // Irrigation count
+    const irrigationCount = filtered.filter(s => s.irrigation_activated).length
+
     return {
       total: filtered.length,
+      irrigationCount,
       meanTime: circularMeanTime(timestamps),
       avgConfidence: confidences.length > 0
         ? `${(confidences.reduce((a, b) => a + b, 0) / confidences.length * 100).toFixed(0)}%`
@@ -160,14 +164,22 @@ function Stats() {
     }
   }, [filtered])
 
-  // ── Monthly chart data ──
+  // ── Monthly chart data (deer + irrigation) ──
   const monthlyChartData = useMemo(() => {
     const data = MONTH_NAMES.map((m, i) => ({ month: m, monthIdx: i }))
     for (const year of selectedYears) {
       const yearSnaps = deerSnapshots.filter(s => new Date(s.timestamp).getFullYear() === year)
-      const counts = new Array(12).fill(0)
-      for (const s of yearSnaps) counts[new Date(s.timestamp).getMonth()]++
-      data.forEach((d, i) => { d[year] = counts[i] })
+      const deerCounts = new Array(12).fill(0)
+      const irrigCounts = new Array(12).fill(0)
+      for (const s of yearSnaps) {
+        const mi = new Date(s.timestamp).getMonth()
+        deerCounts[mi]++
+        if (s.irrigation_activated) irrigCounts[mi]++
+      }
+      data.forEach((d, i) => {
+        d[`deer_${year}`] = deerCounts[i]
+        d[`irrig_${year}`] = irrigCounts[i]
+      })
     }
     return data
   }, [deerSnapshots, selectedYears])
@@ -263,6 +275,7 @@ function Stats() {
           {/* ── Key Metrics Grid ── */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <MetricCard label="Total Sightings" value={metrics.total} />
+            <MetricCard label="💦 Irrigation Events" value={metrics.irrigationCount} />
             <MetricCard label="Mean Sighting Time" value={metrics.meanTime} />
             <MetricCard label="Peak Sighting Hour" value={metrics.peakHour} />
             <MetricCard label="Max Deer / Snapshot" value={metrics.maxDeerInShot} />
@@ -275,7 +288,7 @@ function Stats() {
             {/* Monthly sightings */}
             <div className="bg-white/5 border border-white/10 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-white/70 uppercase tracking-wide mb-3">
-                Monthly Sightings
+                Monthly Sightings & Irrigation
               </h3>
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={monthlyChartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
@@ -287,11 +300,17 @@ function Stats() {
                     labelStyle={{ color: '#fff' }}
                     itemStyle={{ color: '#fff' }}
                   />
+                  <Legend wrapperStyle={{ color: 'rgba(255,255,255,0.7)' }} />
                   {selectedYears.map((year, i) => (
-                    <Bar key={year} dataKey={year} name={String(year)}
+                    <Bar key={`deer_${year}`} dataKey={`deer_${year}`} name={`🦌 ${year}`}
                       fill={YEAR_COLORS[i % YEAR_COLORS.length]} radius={[3, 3, 0, 0]} />
                   ))}
-                  {selectedYears.length > 1 && <Legend wrapperStyle={{ color: 'rgba(255,255,255,0.7)' }} />}
+                  {selectedYears.map((year, i) => (
+                    <Bar key={`irrig_${year}`} dataKey={`irrig_${year}`} name={`💦 ${year}`}
+                      fill={YEAR_COLORS[i % YEAR_COLORS.length]} fillOpacity={0.4}
+                      stroke={YEAR_COLORS[i % YEAR_COLORS.length]} strokeWidth={1}
+                      radius={[3, 3, 0, 0]} />
+                  ))}
                 </BarChart>
               </ResponsiveContainer>
             </div>

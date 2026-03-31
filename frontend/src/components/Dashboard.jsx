@@ -1,5 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { useState, useEffect } from 'react'
 import './Dashboard.css'
 import BoundingBoxImage from './BoundingBoxImage'
 import AnnotationTool from './AnnotationTool'
@@ -311,26 +310,8 @@ function Dashboard({ stats, settings }) {
     return `${(avg * 100).toFixed(0)}%`
   })()
 
-  // Irrigation stats
-  const irrigationCount = timeFilteredDeer.filter(s => s.irrigation_activated).length
+  // Irrigation this month
   const irrigationThisMonth = allDeerSnapshots.filter(s => s.irrigation_activated && new Date(s.timestamp) >= monthStart).length
-
-  // Monthly chart data — deer sightings & irrigation triggers grouped by month
-  const monthlyChartData = useMemo(() => {
-    if (allDeerSnapshots.length === 0) return []
-    const months = {}
-    for (const s of allDeerSnapshots) {
-      const d = new Date(s.timestamp)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      if (!months[key]) months[key] = { month: key, deer: 0, irrigation: 0 }
-      months[key].deer++
-      if (s.irrigation_activated) months[key].irrigation++
-    }
-    return Object.values(months).sort((a, b) => a.month.localeCompare(b.month)).map(m => ({
-      ...m,
-      label: new Date(m.month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
-    }))
-  }, [allDeerSnapshots])
 
   return (
     <div className="dashboard">
@@ -348,16 +329,9 @@ function Dashboard({ stats, settings }) {
         {/* Secondary stats */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
           <div className="flex items-center gap-1.5">
-            <span className="text-white/40 text-xs">🦌 Month</span>
-            <span className="font-semibold text-white/90">{thisMonthCount}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-white/40 text-xs">💦 Irrigated</span>
-            <span className="font-semibold text-blue-400">{irrigationCount}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-white/40 text-xs">💦 Month</span>
-            <span className="font-semibold text-blue-400">{irrigationThisMonth}</span>
+            <span className="text-white/40 text-xs">This Month</span>
+            <span className="font-semibold text-green-400">🦌 {thisMonthCount}</span>
+            <span className="font-semibold text-blue-400">💦 {irrigationThisMonth}</span>
           </div>
           {meanSightingTime && (
             <div className="flex items-center gap-1.5">
@@ -379,26 +353,6 @@ function Dashboard({ stats, settings }) {
           )}
         </div>
       </div>
-
-      {/* Monthly activity chart */}
-      {monthlyChartData.length > 1 && (
-        <div className="monthly-chart-container">
-          <ResponsiveContainer width="100%" height={140}>
-            <BarChart data={monthlyChartData} margin={{ top: 8, right: 16, bottom: 0, left: -20 }}>
-              <XAxis dataKey="label" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
-                labelStyle={{ color: 'rgba(255,255,255,0.7)' }}
-                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-              />
-              <Legend wrapperStyle={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }} />
-              <Bar dataKey="deer" name="Deer Sightings" fill="#4ade80" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="irrigation" name="Irrigation Triggers" fill="#60a5fa" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
 
       {/* Filter controls */}
       <div className="snapshot-controls">
