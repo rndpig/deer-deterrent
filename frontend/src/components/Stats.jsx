@@ -299,12 +299,14 @@ function Stats() {
                     labelStyle={{ color: '#fff' }}
                     itemStyle={{ color: '#fff' }}
                   />
-                  {selectedYears.flatMap((year, i) => [
+                  {selectedYears.map((year, i) =>
                     <Bar key={`deer_${year}`} dataKey={`deer_${year}`} name={`🦌 ${year}`}
-                      fill="#4ade80" radius={[3, 3, 0, 0]} />,
+                      fill="#4ade80" radius={[3, 3, 0, 0]} />
+                  )}
+                  {selectedYears.map((year, i) =>
                     <Bar key={`irrig_${year}`} dataKey={`irrig_${year}`} name={`💦 ${year}`}
                       fill="#60a5fa" radius={[3, 3, 0, 0]} />
-                  ])}
+                  )}
                   <Legend
                     wrapperStyle={{ color: 'rgba(255,255,255,0.7)' }}
                     payload={selectedYears.flatMap(year => [
@@ -329,6 +331,7 @@ function Stats() {
                   <Tooltip
                     contentStyle={{ background: '#1e1e1e', border: '1px solid #333', borderRadius: 8 }}
                     labelStyle={{ color: '#fff' }}
+                    itemStyle={{ color: '#fff' }}
                   />
                   <Bar dataKey="count" name="Sightings" radius={[2, 2, 0, 0]}>
                     {hourlyChartData.map((entry, i) => (
