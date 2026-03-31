@@ -274,11 +274,10 @@ function Stats() {
         <>
           {/* ── Key Metrics Grid ── */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <MetricCard label="Total Sightings" value={metrics.total} />
+            <MetricCard label="🦌 Total Sightings" value={metrics.total} />
             <MetricCard label="💦 Irrigation Events" value={metrics.irrigationCount} />
             <MetricCard label="Mean Sighting Time" value={metrics.meanTime} />
             <MetricCard label="Peak Sighting Hour" value={metrics.peakHour} />
-            <MetricCard label="Max Deer / Snapshot" value={metrics.maxDeerInShot} />
             <MetricCard label="Mean Confidence" value={metrics.avgConfidence} />
             <MetricCard label="Activity Rate" value={metrics.frequency} sub={`${metrics.activeDays} of ${metrics.totalDays} days`} />
           </div>
@@ -303,13 +302,11 @@ function Stats() {
                   <Legend wrapperStyle={{ color: 'rgba(255,255,255,0.7)' }} />
                   {selectedYears.map((year, i) => (
                     <Bar key={`deer_${year}`} dataKey={`deer_${year}`} name={`🦌 ${year}`}
-                      fill={YEAR_COLORS[i % YEAR_COLORS.length]} radius={[3, 3, 0, 0]} />
+                      fill="#4ade80" radius={[3, 3, 0, 0]} />
                   ))}
                   {selectedYears.map((year, i) => (
                     <Bar key={`irrig_${year}`} dataKey={`irrig_${year}`} name={`💦 ${year}`}
-                      fill={YEAR_COLORS[i % YEAR_COLORS.length]} fillOpacity={0.4}
-                      stroke={YEAR_COLORS[i % YEAR_COLORS.length]} strokeWidth={1}
-                      radius={[3, 3, 0, 0]} />
+                      fill="#60a5fa" radius={[3, 3, 0, 0]} />
                   ))}
                 </BarChart>
               </ResponsiveContainer>
