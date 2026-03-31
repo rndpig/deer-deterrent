@@ -305,7 +305,13 @@ function Stats() {
                     <Bar key={`irrig_${year}`} dataKey={`irrig_${year}`} name={`💦 ${year}`}
                       fill="#60a5fa" radius={[3, 3, 0, 0]} />
                   ])}
-                  <Legend wrapperStyle={{ color: 'rgba(255,255,255,0.7)' }} />
+                  <Legend
+                    wrapperStyle={{ color: 'rgba(255,255,255,0.7)' }}
+                    payload={selectedYears.flatMap(year => [
+                      { value: `🦌 ${year}`, type: 'square', color: '#4ade80' },
+                      { value: `💦 ${year}`, type: 'square', color: '#60a5fa' },
+                    ])}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
