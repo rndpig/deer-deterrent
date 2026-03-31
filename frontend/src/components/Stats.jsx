@@ -299,15 +299,13 @@ function Stats() {
                     labelStyle={{ color: '#fff' }}
                     itemStyle={{ color: '#fff' }}
                   />
-                  <Legend wrapperStyle={{ color: 'rgba(255,255,255,0.7)' }} />
-                  {selectedYears.map((year, i) => (
+                  {selectedYears.flatMap((year, i) => [
                     <Bar key={`deer_${year}`} dataKey={`deer_${year}`} name={`🦌 ${year}`}
-                      fill="#4ade80" radius={[3, 3, 0, 0]} />
-                  ))}
-                  {selectedYears.map((year, i) => (
+                      fill="#4ade80" radius={[3, 3, 0, 0]} />,
                     <Bar key={`irrig_${year}`} dataKey={`irrig_${year}`} name={`💦 ${year}`}
                       fill="#60a5fa" radius={[3, 3, 0, 0]} />
-                  ))}
+                  ])}
+                  <Legend wrapperStyle={{ color: 'rgba(255,255,255,0.7)' }} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
