@@ -231,8 +231,18 @@ VIDEO_CAMERA_OVERRIDES = {
     "RingVideo_20251120_064019.mp4": "Woods",  # Device ID says Driveway but shows woods area
 }
 
-# In-memory storage (will move to SQLite later)
-settings = SystemSettings()
+# Load persisted settings from SQLite, or use defaults
+_saved = db.load_settings()
+if _saved:
+    try:
+        settings = SystemSettings(**_saved)
+        print(f"✓ Loaded settings from database")
+    except Exception as e:
+        print(f"⚠ Failed to load saved settings ({e}), using defaults")
+        settings = SystemSettings()
+else:
+    settings = SystemSettings()
+    print("ℹ No saved settings found, using defaults")
 zones = []
 stats = {
     "total_detections": 0,
@@ -1147,6 +1157,9 @@ async def update_settings(new_settings: SystemSettings):
     """Update system settings."""
     global settings, detector
     settings = new_settings
+    
+    # Persist to SQLite so settings survive container restarts
+    db.save_settings(settings.dict())
     
     # Update detector confidence threshold
     if detector:

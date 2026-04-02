@@ -184,10 +184,51 @@ def init_database():
         print("✓ Added 'irrigation_activated' column to ring_events table")
         logger.info("Added 'irrigation_activated' column to ring_events table")
     
+    # System settings table (single-row key-value store)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS system_settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            settings_json TEXT NOT NULL,
+            updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+    
     conn.commit()
     conn.close()
     
     logger.info(f"Database initialized at {DB_PATH}")
+
+
+def save_settings(settings_dict: dict):
+    """Persist system settings to SQLite."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO system_settings (id, settings_json, updated_at)
+        VALUES (1, ?, datetime('now', 'localtime'))
+        ON CONFLICT(id) DO UPDATE SET
+            settings_json = excluded.settings_json,
+            updated_at = excluded.updated_at
+    """, (json.dumps(settings_dict),))
+    conn.commit()
+    conn.close()
+    logger.info("Settings saved to database")
+
+
+def load_settings() -> Optional[dict]:
+    """Load system settings from SQLite. Returns None if no settings saved."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT settings_json FROM system_settings WHERE id = 1")
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        try:
+            return json.loads(row['settings_json'])
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning(f"Failed to parse saved settings: {e}")
+    return None
+
 
 def get_connection():
     """Get a database connection with row factory."""
