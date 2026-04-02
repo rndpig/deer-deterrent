@@ -219,8 +219,12 @@ def load_settings() -> Optional[dict]:
     """Load system settings from SQLite. Returns None if no settings saved."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT settings_json FROM system_settings WHERE id = 1")
-    row = cursor.fetchone()
+    try:
+        cursor.execute("SELECT settings_json FROM system_settings WHERE id = 1")
+        row = cursor.fetchone()
+    except sqlite3.OperationalError:
+        conn.close()
+        return None
     conn.close()
     if row:
         try:

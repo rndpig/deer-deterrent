@@ -116,11 +116,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Initialize database on startup
+# Initialize database on startup (redundant safety — already called at module load)
 @app.on_event("startup")
 async def startup_init_db():
     """Initialize database."""
-    print("Initializing database...")
     db.init_database()
     print("Database ready!")
 
@@ -230,6 +229,9 @@ VIDEO_CAMERA_OVERRIDES = {
     "RingVideo_20251115_064703.MP4": "Driveway",  # Device ID says Woods but shows driveway
     "RingVideo_20251120_064019.mp4": "Woods",  # Device ID says Driveway but shows woods area
 }
+
+# Ensure DB tables exist before loading settings
+db.init_database()
 
 # Load persisted settings from SQLite, or use defaults
 _saved = db.load_settings()
