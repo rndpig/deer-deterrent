@@ -429,7 +429,7 @@ async def update_ring_event(event_id: int, update: dict):
 
 
 @app.get("/api/snapshots")
-async def get_ring_snapshots(limit: int = 100, with_deer: bool = None):
+async def get_ring_snapshots(limit: int = 100, with_deer: bool = None, camera_id: str = None, time_hours: int = None):
     """Get Ring snapshots - merges database entries with filesystem snapshots."""
     from datetime import datetime
     import re
@@ -438,7 +438,9 @@ async def get_ring_snapshots(limit: int = 100, with_deer: bool = None):
     snapshot_paths_seen = set()
     
     # FIRST: Get all database entries (includes deer detections)
-    db_events = db.get_ring_events_with_snapshots(limit=limit*5, with_deer=with_deer)
+    # When filtering (deer/camera/time), use exact limit; unfiltered needs headroom for filesystem merge
+    db_limit = limit if (with_deer is not None or camera_id or time_hours) else limit * 5
+    db_events = db.get_ring_events_with_snapshots(limit=db_limit, with_deer=with_deer, camera_id=camera_id, time_hours=time_hours)
     
     for event in db_events:
         snapshot_path = event.get('snapshot_path')

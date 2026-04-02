@@ -872,12 +872,13 @@ def get_ring_events(hours: int = 24, camera_id: str = None) -> List[Dict]:
     return events
 
 
-def get_ring_events_with_snapshots(limit: int = 100, with_deer: bool = None) -> List[Dict]:
+def get_ring_events_with_snapshots(limit: int = 100, with_deer: bool = None, camera_id: str = None, time_hours: int = None) -> List[Dict]:
     """Get Ring events that have saved snapshots (non-archived only)."""
     conn = get_connection()
     cursor = conn.cursor()
     
     query = "SELECT * FROM ring_events WHERE snapshot_path IS NOT NULL AND (archived = 0 OR archived IS NULL)"
+    params = []
     
     if with_deer is not None:
         if with_deer:
@@ -885,9 +886,18 @@ def get_ring_events_with_snapshots(limit: int = 100, with_deer: bool = None) -> 
         else:
             query += " AND (deer_detected = 0 OR deer_detected IS NULL)"
     
-    query += " ORDER BY timestamp DESC LIMIT ?"
+    if camera_id:
+        query += " AND camera_id = ?"
+        params.append(camera_id)
     
-    cursor.execute(query, (limit,))
+    if time_hours:
+        query += " AND timestamp >= datetime('now', 'localtime', ?)"
+        params.append(f"-{time_hours} hours")
+    
+    query += " ORDER BY timestamp DESC LIMIT ?"
+    params.append(limit)
+    
+    cursor.execute(query, params)
     events = [dict(row) for row in cursor.fetchall()]
     
     # Parse detection_bboxes from JSON string

@@ -65,10 +65,26 @@ function Dashboard({ stats, settings }) {
   const loadSnapshots = async () => {
     setLoading(true)
     try {
-      // Fetch display snapshots and all deer snapshots (for stats) in parallel
+      // Build server-side filter params
+      const displayParams = new URLSearchParams({ limit: '5000' })
+      const deerParams = new URLSearchParams({ limit: '50000', with_deer: 'true' })
+
+      if (feedbackFilter === 'with_deer') displayParams.set('with_deer', 'true')
+      else if (feedbackFilter === 'without_deer') displayParams.set('with_deer', 'false')
+
+      if (cameraFilter !== 'all') {
+        displayParams.set('camera_id', cameraFilter)
+        deerParams.set('camera_id', cameraFilter)
+      }
+
+      if (timeFilter !== 'all') {
+        const hours = timeFilter === 'last24h' ? '24' : '168'
+        displayParams.set('time_hours', hours)
+      }
+
       const [displayRes, deerRes] = await Promise.all([
-        fetch(`${apiUrl}/api/snapshots?limit=5000`),
-        fetch(`${apiUrl}/api/snapshots?limit=50000&with_deer=true`)
+        fetch(`${apiUrl}/api/snapshots?${displayParams}`),
+        fetch(`${apiUrl}/api/snapshots?${deerParams}`)
       ])
 
       if (!displayRes.ok) throw new Error(`HTTP ${displayRes.status}: ${displayRes.statusText}`)
@@ -76,36 +92,8 @@ function Dashboard({ stats, settings }) {
 
       const [displayData, deerData] = await Promise.all([displayRes.json(), deerRes.json()])
 
-      // Store all deer snapshots for stats (apply camera filter only)
-      let allDeer = deerData.snapshots || []
-      if (cameraFilter !== 'all') {
-        allDeer = allDeer.filter(s => s.camera_id === cameraFilter)
-      }
-      setAllDeerSnapshots(allDeer)
-
-      // Process display snapshots
-      let allSnapshots = displayData.snapshots || []
-
-      // Apply camera filter
-      if (cameraFilter !== 'all') {
-        allSnapshots = allSnapshots.filter(s => s.camera_id === cameraFilter)
-      }
-      
-      // Apply time filter
-      if (timeFilter !== 'all') {
-        const hours = timeFilter === 'last24h' ? 24 : 168
-        const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
-        allSnapshots = allSnapshots.filter(s => new Date(s.timestamp) > cutoff)
-      }
-      
-      // Apply deer/no-deer filter for display only
-      if (feedbackFilter === 'with_deer') {
-        allSnapshots = allSnapshots.filter(s => s.deer_detected)
-      } else if (feedbackFilter === 'without_deer') {
-        allSnapshots = allSnapshots.filter(s => !s.deer_detected)
-      }
-      
-      setSnapshots(allSnapshots)
+      setAllDeerSnapshots(deerData.snapshots || [])
+      setSnapshots(displayData.snapshots || [])
       setCurrentPage(1)
     } catch (error) {
       console.error('Error loading snapshots:', error)
