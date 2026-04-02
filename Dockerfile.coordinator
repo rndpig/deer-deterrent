@@ -43,6 +43,7 @@ Handles the complete flow from camera event to deterrent action
 import os
 import logging
 import json
+import base64
 import hashlib
 import itertools
 from datetime import datetime, timedelta
@@ -134,6 +135,36 @@ def save_pending_videos(queue_list: list):
         PENDING_VIDEOS_FILE.write_text(json.dumps(queue_list, indent=2))
     except OSError as e:
         logger.error(f"Failed to save pending videos file: {e}")
+
+
+def extract_recording_time_from_url(url: str) -> Optional[str]:
+    """Extract the actual recording start time from a Ring download URL's JWT token.
+    
+    Ring download URLs contain a security_token JWT with a 'start' field
+    (epoch milliseconds) indicating when the video was actually recorded.
+    This is more accurate than datetime.now() since Ring may deliver
+    recording URLs hours after the video was captured.
+    """
+    try:
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(url)
+        qs = parse_qs(parsed.query)
+        token = qs.get("security_token", [None])[0]
+        if not token:
+            return None
+        # Decode JWT payload (second segment) without verification
+        payload_b64 = token.split(".")[1]
+        # Add padding
+        payload_b64 += "=" * (-len(payload_b64) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+        start_ms = payload.get("start")
+        if start_ms:
+            recording_time = datetime.fromtimestamp(start_ms / 1000)
+            logger.debug(f"Extracted recording time from URL JWT: {recording_time.isoformat()}")
+            return recording_time.isoformat()
+    except Exception as e:
+        logger.debug(f"Could not extract recording time from URL: {e}")
+    return None
 
 
 def queue_video_for_processing(camera_id: str, recording_url: str, motion_time: str = None):
@@ -974,7 +1005,10 @@ def on_mqtt_message(client, userdata, msg):
                     )
                 
                 if recording_url and '.mp4' in recording_url.lower():
-                    queue_video_for_processing(camera_id, recording_url, motion_time=datetime.now().isoformat())
+                    recording_time = extract_recording_time_from_url(recording_url)
+                    if recording_time:
+                        logger.info(f"📹 Extracted recording time from URL for camera {camera_id}: {recording_time}")
+                    queue_video_for_processing(camera_id, recording_url, motion_time=recording_time or datetime.now().isoformat())
                 elif recording_url:
                     logger.info(f"event_select URL is not MP4 for camera {camera_id}: {recording_url[:120]}")
                 else:
@@ -982,7 +1016,8 @@ def on_mqtt_message(client, userdata, msg):
             except (json.JSONDecodeError, TypeError) as e:
                 # Payload might be a direct URL string
                 if payload and '.mp4' in payload.lower() and payload.startswith('http'):
-                    queue_video_for_processing(camera_id, payload, motion_time=datetime.now().isoformat())
+                    recording_time = extract_recording_time_from_url(payload)
+                    queue_video_for_processing(camera_id, payload, motion_time=recording_time or datetime.now().isoformat())
                 else:
                     logger.warning(f"Could not parse event_select payload: {e} — raw: {payload[:200]}")
             return
