@@ -136,7 +136,7 @@ def save_pending_videos(queue_list: list):
         logger.error(f"Failed to save pending videos file: {e}")
 
 
-def queue_video_for_processing(camera_id: str, recording_url: str):
+def queue_video_for_processing(camera_id: str, recording_url: str, motion_time: str = None):
     """Append a video URL to the pending queue (persisted to disk)."""
     pending = load_pending_videos()
     # Deduplicate by URL
@@ -146,7 +146,8 @@ def queue_video_for_processing(camera_id: str, recording_url: str):
     pending.append({
         "camera_id": camera_id,
         "url": recording_url,
-        "queued_at": datetime.now().isoformat()
+        "queued_at": datetime.now().isoformat(),
+        "motion_time": motion_time or datetime.now().isoformat()
     })
     save_pending_videos(pending)
     logger.info(f"📹 Queued video for deferred processing (camera {camera_id}, queue size: {len(pending)})")
@@ -417,7 +418,8 @@ async def stop_rainbird() -> bool:
 
 
 def log_ring_event(camera_id: str, event_type: str, snapshot_available: bool = False,
-                   snapshot_size: int = None, snapshot_path: str = None, recording_url: str = None) -> Optional[int]:
+                   snapshot_size: int = None, snapshot_path: str = None, recording_url: str = None,
+                   timestamp: str = None) -> Optional[int]:
     """Log Ring event to backend database for diagnostics (synchronous for MQTT thread)"""
     try:
         response = requests.post(
@@ -425,7 +427,7 @@ def log_ring_event(camera_id: str, event_type: str, snapshot_available: bool = F
             json={
                 "camera_id": camera_id,
                 "event_type": event_type,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": timestamp or datetime.now().isoformat(),
                 "snapshot_available": snapshot_available,
                 "snapshot_size": snapshot_size,
                 "snapshot_path": snapshot_path,
@@ -623,17 +625,29 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
         logger.error(f"Error processing camera event: {e}", exc_info=True)
 
 
-async def process_video_frames(camera_id: str, recording_url: str):
+async def process_video_frames(camera_id: str, recording_url: str, motion_time: str = None):
     """Download Ring motion video and extract frames for training data collection.
     
     Extracts frames at the configured snapshot_frequency cadence, runs ML detection
     on each, and logs results as ring_events with event_type='video_frame'.
     No irrigation is triggered from video frames — this is purely for model improvement.
     Called from the batch processor after active hours end.
+    
+    Args:
+        motion_time: ISO timestamp of the original motion event (used for frame timestamps).
     """
     import subprocess
     
     try:
+        # Use original motion event time for timestamps, fall back to now
+        if motion_time:
+            try:
+                event_time = datetime.fromisoformat(motion_time)
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid motion_time '{motion_time}', using current time")
+                event_time = datetime.now()
+        else:
+            event_time = datetime.now()
         now = datetime.now()
         
         logger.info(f"📹 Downloading motion video for camera {camera_id}: {recording_url[:80]}...")
@@ -650,8 +664,8 @@ async def process_video_frames(camera_id: str, recording_url: str):
         
         logger.info(f"Downloaded video: {len(video_bytes)} bytes")
         
-        # Save video to temp file
-        ts = now.strftime("%Y%m%d_%H%M%S")
+        # Save video to temp file (use event_time for naming)
+        ts = event_time.strftime("%Y%m%d_%H%M%S")
         temp_video = Path(f"/app/snapshots/video_{ts}_{camera_id}.mp4")
         temp_video.parent.mkdir(parents=True, exist_ok=True)
         temp_video.write_bytes(video_bytes)
@@ -735,10 +749,10 @@ async def process_video_frames(camera_id: str, recording_url: str):
                     frame_path.unlink(missing_ok=True)
                     continue
                 
-                # Compute frame timestamp: video capture time + offset
-                frame_timestamp = now + timedelta(seconds=frame_time - duration)  # Approximate: motion started ~duration ago
+                # Compute frame timestamp: original motion time + frame offset into video
+                frame_timestamp = event_time + timedelta(seconds=frame_time)
                 
-                # Log ring event for this frame
+                # Log ring event for this frame (use computed timestamp from motion event)
                 snapshot_rel_path = f"data/snapshots/{frame_filename}"
                 ring_event_id = log_ring_event(
                     camera_id=camera_id,
@@ -746,7 +760,8 @@ async def process_video_frames(camera_id: str, recording_url: str):
                     snapshot_available=True,
                     snapshot_size=len(frame_bytes),
                     snapshot_path=snapshot_rel_path,
-                    recording_url=recording_url
+                    recording_url=recording_url,
+                    timestamp=frame_timestamp.isoformat()
                 )
                 
                 if not ring_event_id:
@@ -959,7 +974,7 @@ def on_mqtt_message(client, userdata, msg):
                     )
                 
                 if recording_url and '.mp4' in recording_url.lower():
-                    queue_video_for_processing(camera_id, recording_url)
+                    queue_video_for_processing(camera_id, recording_url, motion_time=datetime.now().isoformat())
                 elif recording_url:
                     logger.info(f"event_select URL is not MP4 for camera {camera_id}: {recording_url[:120]}")
                 else:
@@ -967,7 +982,7 @@ def on_mqtt_message(client, userdata, msg):
             except (json.JSONDecodeError, TypeError) as e:
                 # Payload might be a direct URL string
                 if payload and '.mp4' in payload.lower() and payload.startswith('http'):
-                    queue_video_for_processing(camera_id, payload)
+                    queue_video_for_processing(camera_id, payload, motion_time=datetime.now().isoformat())
                 else:
                     logger.warning(f"Could not parse event_select payload: {e} — raw: {payload[:200]}")
             return
@@ -1204,15 +1219,39 @@ async def video_batch_processor():
                 # Transition: active hours just ended — process the queue
                 pending = load_pending_videos()
                 if pending:
-                    logger.info(f"🎬 Active hours ended — processing {len(pending)} queued videos")
-                    processed = 0
+                    # Filter to only videos from active monitoring hours
+                    start_h = CONFIG.get("ACTIVE_HOURS_START", 20)
+                    end_h = CONFIG.get("ACTIVE_HOURS_END", 6)
+                    valid = []
+                    skipped = 0
                     for entry in pending:
+                        mt = entry.get("motion_time", entry.get("queued_at", ""))
+                        try:
+                            mt_dt = datetime.fromisoformat(mt)
+                            h = mt_dt.hour
+                            if start_h <= end_h:
+                                in_active = start_h <= h < end_h
+                            else:
+                                in_active = h >= start_h or h < end_h
+                            if in_active:
+                                valid.append(entry)
+                            else:
+                                skipped += 1
+                                logger.info(f"Skipping video from {mt} — outside active hours ({start_h}:00-{end_h}:00)")
+                        except (ValueError, TypeError):
+                            valid.append(entry)  # Can't parse time, process anyway
+                    if skipped:
+                        logger.info(f"🎬 Filtered {skipped}/{len(pending)} videos outside active hours")
+                    logger.info(f"🎬 Active hours ended — processing {len(valid)} queued videos")
+                    processed = 0
+                    for entry in valid:
                         cam = entry.get("camera_id", "unknown")
                         url = entry.get("url", "")
+                        mt = entry.get("motion_time")
                         if url:
-                            await process_video_frames(cam, url)
+                            await process_video_frames(cam, url, motion_time=mt)
                             processed += 1
-                    logger.info(f"🎬 Batch video processing complete: {processed}/{len(pending)} videos processed")
+                    logger.info(f"🎬 Batch video processing complete: {processed}/{len(valid)} videos processed")
                     # Clear the queue
                     save_pending_videos([])
                 else:
