@@ -5,7 +5,7 @@ Provides REST API and WebSocket for real-time updates.
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 from datetime import datetime, timedelta
@@ -138,7 +138,73 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Debug endpoint removed — was exposing environment variables without authentication
+# ── Authentication middleware ────────────────────────────────────────────
+import auth as auth_module
+
+# Paths that require NO authentication
+OPEN_PATHS = {
+    "/", "/health", "/api/health", "/docs", "/openapi.json", "/redoc",
+}
+# GET-only prefixes open without auth — image/file serving for <img> tags
+OPEN_GET_PREFIXES = [
+    "/api/snapshots/",      # .../image endpoint
+    "/api/training-frames/",
+    "/api/frames/",         # .../annotated endpoint
+    "/api/images/",
+    "/api/videos/",         # .../stream, .../thumbnail endpoints
+]
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """Enforce authentication on all endpoints except explicitly open ones."""
+    path = request.url.path
+    method = request.method
+
+    # Always allow OPTIONS (CORS preflight)
+    if method == "OPTIONS":
+        return await call_next(request)
+
+    # Allow explicitly open paths
+    if path in OPEN_PATHS:
+        return await call_next(request)
+
+    # Allow GET requests to file-serving endpoints (images, video streams, thumbnails)
+    # These are accessed by <img>/<video> tags which can't send auth headers
+    if method == "GET":
+        for prefix in OPEN_GET_PREFIXES:
+            if path.startswith(prefix):
+                return await call_next(request)
+
+    # GET /api/settings is open (coordinator + ml-detector poll this)
+    if path == "/api/settings" and method == "GET":
+        return await call_next(request)
+
+    # WebSocket upgrade — handled separately (can't use middleware well for WS)
+    if path == "/ws":
+        return await call_next(request)
+
+    # Check X-API-Key first (service-to-service)
+    api_key = request.headers.get("X-API-Key")
+    if api_key:
+        if auth_module._verify_api_key(api_key):
+            request.state.user_id = "service"
+            request.state.auth_type = "api_key"
+            return await call_next(request)
+        return JSONResponse(status_code=401, content={"detail": "Invalid API key"})
+
+    # Check Bearer token (Firebase)
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        decoded = auth_module._verify_firebase_token(token)
+        if decoded:
+            request.state.user_id = decoded.get("uid", "unknown")
+            request.state.auth_type = "firebase"
+            return await call_next(request)
+        return JSONResponse(status_code=401, content={"detail": "Invalid or expired token"})
+
+    return JSONResponse(status_code=401, content={"detail": "Authentication required"})
+# ── End authentication middleware ────────────────────────────────────────
 
 # Initialize detector
 detector = None

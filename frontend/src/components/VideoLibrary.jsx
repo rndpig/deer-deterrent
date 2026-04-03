@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './VideoLibrary.css'
+import { apiFetch, API_URL } from '../api'
 
 function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnapshots, onViewArchive, hideSnapshotsButton = false }) {
   const [videos, setVideos] = useState([])
@@ -44,17 +45,13 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
     return () => document.removeEventListener('click', handleClickOutside)
   }, [openMenuId])
 
-  const loadVideos = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    setLoading(true)
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/videos`)
+  const loadVideos = async () => {    setLoading(true)
+           try {
+         const response = await apiFetch(`/api/videos`)
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
-      
-      const data = await response.json()
+              const data = await response.json()
       setVideos(data)
     } catch (error) {
       console.error('Error loading videos:', error)
@@ -63,12 +60,8 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       setLoading(false)
     }
   }
-
-  const loadTrainingStatus = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/videos/training/status`)
+    const loadTrainingStatus = async () => {    try {
+         const response = await apiFetch(`/api/videos/training/status`)
       if (response.ok) {
         const data = await response.json()
         setTrainingStatus(data)
@@ -77,17 +70,12 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       console.error('Error loading training status:', error)
     }
   }
-
-  const deleteVideo = async (videoId, videoFilename) => {
+    const deleteVideo = async (videoId, videoFilename) => {
     if (!confirm(`Delete "${videoFilename}"? This will remove the video and all extracted frames.`)) {
       return
-    }
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    setDeleting(videoId)
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/videos/${videoId}`, {
+    }    setDeleting(videoId)
+          try {
+         const response = await apiFetch(`/api/videos/${videoId}`, {
         method: 'DELETE'
       })
       
@@ -105,16 +93,12 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       setDeleting(null)
     }
   }
-
-  const archiveVideo = async (videoId, videoFilename) => {
+    const archiveVideo = async (videoId, videoFilename) => {
     if (!confirm(`Archive "${videoFilename}"? This will hide it from the main gallery but preserve all data.`)) {
       return
     }
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
     try {
-      const response = await fetch(`${apiUrl}/api/videos/${videoId}/archive`, {
+         const response = await apiFetch(`/api/videos/${videoId}/archive`, {
         method: 'POST'
       })
       
@@ -130,16 +114,12 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       alert('Failed to archive video')
     }
   }
-
-  const fillMissingFrames = async (videoId, videoFilename) => {
+    const fillMissingFrames = async (videoId, videoFilename) => {
     if (!confirm(`Fill in missing frames for "${videoFilename}"? This will preserve all existing annotations.`)) {
       return
     }
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
     try {
-      const response = await fetch(`${apiUrl}/api/videos/${videoId}/fill-missing-frames`, {
+         const response = await apiFetch(`/api/videos/${videoId}/fill-missing-frames`, {
         method: 'POST'
       })
       
@@ -147,8 +127,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
         const error = await response.json()
         throw new Error(error.detail || 'Failed to fill missing frames')
       }
-      
-      const result = await response.json()
+              const result = await response.json()
       alert(`✅ Success! Added ${result.frames_added} missing frames. All annotations preserved.`)
       
       // Reload videos to update frame count
@@ -159,13 +138,11 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       alert(`Failed to fill missing frames: ${error.message}`)
     }
   }
-
-  const toggleMenu = (videoId, event) => {
+    const toggleMenu = (videoId, event) => {
     event.stopPropagation()
     setOpenMenuId(openMenuId === videoId ? null : videoId)
   }
-  
-  const handleMenuAction = (action, video, event) => {
+      const handleMenuAction = (action, video, event) => {
     event.stopPropagation()
     setOpenMenuId(null)
     
@@ -187,13 +164,9 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
         break
     }
   }
-
-  const handleStartReview = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    try {
+    const handleStartReview = async () => {    try {
       // Trigger frame selection algorithm
-      const response = await fetch(`${apiUrl}/api/training/select-frames`, {
+      const response = await apiFetch(`/api/training/select-frames`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ target_count: 120 })
@@ -213,23 +186,17 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       alert('❌ Failed to start review: ' + error.message)
     }
   }
-  
-  const handleUploadClick = () => {
+      const handleUploadClick = () => {
     document.getElementById('video-upload-input').click()
   }
-
-  const handleReanalyzeAll = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    if (!confirm('🔄 Re-analyze all videos with the new model?\n\nThis will:\n1. Run the updated model on all videos\n2. Update detection counts\n3. Take a few minutes to complete\n\nContinue?')) {
+    const handleReanalyzeAll = async () => {    if (!confirm('🔄 Re-analyze all videos with the new model?\n\nThis will:\n1. Run the updated model on all videos\n2. Update detection counts\n3. Take a few minutes to complete\n\nContinue?')) {
       return
     }
     
     setReanalyzing(true)
     setReanalysisProgress({ current: 0, total: videos.length, results: [] })
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/videos/reanalyze-all`, {
+          try {
+         const response = await apiFetch(`/api/videos/reanalyze-all`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       })
@@ -238,8 +205,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
         const error = await response.json()
         throw new Error(error.detail || 'Re-analysis failed')
       }
-      
-      const result = await response.json()
+              const result = await response.json()
       
       alert(
         `✅ Re-analysis complete!\n\n` +
@@ -259,19 +225,14 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       setReanalysisProgress(null)
     }
   }
-
-  const handleVideoUpload = async (event) => {
+    const handleVideoUpload = async (event) => {
     const file = event.target.files[0]
-    if (!file) return
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    setUploading(true)
-
-    try {
-      const formData = new FormData()
+    if (!file) return    setUploading(true)
+       try {
+         const formData = new FormData()
       formData.append('video', file)
 
-      const response = await fetch(`${apiUrl}/api/videos/upload`, {
+      const response = await apiFetch(`/api/videos/upload`, {
         method: 'POST',
         body: formData
       })
@@ -280,8 +241,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
         const error = await response.json()
         throw new Error(error.detail || 'Upload failed')
       }
-
-      const result = await response.json()
+        const result = await response.json()
       
       // Store upload result and show confirmation dialog
       setUploadedVideo({
@@ -333,16 +293,12 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       event.target.value = ''
     }
   }
-
-  const handleConfirmVideo = async () => {
+    const handleConfirmVideo = async () => {
     if (!uploadedVideo) return
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    const isEditing = !!videos.find(v => v.id === uploadedVideo.video_id)
-
-    try {
+        const isEditing = !!videos.find(v => v.id === uploadedVideo.video_id)
+      try {
       // Update video metadata
-      const response = await fetch(`${apiUrl}/api/videos/${uploadedVideo.video_id}`, {
+      const response = await apiFetch(`/api/videos/${uploadedVideo.video_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -367,15 +323,11 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       alert(`❌ Error: ${error.message}`)
     }
   }
-
-  const handleCancelVideo = async () => {
+    const handleCancelVideo = async () => {
     if (!uploadedVideo) return
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-
-    try {
+        try {
       // Delete the uploaded video
-      await fetch(`${apiUrl}/api/videos/${uploadedVideo.video_id}`, {
+      await apiFetch(`/api/videos/${uploadedVideo.video_id}`, {
         method: 'DELETE'
       })
 
@@ -385,8 +337,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       console.error('Error canceling video:', error)
     }
   }
-
-  const handleEditVideo = (video) => {
+    const handleEditVideo = (video) => {
     // Parse camera from camera_name (e.g., "Manual Upload" -> "side", or existing camera value)
     const cameraMap = {
       'Front': 'front',
@@ -395,7 +346,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       'Driveway': 'driveway',
       'Backyard': 'backyard'
     }
-    const camera = video.camera || cameraMap[video.camera_name] || 'side'
+     const camera = video.camera || cameraMap[video.camera_name] || 'side'
     
     // Parse date/time
     const dateTime = video.captured_at || video.upload_date
@@ -414,23 +365,17 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
     setCaptureDateTime(localDateTime)
     setShowConfirmDialog(true)
   }
-
-  const formatDuration = (seconds) => {
+    const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
-
-  const handlePlayVideo = (video) => {
+    const handlePlayVideo = (video) => {
     setPlayingVideo(video)
     setShowVideoPlayer(true)
   }
-
-  const handleViewFrames = async (video) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/videos/${video.id}`)
+    const handleViewFrames = async (video) => {    try {
+         const response = await apiFetch(`/api/videos/${video.id}`)
       if (!response.ok) throw new Error('Failed to load video details')
       
       const data = await response.json()
@@ -443,14 +388,12 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       alert('Failed to load video frames')
     }
   }
-
-  const handleNextFrame = () => {
+    const handleNextFrame = () => {
     if (currentFrameIndex < videoFrames.length - 1) {
       setCurrentFrameIndex(currentFrameIndex + 1)
     }
   }
-
-  const handlePrevFrame = () => {
+    const handlePrevFrame = () => {
     if (currentFrameIndex > 0) {
       setCurrentFrameIndex(currentFrameIndex - 1)
     }
@@ -459,8 +402,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
   // Keyboard navigation for frame analysis
   useEffect(() => {
     if (!showFrameAnalysis) return
-
-    const handleKeyDown = (e) => {
+          const handleKeyDown = (e) => {
       if (e.key === 'ArrowLeft') {
         e.preventDefault()
         handlePrevFrame()
@@ -480,8 +422,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
   // Auto-scroll thumbnail carousel to center selected frame
   useEffect(() => {
     if (!showFrameAnalysis || videoFrames.length === 0) return
-    
-    const activeThumbnail = thumbnailRefs.current[currentFrameIndex]
+              const activeThumbnail = thumbnailRefs.current[currentFrameIndex]
     if (activeThumbnail) {
       activeThumbnail.scrollIntoView({
         behavior: 'smooth',
@@ -495,8 +436,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
     const date = new Date(dateString)
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
-
-  const formatCameraName = (video) => {
+    const formatCameraName = (video) => {
     // Use camera_name from database (updated by backend)
     if (video.camera_name && video.camera_name !== 'Manual Upload' && video.camera_name !== 'Unknown Camera') {
       return video.camera_name
@@ -513,8 +453,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
     }
     return '—'
   }
-
-  if (loading) {
+    if (loading) {
     return (
       <div className="video-library">
         <div className="loading">Loading videos...</div>
@@ -607,7 +546,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
               >
                 {video.video_path ? (
                   <img 
-                    src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/videos/${video.id}/thumbnail`}
+                    src={`${API_URL}/api/videos/${video.id}/thumbnail`}
                     alt={video.filename}
                     className="thumbnail-image"
                     onError={(e) => {
@@ -795,7 +734,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
                 controls 
                 autoPlay
                 className="video-player"
-                src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/videos/${playingVideo.id}/stream`}
+                src={`${API_URL}/api/videos/${playingVideo.id}/stream`}
               >
                 Your browser does not support video playback.
               </video>
@@ -859,8 +798,8 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
                     <img 
                       src={
                         videoFrames[currentFrameIndex]?.detection_count > 0
-                          ? `${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/frames/${videoFrames[currentFrameIndex]?.id}/annotated`
-                          : `${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/training-frames/${videoFrames[currentFrameIndex]?.image_path?.split('/').pop()}`
+                          ? `${API_URL}/api/frames/${videoFrames[currentFrameIndex]?.id}/annotated`
+                          : `${API_URL}/api/training-frames/${videoFrames[currentFrameIndex]?.image_path?.split('/').pop()}`
                       }
                       alt={`Frame ${videoFrames[currentFrameIndex]?.frame_number}`}
                       className="frame-image"
@@ -887,7 +826,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
                         title={`Frame ${frame.frame_number} - ${frame.detection_count} detections`}
                       >
                         <img 
-                          src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/training-frames/${frame.image_path.split('/').pop()}`}
+                          src={`${API_URL}/api/training-frames/${frame.image_path.split('/').pop()}`}
                           alt={`Thumb ${idx}`}
                         />
                         {frame.detection_count > 0 && (

@@ -1,19 +1,17 @@
 import { useState, useEffect } from 'react'
 import './DetectionHistory.css'
+import { apiFetch, API_URL } from '../api'
 
 function DetectionHistory() {
   const [detections, setDetections] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('last24h') // all, last24h, last7d
 
-  useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
+  useEffect(() => {    const endpoint = filter === 'all' 
+      ? `${API_URL}/api/detections?limit=100`
+      : `${API_URL}/api/detections/recent?hours=${filter === 'last24h' ? 24 : 168}`
     
-    const endpoint = filter === 'all' 
-      ? `${apiUrl}/api/detections?limit=100`
-      : `${apiUrl}/api/detections/recent?hours=${filter === 'last24h' ? 24 : 168}`
-    
-    fetch(endpoint)
+    apiFetch(endpoint)
       .then(res => res.json())
       .then(data => {
         setDetections(data)
@@ -88,7 +86,7 @@ function DetectionHistory() {
                   <td>
                     {detection.image_path && (
                       <a 
-                        href={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}${detection.image_path}`}
+                        href={`${API_URL}${detection.image_path}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="view-image-link"

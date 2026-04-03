@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './SnapshotViewer.css'
+import { apiFetch, API_URL } from '../api'
 
 function SnapshotViewer({ onViewVideos, onViewArchive }) {
   const [snapshots, setSnapshots] = useState([])
@@ -16,11 +17,7 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
   const [selectedCamera, setSelectedCamera] = useState('side')
   const [captureDateTime, setCaptureDateTime] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
-  const snapshotsPerPage = 100
-
-  const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-
-  // Camera ID to name mapping
+  const snapshotsPerPage = 100  // Camera ID to name mapping
   const CAMERA_NAMES = {
     '587a624d3fae': 'Driveway',
     '4439c4de7a79': 'Front Door',
@@ -28,8 +25,7 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
     '10cea9e4511f': 'Side',
     'manual_upload': 'Manual Upload'
   }
-
-  const formatCameraName = (cameraId) => {
+    const formatCameraName = (cameraId) => {
     return CAMERA_NAMES[cameraId] || cameraId
   }
 
@@ -40,16 +36,15 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
 
   const loadSnapshots = async () => {
     setLoading(true)
-    try {
-      let url = `${apiUrl}/api/snapshots?limit=2000` // Load more for pagination
+      try {
+         let url = `${API_URL}/api/snapshots?limit=2000` // Load more for pagination
       
       if (filter === 'with_deer') {
         url += '&with_deer=true'
       } else if (filter === 'without_deer') {
         url += '&with_deer=false'
       }
-
-      const response = await fetch(url)
+        const response = await apiFetch(url)
       if (!response.ok) throw new Error('Failed to load snapshots')
 
       const data = await response.json()
@@ -61,18 +56,16 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
       setLoading(false)
     }
   }
-
-  const selectSnapshot = (snapshot) => {
+    const selectSnapshot = (snapshot) => {
     setSelectedSnapshot(snapshot)
   }
-
-  const rerunDetection = async () => {
+    const rerunDetection = async () => {
     if (!selectedSnapshot) return
 
     setDetectionRunning(true)
-    try {
-      const response = await fetch(
-        `${apiUrl}/api/snapshots/${selectedSnapshot.id}/rerun-detection?threshold=${threshold}`,
+      try {
+         const response = await apiFetch(
+        `${API_URL}/api/snapshots/${selectedSnapshot.id}/rerun-detection?threshold=${threshold}`,
         { method: 'POST' }
       )
 
@@ -103,8 +96,7 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
       setDetectionRunning(false)
     }
   }
-
-  const formatTimestamp = (timestamp) => {
+    const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp)
     // Don't adjust timezone for timestamps that are already in local time
     // (Only adjust for Ring camera snapshots which are in EST)
@@ -117,8 +109,7 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
     date.setHours(date.getHours() - 1)
     return date.toLocaleString()
   }
-
-  const handleImageUpload = async (event) => {
+    const handleImageUpload = async (event) => {
     const file = event.target.files[0]
     if (!file) return
 
@@ -139,22 +130,20 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
     setSelectedFile(file)
     setUploadResult(null)
   }
-
-  const handleConfirmUpload = async () => {
+    const handleConfirmUpload = async () => {
     if (!selectedFile) return
 
     setUploadingImage(true)
     setUploadResult(null)
-
-    try {
-      const formData = new FormData()
+      try {
+         const formData = new FormData()
       formData.append('image', selectedFile)
       formData.append('threshold', threshold)
       formData.append('save_to_database', 'true')
       formData.append('camera_id', selectedCamera === 'side' ? '10cea9e4511f' : '587a624d3fae')
       formData.append('captured_at', captureDateTime)
 
-      const response = await fetch(`${apiUrl}/api/test-detection`, {
+      const response = await apiFetch(`/api/test-detection`, {
         method: 'POST',
         body: formData
       })
@@ -162,8 +151,7 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
       if (!response.ok) {
         throw new Error('Detection failed')
       }
-
-      const result = await response.json()
+        const result = await response.json()
       setUploadResult({
         success: true,
         deerDetected: result.deer_detected,
@@ -187,13 +175,11 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
       setUploadingImage(false)
     }
   }
-
-  const handleCancelUpload = () => {
+    const handleCancelUpload = () => {
     setSelectedFile(null)
     setUploadResult(null)
   }
-
-  if (loading) {
+    if (loading) {
     return (
       <div className="snapshot-viewer">
         <div className="loading">Loading snapshots...</div>
@@ -299,7 +285,7 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
               >
                 <div className="snapshot-thumbnail">
                   <img
-                    src={`${apiUrl}/api/snapshots/${snapshot.id}/image`}
+                    src={`${API_URL}/api/snapshots/${snapshot.id}/image`}
                     alt={`Snapshot ${snapshot.id}`}
                     loading="lazy"
                   />
@@ -363,7 +349,7 @@ function SnapshotViewer({ onViewVideos, onViewArchive }) {
             <div className="modal-content">
               <div className="detail-image">
                 <img
-                  src={`${apiUrl}/api/snapshots/${selectedSnapshot.id}/image`}
+                  src={`${API_URL}/api/snapshots/${selectedSnapshot.id}/image`}
                   alt={`Snapshot ${selectedSnapshot.id}`}
                 />
                 {selectedSnapshot.detection_result?.detections?.map((det, idx) => (

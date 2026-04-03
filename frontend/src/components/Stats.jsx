@@ -3,6 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   Legend, CartesianGrid, Cell
 } from 'recharts'
+import { apiFetch, API_URL } from '../api'
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const YEAR_COLORS = ['#4ade80','#60a5fa','#f59e0b','#f472b6','#a78bfa','#fb923c']
@@ -47,12 +48,10 @@ function Stats() {
   const [aiSynopsis, setAiSynopsis] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const res = await fetch(`${apiUrl}/api/snapshots?limit=50000&with_deer=true`)
+        const res = await apiFetch(`/api/snapshots?limit=50000&with_deer=true`)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         setAllSnapshots(data.snapshots || [])
@@ -111,27 +110,27 @@ function Stats() {
 
     // Most active camera
     const cameraCounts = {}
-    for (const s of filtered) {
+     for (const s of filtered) {
       const name = formatCameraName(s.camera_id)
       cameraCounts[name] = (cameraCounts[name] || 0) + 1
     }
-    const topCamera = Object.entries(cameraCounts).sort((a, b) => b[1] - a[1])[0]
+     const topCamera = Object.entries(cameraCounts).sort((a, b) => b[1] - a[1])[0]
 
     // Peak month
     const monthCounts = {}
-    for (const s of filtered) {
+     for (const s of filtered) {
       const d = new Date(s.timestamp)
       const key = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`
       monthCounts[key] = (monthCounts[key] || 0) + 1
     }
-    const peakMonth = Object.entries(monthCounts).sort((a, b) => b[1] - a[1])[0]
+     const peakMonth = Object.entries(monthCounts).sort((a, b) => b[1] - a[1])[0]
 
     // Peak hour (using 1-hour buckets)
     const hourCounts = new Array(24).fill(0)
     for (const s of filtered) {
       hourCounts[new Date(s.timestamp).getHours()]++
     }
-    const peakHourIdx = hourCounts.indexOf(Math.max(...hourCounts))
+     const peakHourIdx = hourCounts.indexOf(Math.max(...hourCounts))
     const peakHourAmpm = peakHourIdx >= 12 ? 'PM' : 'AM'
     const peakHourDisplay = peakHourIdx % 12 || 12
     const peakHour = `${peakHourDisplay} ${peakHourAmpm}`
@@ -200,7 +199,7 @@ function Stats() {
     if (!metrics || filtered.length === 0) return
     setAiLoading(true)
     setAiSynopsis(null)
-    try {
+     try {
       // Build a data summary to send to the backend
       const payload = {
         total_sightings: metrics.total,
@@ -221,7 +220,7 @@ function Stats() {
         }),
         hourly_distribution: metrics.hourCounts,
       }
-      const res = await fetch(`${apiUrl}/api/stats/synopsis`, {
+       const res = await apiFetch(`/api/stats/synopsis`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -235,12 +234,10 @@ function Stats() {
       setAiLoading(false)
     }
   }
-
-  if (loading) {
+    if (loading) {
     return <div className="flex items-center justify-center h-64 text-white/50">Loading stats...</div>
   }
-
-  if (deerSnapshots.length === 0) {
+    if (deerSnapshots.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-white/50 gap-2">
         <span className="text-4xl">🦌</span>

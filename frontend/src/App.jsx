@@ -8,6 +8,7 @@ import AuthButton from './components/AuthButton'
 import CombinedArchive from './components/CombinedArchive'
 import VideoLibrary from './components/VideoLibrary'
 import { useAuth } from './hooks/useAuth'
+import { apiFetch, API_URL } from './api'
 
 function App() {
   const { user, loading, signIn, signOut } = useAuth()
@@ -23,8 +24,7 @@ function App() {
   useEffect(() => {
     if (!user) return // Only connect if authenticated
     
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    const wsUrl = apiUrl.replace('http', 'ws') + '/ws'
+    const wsUrl = API_URL.replace('http', 'ws') + '/ws'
     
     const websocket = new WebSocket(wsUrl)
     
@@ -63,14 +63,12 @@ function App() {
   useEffect(() => {
     if (!user) return // Only fetch if authenticated
     
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    fetch(`${apiUrl}/api/stats`)
+    apiFetch('/api/stats')
       .then(res => res.json())
       .then(data => setStats(data))
       .catch(err => console.error('Error fetching stats:', err))
     
-    fetch(`${apiUrl}/api/settings`)
+    apiFetch('/api/settings')
       .then(res => res.json())
       .then(data => setSettings(data))
       .catch(err => console.error('Error fetching settings:', err))

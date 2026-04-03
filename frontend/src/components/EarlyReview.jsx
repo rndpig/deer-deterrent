@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './EarlyReview.css'
+import { apiFetch, API_URL } from '../api'
 
 function EarlyReview({ onBack, selectedVideo }) {
   const [frames, setFrames] = useState([])
@@ -44,8 +45,7 @@ function EarlyReview({ onBack, selectedVideo }) {
 
   const redrawCanvas = () => {
     if (!currentFrame || !imageRef.current || !canvasRef.current) return
-    
-    const img = imageRef.current
+              const img = imageRef.current
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
     
@@ -84,8 +84,7 @@ function EarlyReview({ onBack, selectedVideo }) {
       ctx.setLineDash([])
     }
   }
-
-  const handleMouseDown = (e) => {
+    const handleMouseDown = (e) => {
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
     
@@ -101,11 +100,9 @@ function EarlyReview({ onBack, selectedVideo }) {
     setDrawing(true)
     setCurrentBox({ x, y, width: 0, height: 0 })
   }
-
-  const handleMouseMove = (e) => {
+    const handleMouseMove = (e) => {
     if (!drawing || !currentBox) return
-    
-    const canvas = canvasRef.current
+              const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
     
     const mouseX = e.clientX - rect.left
@@ -122,8 +119,7 @@ function EarlyReview({ onBack, selectedVideo }) {
     
     setCurrentBox({ ...currentBox, width, height })
   }
-
-  const handleMouseUp = () => {
+    const handleMouseUp = () => {
     if (!drawing || !currentBox) return
     
     // Only add box if it has meaningful size
@@ -135,7 +131,7 @@ function EarlyReview({ onBack, selectedVideo }) {
         x += width
         width = Math.abs(width)
       }
-      if (height < 0) {
+       if (height < 0) {
         y += height
         height = Math.abs(height)
       }
@@ -155,16 +151,12 @@ function EarlyReview({ onBack, selectedVideo }) {
     setDrawing(false)
     setCurrentBox(null)
   }
-
-  const handleRemoveBox = async (index) => {
+    const handleRemoveBox = async (index) => {
     const updatedBoxes = drawnBoxes.filter((_, i) => i !== index)
     setDrawnBoxes(updatedBoxes)
     
-    // Save immediately to persist the deletion
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/frames/${currentFrame.id}/annotate`, {
+    // Save immediately to persist the deletion    try {
+         const response = await apiFetch(`/api/frames/${currentFrame.id}/annotate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -195,17 +187,11 @@ function EarlyReview({ onBack, selectedVideo }) {
       setDrawnBoxes(drawnBoxes)
     }
   }
-
-  const handleSaveBoxes = async () => {
-    if (drawnBoxes.length === 0) return
-    
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    console.log('Saving annotations for frame:', currentFrame.id)
+    const handleSaveBoxes = async () => {
+    if (drawnBoxes.length === 0) return    console.log('Saving annotations for frame:', currentFrame.id)
     console.log('Boxes to save:', drawnBoxes)
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/frames/${currentFrame.id}/annotate`, {
+          try {
+         const response = await apiFetch(`/api/frames/${currentFrame.id}/annotate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -241,15 +227,11 @@ function EarlyReview({ onBack, selectedVideo }) {
       alert(`❌ Error saving annotations: ${error.message}`)
     }
   }
-
-  const handleClearBoxes = async () => {
+    const handleClearBoxes = async () => {
     setDrawnBoxes([])
     
-    // Save immediately to persist the clearing
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/frames/${currentFrame.id}/annotate`, {
+    // Save immediately to persist the clearing    try {
+         const response = await apiFetch(`/api/frames/${currentFrame.id}/annotate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -276,18 +258,13 @@ function EarlyReview({ onBack, selectedVideo }) {
       alert('❌ Error clearing boxes. Please try again.')
     }
   }
-
-  const handleClearFrames = async () => {
+    const handleClearFrames = async () => {
     if (!selectedVideo) return
-    
-    if (!confirm(`Delete all extracted frames for video "${currentFrame.video_filename}"? You will need to re-extract frames to annotate again.`)) {
+              if (!confirm(`Delete all extracted frames for video "${currentFrame.video_filename}"? You will need to re-extract frames to annotate again.`)) {
       return
     }
-    
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
     try {
-      const response = await fetch(`${apiUrl}/api/videos/${selectedVideo.id}/clear-frames`, {
+         const response = await apiFetch(`/api/videos/${selectedVideo.id}/clear-frames`, {
         method: 'DELETE'
       })
       
@@ -311,18 +288,14 @@ function EarlyReview({ onBack, selectedVideo }) {
     loadFrames()
   }, [])
 
-  const loadFrames = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    setLoading(true)
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/training/frames`)
+  const loadFrames = async () => {    setLoading(true)
+           try {
+         const response = await apiFetch(`/api/training/frames`)
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
-      
-      const data = await response.json()
+              const data = await response.json()
       
       console.log('=== FRAMES LOADED FROM API ===')
       console.log(`Total frames from API: ${data.length}`)
@@ -348,14 +321,9 @@ function EarlyReview({ onBack, selectedVideo }) {
       setLoading(false)
     }
   }
-
-  const reviewFrame = async (reviewType) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    if (!currentFrame) return
-
-    try {
-      const response = await fetch(`${apiUrl}/api/frames/${currentFrame.id}/review`, {
+    const reviewFrame = async (reviewType) => {    if (!currentFrame) return
+          try {
+         const response = await apiFetch(`/api/frames/${currentFrame.id}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -384,23 +352,19 @@ function EarlyReview({ onBack, selectedVideo }) {
       alert(`❌ Error submitting review: ${error.message}`)
     }
   }
-
-  const nextFrame = () => {
+    const nextFrame = () => {
     if (currentIndex < frames.length - 1) {
       setCurrentIndex(currentIndex + 1)
     }
   }
-
-  const previousFrame = () => {
+    const previousFrame = () => {
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1)
     }
   }
-
-  const handleKeyPress = (e) => {
+    const handleKeyPress = (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
-    
-    if (e.key === 'ArrowRight') nextFrame()
+              if (e.key === 'ArrowRight') nextFrame()
     if (e.key === 'ArrowLeft') previousFrame()
     if (e.key === 'c' || e.key === 'C') reviewFrame('correct')
     if (e.key === 's' || e.key === 'S') handleSaveBoxes()
@@ -418,8 +382,7 @@ function EarlyReview({ onBack, selectedVideo }) {
       </div>
     )
   }
-
-  if (frames.length === 0) {
+    if (frames.length === 0) {
     return (
       <div className="early-review-container">
         <div className="empty-state">
@@ -431,10 +394,9 @@ function EarlyReview({ onBack, selectedVideo }) {
     )
   }
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
   const imageUrl = currentFrame.image_url?.startsWith('http') 
     ? currentFrame.image_url 
-    : `${apiUrl}${currentFrame.image_url}`
+    : `${API_URL}${currentFrame.image_url}`
 
   // Check if all frames are annotated
   const allAnnotated = frames.every(f => f.annotation_count > 0 || f.reviewed)
