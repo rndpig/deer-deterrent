@@ -148,6 +148,7 @@ services:
       - TZ=${TIMEZONE:-America/Chicago}
       - ML_DETECTOR_URL=http://ml-detector:8001
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-}
     
     volumes:
       - ./backend:/app
@@ -258,6 +259,7 @@ services:
       - RING_LOCATION_ID=${RING_LOCATION_ID:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - TZ=${TIMEZONE:-America/Chicago}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-}
     
     volumes:
       - ./dell-deployment/logs/coordinator:/app/logs
