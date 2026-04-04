@@ -2,72 +2,129 @@
 Authentication module for the Deer Deterrent API.
 
 Two auth mechanisms:
-1. Firebase ID Token (frontend users) — validated via Firebase Admin SDK
+1. Firebase ID Token (frontend users) — validated via PyJWT + Google's public keys
 2. Internal API Key (coordinator, ml-detector) — validated against INTERNAL_API_KEY env var
 """
 import os
 import logging
-from typing import Optional
+import time
+from typing import Optional, Dict, Any
 
+import jwt
+import requests
+from cryptography.x509 import load_pem_x509_certificate
 from fastapi import Request, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 logger = logging.getLogger(__name__)
 
-# Lazy-loaded Firebase Admin app
-_firebase_app = None
-_firebase_init_attempted = False
-
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
 FIREBASE_PROJECT_ID = "deer-deterrent-rnp"
+
+# Google's public certificates for Firebase token verification
+GOOGLE_CERTS_URL = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
+
+# Cached certificates and expiry time
+_cached_certs: Dict[str, Any] = {}
+_certs_expiry: float = 0
 
 # Security scheme for OpenAPI docs
 _bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def _get_firebase_app():
-    """Initialize Firebase Admin SDK (once)."""
-    global _firebase_app, _firebase_init_attempted
-    if _firebase_init_attempted:
-        return _firebase_app
-    _firebase_init_attempted = True
+def _get_google_certs() -> Dict[str, Any]:
+    """Fetch and cache Google's public certificates for JWT verification."""
+    global _cached_certs, _certs_expiry
+    
+    # Return cached certs if still valid
+    if _cached_certs and time.time() < _certs_expiry:
+        return _cached_certs
+    
     try:
-        import firebase_admin
-        from firebase_admin import credentials
-        # Use Application Default Credentials or explicit service account
-        cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if cred_path and os.path.exists(cred_path):
-            cred = credentials.Certificate(cred_path)
-            _firebase_app = firebase_admin.initialize_app(cred)
-            logger.info("Firebase Admin SDK initialized with service account")
-        else:
-            # Initialize without credentials — can still verify ID tokens
-            # if the project ID is set (uses Google's public keys)
-            _firebase_app = firebase_admin.initialize_app(options={
-                "projectId": FIREBASE_PROJECT_ID,
-            })
-            logger.info("Firebase Admin SDK initialized with project ID only")
+        resp = requests.get(GOOGLE_CERTS_URL, timeout=10)
+        resp.raise_for_status()
+        
+        # Parse cache-control header for expiry
+        cache_control = resp.headers.get("Cache-Control", "")
+        max_age = 3600  # Default 1 hour
+        for part in cache_control.split(","):
+            if "max-age=" in part:
+                try:
+                    max_age = int(part.split("=")[1].strip())
+                except ValueError:
+                    pass
+        
+        # Convert PEM certificates to public keys
+        certs_json = resp.json()
+        _cached_certs = {}
+        for kid, cert_pem in certs_json.items():
+            cert = load_pem_x509_certificate(cert_pem.encode())
+            _cached_certs[kid] = cert.public_key()
+        
+        _certs_expiry = time.time() + max_age
+        logger.info(f"Fetched {len(_cached_certs)} Google certificates, cached for {max_age}s")
+        return _cached_certs
     except Exception as e:
-        logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
-        _firebase_app = None
-    return _firebase_app
+        logger.error(f"Failed to fetch Google certificates: {e}")
+        return _cached_certs  # Return stale cache if available
 
 
 def _verify_firebase_token(token: str) -> Optional[dict]:
-    """Verify a Firebase ID token. Returns decoded token or None."""
-    app = _get_firebase_app()
-    if not app:
-        logger.warning("Firebase Admin SDK not available — cannot verify token")
-        return None
+    """Verify a Firebase ID token using PyJWT + Google's public certificates."""
     try:
-        from firebase_admin import auth as firebase_auth
-        decoded = firebase_auth.verify_id_token(token, app=app)
+        # Get the key ID from token header
+        unverified_header = jwt.get_unverified_header(token)
+        kid = unverified_header.get("kid")
+        if not kid:
+            logger.warning("Token missing 'kid' in header")
+            return None
+        
+        # Get Google's public keys
+        certs = _get_google_certs()
+        if kid not in certs:
+            # Refresh certs in case of rotation
+            global _certs_expiry
+            _certs_expiry = 0  # Force refresh
+            certs = _get_google_certs()
+            if kid not in certs:
+                logger.warning(f"Unknown key ID: {kid}")
+                return None
+        
+        public_key = certs[kid]
+        
+        # Verify the token
+        decoded = jwt.decode(
+            token,
+            public_key,
+            algorithms=["RS256"],
+            audience=FIREBASE_PROJECT_ID,
+            issuer=f"https://securetoken.google.com/{FIREBASE_PROJECT_ID}",
+        )
+        
+        # Additional Firebase-specific validations
+        if not decoded.get("sub"):
+            logger.warning("Token missing 'sub' claim")
+            return None
+        if decoded.get("auth_time", 0) > time.time():
+            logger.warning("Token auth_time is in the future")
+            return None
+        
+        logger.info(f"Token verified for uid={decoded.get('sub', 'unknown')}")
         return decoded
-    except firebase_admin.exceptions.FirebaseError as e:
-        logger.debug(f"Firebase token verification failed: {e}")
+    except jwt.ExpiredSignatureError:
+        logger.warning("Token has expired")
+        return None
+    except jwt.InvalidAudienceError:
+        logger.warning(f"Invalid audience in token")
+        return None
+    except jwt.InvalidIssuerError:
+        logger.warning(f"Invalid issuer in token")
+        return None
+    except jwt.PyJWTError as e:
+        logger.warning(f"JWT verification failed: {e}")
         return None
     except Exception as e:
-        logger.debug(f"Token verification error: {e}")
+        logger.warning(f"Token verification error: {type(e).__name__}: {e}")
         return None
 
 
