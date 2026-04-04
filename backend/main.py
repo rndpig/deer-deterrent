@@ -185,8 +185,11 @@ async def auth_middleware(request: Request, call_next):
 
     # Check X-API-Key first (service-to-service)
     api_key = request.headers.get("X-API-Key")
+    print(f"[AUTH DEBUG] path={path}, method={method}, api_key={repr(api_key)}")  # DEBUG
     if api_key:
-        if auth_module._verify_api_key(api_key):
+        verify_result = auth_module._verify_api_key(api_key)
+        print(f"[AUTH DEBUG] verify_result={verify_result}")  # DEBUG
+        if verify_result:
             request.state.user_id = "service"
             request.state.auth_type = "api_key"
             return await call_next(request)
