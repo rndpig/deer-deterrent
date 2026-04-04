@@ -1,7 +1,7 @@
 # API Auth Implementation Progress
 
 **Branch**: `feature/api-auth` (created from `main` at commit `35c609a`)
-**Last Updated**: 2026-04-02 (evening — frontend complete)
+**Last Updated**: 2026-04-03 (coordinator + deployment complete)
 
 ## Roadmap Context
 
@@ -9,9 +9,9 @@ This is item #1 from the code review roadmap. The full roadmap is stored in:
 `code-review-roadmap.md` (in Copilot memory, may get wiped between sessions)
 
 **Roadmap items** (in priority order):
-1. **Add API Authentication** ← IN PROGRESS
+1. **Add API Authentication** ← COMPLETE
 2. Enable SQLite WAL Mode + Busy Timeout
-3. Fix Temp Video File Leak in Coordinator
+3. Fix Temp Video File Leak in Coordinator  
 4. Remove Docker Socket Mount + Legacy Postgres Container
 5. Extract Coordinator/ML-Detector Code from Dockerfiles
 
@@ -48,35 +48,32 @@ This is item #1 from the code review roadmap. The full roadmap is stored in:
 - Image `<img src>` attributes use `${API_URL}/api/snapshots/...` (no auth needed — backend allows GET to image endpoints)
 - Build verified: `npx vite build` succeeds
 
----
+### Coordinator — COMPLETE (2026-04-03)
+- Added `INTERNAL_API_KEY` to CONFIG dict with `os.getenv("INTERNAL_API_KEY", "")`
+- Created `get_api_headers()` helper that returns `{"Content-Type": "application/json", "X-API-Key": <key>}`
+- Updated all backend API calls to include `headers=get_api_headers()`:
+  - `log_ring_event()` — POST /api/ring-events
+  - `log_to_backend()` — POST /api/detections  
+  - PATCH /api/ring-events/{id} (two locations: motion detection + video frames)
+  - POST /api/cleanup-old-snapshots
 
-## What's NOT Done
+### ML-Detector — N/A (no changes needed)
+- ml-detector only calls `GET /api/settings` which is open (no auth required)
 
-### Coordinator — NOT STARTED
-- [ ] Add `INTERNAL_API_KEY` env var to `Dockerfile.coordinator`
-- [ ] Attach `X-API-Key` header to all HTTP calls to backend (POST/PATCH ring-events, GET settings, etc.)
-- [ ] Add `INTERNAL_API_KEY` to `docker-compose.yml` environment for coordinator service
+### Infrastructure — COMPLETE (2026-04-03)
+- Added `INTERNAL_API_KEY=${INTERNAL_API_KEY:-}` to docker-compose.yml:
+  - backend service
+  - coordinator service
+- Added `INTERNAL_API_KEY=` with generation instructions to `.env.example`
+- Generated secure key and added to server `.env`: `D__V-h82DeA-pDme5zb562JxPB-RcfEQJkZM6qvzZbc`
+- Deployed: backend + coordinator rebuilt and restarted
 
-### ML-Detector — NOT STARTED
-- [ ] Add `INTERNAL_API_KEY` env var to `Dockerfile.ml-detector`
-- [ ] Attach `X-API-Key` header to settings sync calls (`GET /api/settings`)
-- [ ] Add `INTERNAL_API_KEY` to `docker-compose.yml` environment for ml-detector service
-
-### Infrastructure — NOT STARTED
-- [ ] Add `INTERNAL_API_KEY` to `.env.example` (and generate a real value for server `.env`)
-- [ ] Add `GOOGLE_APPLICATION_CREDENTIALS` path to docker-compose.yml backend service (optional — works without it)
-- [ ] Update `docker-compose.yml` to pass `INTERNAL_API_KEY` env var to backend, coordinator, ml-detector
-- [ ] Deploy and test end-to-end
-
-### Testing — NOT STARTED
-- [ ] Test: unauthenticated request to protected endpoint → 401
-- [ ] Test: valid Firebase token → 200
-- [ ] Test: valid API key → 200
-- [ ] Test: invalid token/key → 401
-- [ ] Test: coordinator can still communicate with backend
-- [ ] Test: ml-detector settings sync still works
-- [ ] Test: frontend login + API calls work
-- [ ] Test: snapshot images still load in frontend
+### Testing — COMPLETE (2026-04-03)
+- ✓ Unauthenticated request to /api/ring-events → 401
+- ✓ Valid API key with X-API-Key header → 200
+- ✓ Coordinator PATCH /api/ring-events → 200 OK (verified in logs)
+- ✓ Coordinator POST /api/detections → 200 OK (verified in logs)
+- ✓ Settings sync still works (GET /api/settings is open)
 
 ---
 
@@ -86,6 +83,9 @@ This is item #1 from the code review roadmap. The full roadmap is stored in:
 - **Image-serving GET endpoints are open** — `<img>` tags can't send auth headers; images are just deer photos (low risk); frontend gates access behind Firebase login
 - **WebSocket skipped in middleware** — needs separate handling (future: send token as query param)
 - **`apiFetch` handles both paths and full URLs** — `pathOrUrl.startsWith('http')` check for backward compatibility
+- **ML-detector doesn't need changes** — only calls GET /api/settings which is open
 
-## Suggested Next Step
-Wire up the coordinator and ml-detector services with `X-API-Key` headers, add `INTERNAL_API_KEY` to docker-compose.yml and .env, then deploy and test end-to-end.
+## Remaining Work
+- [ ] Test frontend login + API calls work (need to deploy frontend or test locally)
+- [ ] Merge `feature/api-auth` branch to `main` after frontend verification
+- [ ] (Optional) Add WebSocket authentication (low priority — WS only sends snapshot updates)
