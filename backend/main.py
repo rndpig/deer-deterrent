@@ -185,11 +185,8 @@ async def auth_middleware(request: Request, call_next):
 
     # Check X-API-Key first (service-to-service)
     api_key = request.headers.get("X-API-Key")
-    print(f"[AUTH DEBUG] path={path}, method={method}, api_key={repr(api_key)}")  # DEBUG
     if api_key:
-        verify_result = auth_module._verify_api_key(api_key)
-        print(f"[AUTH DEBUG] verify_result={verify_result}")  # DEBUG
-        if verify_result:
+        if auth_module._verify_api_key(api_key):
             request.state.user_id = "service"
             request.state.auth_type = "api_key"
             return await call_next(request)
@@ -199,13 +196,17 @@ async def auth_middleware(request: Request, call_next):
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
+        logger.info(f"[AUTH] Token found, len={len(token)}")
         decoded = auth_module._verify_firebase_token(token)
         if decoded:
             request.state.user_id = decoded.get("uid", "unknown")
             request.state.auth_type = "firebase"
+            logger.info(f"[AUTH] Success for uid={request.state.user_id}")
             return await call_next(request)
+        logger.warning(f"[AUTH] Token verification failed")
         return JSONResponse(status_code=401, content={"detail": "Invalid or expired token"})
-
+    
+    logger.warning(f"[AUTH] No auth provided for {method} {path}")
     return JSONResponse(status_code=401, content={"detail": "Authentication required"})
 # ── End authentication middleware ────────────────────────────────────────
 
