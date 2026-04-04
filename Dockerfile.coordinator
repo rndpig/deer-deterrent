@@ -101,7 +101,17 @@ CONFIG = {
     "SNAPSHOT_FREQUENCY": 60,  # Ring capture frequency in seconds, synced from backend settings
     "RING_LOCATION_ID": os.getenv("RING_LOCATION_ID", ""),  # Needed for MQTT topics
     "CAMERA_ZONES": {},  # Camera ID → Rainbird zone number, synced from backend settings
+    "INTERNAL_API_KEY": os.getenv("INTERNAL_API_KEY", ""),  # API key for service-to-service auth
 }
+
+
+def get_api_headers() -> Dict[str, str]:
+    """Get headers for backend API calls (includes API key if configured)."""
+    headers = {"Content-Type": "application/json"}
+    if CONFIG["INTERNAL_API_KEY"]:
+        headers["X-API-Key"] = CONFIG["INTERNAL_API_KEY"]
+    return headers
+
 
 # State tracking
 last_activation_time: Optional[datetime] = None
@@ -464,6 +474,7 @@ def log_ring_event(camera_id: str, event_type: str, snapshot_available: bool = F
                 "snapshot_path": snapshot_path,
                 "recording_url": recording_url
             },
+            headers=get_api_headers(),
             timeout=5.0
         )
         if response.status_code == 200:
@@ -480,7 +491,8 @@ async def log_to_backend(event_data: Dict[str, Any]):
         async with httpx.AsyncClient(timeout=5.0) as client:
             await client.post(
                 f"{CONFIG['BACKEND_API_URL']}/api/detections",
-                json=event_data
+                json=event_data,
+                headers=get_api_headers()
             )
             logger.info("Logged event to backend")
     except Exception as e:
@@ -644,7 +656,8 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     await client.patch(
                         f"{CONFIG['BACKEND_API_URL']}/api/ring-events/{ring_event_id}",
-                        json=update_payload
+                        json=update_payload,
+                        headers=get_api_headers()
                     )
             except Exception as e:
                 logger.error(f"Failed to update Ring event: {e}")
@@ -824,7 +837,8 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
                     async with httpx.AsyncClient(timeout=5.0) as client:
                         await client.patch(
                             f"{CONFIG['BACKEND_API_URL']}/api/ring-events/{ring_event_id}",
-                            json=update_payload
+                            json=update_payload,
+                            headers=get_api_headers()
                         )
                 except Exception as e:
                     logger.error(f"Failed to update ring event #{ring_event_id}: {e}")
@@ -1219,7 +1233,8 @@ async def cleanup_no_deer_snapshots():
                         "event_type": "periodic_snapshot",
                         "deer_detected": False,
                         "older_than": cutoff.isoformat()
-                    }
+                    },
+                    headers=get_api_headers()
                 )
                 
                 if response.status_code == 200:

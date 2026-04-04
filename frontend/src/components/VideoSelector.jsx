@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './VideoSelector.css'
+import { apiFetch, API_URL } from '../api'
 
 function VideoSelector({ onBack, onVideoSelected, onTrainModel }) {
   const [videos, setVideos] = useState([])
@@ -12,12 +13,9 @@ function VideoSelector({ onBack, onVideoSelected, onTrainModel }) {
     loadVideos()
   }, [])
 
-  const loadVideos = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    setLoading(true)
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/videos`)
+  const loadVideos = async () => {    setLoading(true)
+           try {
+         const response = await apiFetch(`/api/videos`)
       if (!response.ok) throw new Error('Failed to load videos')
       
       const data = await response.json()
@@ -29,21 +27,17 @@ function VideoSelector({ onBack, onVideoSelected, onTrainModel }) {
       setLoading(false)
     }
   }
-
-  const handleVideoClick = async (video) => {
-    setSelectedVideo(video)
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    setProcessing(true)
+    const handleVideoClick = async (video) => {
+    setSelectedVideo(video)    setProcessing(true)
 
     console.log('=== VIDEO CLICK ===')
     console.log('Video object:', video)
     console.log('Video ID:', video.id)
     console.log('Video filename:', video.filename)
-
-    try {
+      try {
       // Check if this video already has extracted frames
       console.log(`Checking if video ${video.id} has frames...`)
-      const checkResponse = await fetch(`${apiUrl}/api/videos/${video.id}/has-frames`)
+      const checkResponse = await apiFetch(`/api/videos/${video.id}/has-frames`)
       
       console.log('Check response status:', checkResponse.status)
       
@@ -56,8 +50,7 @@ function VideoSelector({ onBack, onVideoSelected, onTrainModel }) {
         await handleExtractFrames(video)
         return
       }
-      
-      const checkData = await checkResponse.json()
+              const checkData = await checkResponse.json()
       
       console.log('Frame check result:', checkData)
       
@@ -77,16 +70,11 @@ function VideoSelector({ onBack, onVideoSelected, onTrainModel }) {
       setProcessing(false)
     }
   }
-
-  const handleExtractFrames = async (video) => {
+    const handleExtractFrames = async (video) => {
     const videoToExtract = video || selectedVideo
-    if (!videoToExtract) return
-    
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    setProcessing(true)
-
-    try {
-      const response = await fetch(`${apiUrl}/api/videos/${videoToExtract.id}/extract-frames`, {
+    if (!videoToExtract) return    setProcessing(true)
+       try {
+         const response = await apiFetch(`/api/videos/${videoToExtract.id}/extract-frames`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -98,8 +86,7 @@ function VideoSelector({ onBack, onVideoSelected, onTrainModel }) {
         const error = await response.json()
         throw new Error(error.detail || 'Failed to extract frames')
       }
-
-      const result = await response.json()
+        const result = await response.json()
       console.log('Extracted frames:', result)
       
       // Navigate to annotation view
@@ -110,21 +97,18 @@ function VideoSelector({ onBack, onVideoSelected, onTrainModel }) {
       setProcessing(false)
     }
   }
-
-  const formatCameraName = (video) => {
+    const formatCameraName = (video) => {
     if (video.camera_name && video.camera_name !== 'Unknown Camera') {
       return video.camera_name
     }
     return 'Unknown Camera'
   }
-
-  const formatDate = (timestamp) => {
+    const formatDate = (timestamp) => {
     if (!timestamp) return 'Unknown date'
     const date = new Date(timestamp)
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
-
-  if (loading) {
+    if (loading) {
     return (
       <div className="video-selector-container">
         <div className="loading-message">Loading videos...</div>
@@ -174,9 +158,7 @@ function VideoSelector({ onBack, onVideoSelected, onTrainModel }) {
       ) : (
         <div className="selector-content">
           <div className="video-grid">
-            {videos.map(video => {
-              const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-              const thumbnailUrl = `${apiUrl}/api/videos/${video.id}/thumbnail`
+            {videos.map(video => {              const thumbnailUrl = `${API_URL}/api/videos/${video.id}/thumbnail`
               const fullyAnnotated = video.fully_annotated || false
               const hasAnnotations = video.has_annotations || false
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './ArchivedVideos.css'
+import { apiFetch, API_URL } from '../api'
 
 function ArchivedVideos({ onBack, onAnnotate }) {
   const [videos, setVideos] = useState([])
@@ -19,18 +20,14 @@ function ArchivedVideos({ onBack, onAnnotate }) {
     loadArchivedVideos()
   }, [])
 
-  const loadArchivedVideos = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    setLoading(true)
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/videos/archived`)
+  const loadArchivedVideos = async () => {    setLoading(true)
+           try {
+         const response = await apiFetch(`/api/videos/archived`)
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(`HTTP ${response.status}: ${errorText}`)
       }
-      
-      const data = await response.json()
+              const data = await response.json()
       setVideos(Array.isArray(data) ? data : [])
       setLoading(false)
     } catch (error) {
@@ -39,16 +36,12 @@ function ArchivedVideos({ onBack, onAnnotate }) {
       alert(`Failed to load archived videos: ${error.message}`)
     }
   }
-
-  const unarchiveVideo = async (videoId, filename) => {
+    const unarchiveVideo = async (videoId, filename) => {
     if (!confirm(`Restore "${filename}" to main gallery?`)) {
       return
     }
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
     try {
-      const response = await fetch(`${apiUrl}/api/videos/${videoId}/unarchive`, {
+         const response = await apiFetch(`/api/videos/${videoId}/unarchive`, {
         method: 'POST'
       })
       
@@ -63,13 +56,11 @@ function ArchivedVideos({ onBack, onAnnotate }) {
       alert('Failed to restore video')
     }
   }
-
-  const formatDate = (dateStr) => {
+    const formatDate = (dateStr) => {
     const date = new Date(dateStr)
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
   }
-
-  const formatCameraName = (video) => {
+    const formatCameraName = (video) => {
     // Check if camera is a camera ID and map it
     if (video.camera && CAMERA_NAMES[video.camera]) {
       return CAMERA_NAMES[video.camera]
@@ -79,8 +70,7 @@ function ArchivedVideos({ onBack, onAnnotate }) {
     if (video.camera_name) return video.camera_name
     return 'Unknown'
   }
-
-  if (loading) {
+    if (loading) {
     return (
       <div className="archived-videos-container">
         <div className="archived-header">

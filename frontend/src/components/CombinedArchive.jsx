@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './CombinedArchive.css'
+import { apiFetch, API_URL } from '../api'
 
 function CombinedArchive({ onBack, onAnnotate }) {
   const [activeTab, setActiveTab] = useState('snapshots') // 'snapshots' or 'videos'
@@ -32,50 +33,36 @@ function CombinedArchive({ onBack, onAnnotate }) {
     ])
     setLoading(false)
   }
-
-  const loadArchivedSnapshots = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/snapshots/archived`)
+    const loadArchivedSnapshots = async () => {    try {
+         const response = await apiFetch(`/api/snapshots/archived`)
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
-      
-      const data = await response.json()
+              const data = await response.json()
       setSnapshots(data.snapshots || [])
     } catch (error) {
       console.error('Error loading archived snapshots:', error)
       setSnapshots([])
     }
   }
-
-  const loadArchivedVideos = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/videos/archived`)
+    const loadArchivedVideos = async () => {    try {
+         const response = await apiFetch(`/api/videos/archived`)
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
-      
-      const data = await response.json()
+              const data = await response.json()
       setVideos(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error loading archived videos:', error)
       setVideos([])
     }
   }
-
-  const unarchiveSnapshot = async (eventId) => {
+    const unarchiveSnapshot = async (eventId) => {
     if (!confirm('Restore this snapshot to main gallery?')) {
       return
     }
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
     try {
-      const response = await fetch(`${apiUrl}/api/snapshots/${eventId}/unarchive`, {
+         const response = await apiFetch(`/api/snapshots/${eventId}/unarchive`, {
         method: 'POST'
       })
       
@@ -89,16 +76,12 @@ function CombinedArchive({ onBack, onAnnotate }) {
       alert('Failed to restore snapshot')
     }
   }
-
-  const unarchiveVideo = async (videoId, filename) => {
+    const unarchiveVideo = async (videoId, filename) => {
     if (!confirm(`Restore "${filename}" to main gallery?`)) {
       return
     }
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
     try {
-      const response = await fetch(`${apiUrl}/api/videos/${videoId}/unarchive`, {
+         const response = await apiFetch(`/api/videos/${videoId}/unarchive`, {
         method: 'POST'
       })
       
@@ -112,23 +95,20 @@ function CombinedArchive({ onBack, onAnnotate }) {
       alert('Failed to restore video')
     }
   }
-
-  const formatDate = (dateStr) => {
+    const formatDate = (dateStr) => {
     const date = new Date(dateStr)
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
   }
-
-  const formatCameraName = (item) => {
+    const formatCameraName = (item) => {
     const cameraId = item.camera_id || item.camera
     if (cameraId && CAMERA_NAMES[cameraId.toLowerCase()]) {
       return CAMERA_NAMES[cameraId.toLowerCase()]
     }
-    if (item.camera_name) return item.camera_name
+     if (item.camera_name) return item.camera_name
     if (item.camera) return item.camera.charAt(0).toUpperCase() + item.camera.slice(1)
     return 'Unknown'
   }
-
-  if (loading) {
+    if (loading) {
     return (
       <div className="combined-archive-container">
         <div className="archive-header">
@@ -293,7 +273,7 @@ function CombinedArchive({ onBack, onAnnotate }) {
             </div>
             <div className="modal-body">
               <img 
-                src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/snapshots/${selectedSnapshot.event_id}/image`}
+                src={`${API_URL}/api/snapshots/${selectedSnapshot.event_id}/image`}
                 alt="Archived snapshot"
                 className="modal-image"
               />
@@ -315,7 +295,7 @@ function CombinedArchive({ onBack, onAnnotate }) {
                 controls
                 autoPlay
                 className="modal-video"
-                src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/videos/${selectedVideo.id}/stream`}
+                src={`${API_URL}/api/videos/${selectedVideo.id}/stream`}
               >
                 Your browser does not support video playback.
               </video>
@@ -334,7 +314,7 @@ function CombinedArchive({ onBack, onAnnotate }) {
             </div>
             <div className="modal-body">
               <img 
-                src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/snapshots/${selectedSnapshot.event_id}/image`}
+                src={`${API_URL}/api/snapshots/${selectedSnapshot.event_id}/image`}
                 alt="Archived snapshot"
                 className="modal-image"
               />
@@ -356,7 +336,7 @@ function CombinedArchive({ onBack, onAnnotate }) {
                 controls
                 autoPlay
                 className="modal-video"
-                src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}/api/videos/${selectedVideo.id}/stream`}
+                src={`${API_URL}/api/videos/${selectedVideo.id}/stream`}
               >
                 Your browser does not support video playback.
               </video>

@@ -5,6 +5,7 @@ import VideoLibrary from './VideoLibrary'
 import VideoSelector from './VideoSelector'
 import EarlyReview from './EarlyReview'
 import SnapshotViewer from './SnapshotViewer'
+import { apiFetch, API_URL } from '../api'
 
 function Training({ initialVideoId, onViewArchive }) {
   const [viewMode, setViewMode] = useState('snapshots') // 'snapshots', 'library', 'selector', 'review'
@@ -57,14 +58,13 @@ function Training({ initialVideoId, onViewArchive }) {
   // Draw bounding boxes on canvas when detection changes
   useEffect(() => {
     if (!currentDetection || !imageRef.current || !canvasRef.current) return
-    
-    const img = imageRef.current
+              const img = imageRef.current
     const canvas = canvasRef.current
     
     // Wait for image to load
     const drawBoxes = () => {
       try {
-        const ctx = canvas.getContext('2d')
+           const ctx = canvas.getContext('2d')
         if (!ctx) return
         
         canvas.width = img.naturalWidth || img.width
@@ -133,8 +133,7 @@ function Training({ initialVideoId, onViewArchive }) {
         console.error('Error drawing boxes:', error)
       }
     }
-    
-    if (img.complete && img.naturalWidth > 0) {
+          if (img.complete && img.naturalWidth > 0) {
       drawBoxes()
     } else {
       img.onload = drawBoxes
@@ -153,10 +152,8 @@ function Training({ initialVideoId, onViewArchive }) {
     }
   }, [initialVideoId])
 
-  const selectVideoForReview = async (videoId) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    try {
-      const response = await fetch(`${apiUrl}/api/videos/${videoId}`)
+  const selectVideoForReview = async (videoId) => {    try {
+         const response = await apiFetch(`/api/videos/${videoId}`)
       if (response.ok) {
         const video = await response.json()
         setSelectedVideo(video)
@@ -166,26 +163,21 @@ function Training({ initialVideoId, onViewArchive }) {
       console.error('Error loading video:', error)
     }
   }
-
-  const loadDetections = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    setLoading(true)
+    const loadDetections = async () => {    setLoading(true)
     
     // If in review mode, load training frames instead of all detections
     const endpoint = viewMode === 'review' 
-      ? `${apiUrl}/api/training/frames`
-      : `${apiUrl}/api/detections?limit=200`
+      ? `${API_URL}/api/training/frames`
+      : `${API_URL}/api/detections?limit=200`
     
     console.log('Loading detections from:', endpoint)
-    
-    try {
-      const response = await fetch(endpoint)
+          try {
+         const response = await apiFetch(endpoint)
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
-      
-      const data = await response.json()
+              const data = await response.json()
       console.log('Loaded detections:', data.length, 'items')
       
       // Filter based on selection (only for legacy detections endpoint)
@@ -208,12 +200,8 @@ function Training({ initialVideoId, onViewArchive }) {
       setLoading(false)
     }
   }
-
-  const loadTrainingStats = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/training/stats`)
+    const loadTrainingStats = async () => {    try {
+         const response = await apiFetch(`/api/training/stats`)
       if (response.ok) {
         const data = await response.json()
         setTrainingStats(data)
@@ -222,25 +210,19 @@ function Training({ initialVideoId, onViewArchive }) {
       console.error('Error loading training stats:', error)
     }
   }
-
-  const reviewDetection = async (reviewType, correctedCount = null) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    const detection = detections[currentIndex]
+    const reviewDetection = async (reviewType, correctedCount = null) => {    const detection = detections[currentIndex]
     
     if (!detection) return
-
-    try {
-      const payload = {
+          try {
+         const payload = {
         detection_id: detection.id,
         review_type: reviewType,
         reviewer: 'user'
       }
-      
-      if (correctedCount !== null) {
+              if (correctedCount !== null) {
         payload.corrected_deer_count = correctedCount
       }
-
-      const response = await fetch(`${apiUrl}/api/detections/${detection.id}/review`, {
+        const response = await apiFetch(`/api/detections/${detection.id}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -265,18 +247,16 @@ function Training({ initialVideoId, onViewArchive }) {
       alert('❌ Error submitting review')
     }
   }
-
-  const handleKeyPress = (e) => {
+    const handleKeyPress = (e) => {
     // Don't trigger if user is typing in an input field
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
-    
-    if (e.key === 'ArrowRight') nextDetection()
+              if (e.key === 'ArrowRight') nextDetection()
     if (e.key === 'ArrowLeft') previousDetection()
     if (e.key === ' ' || e.key === 'Spacebar') {
       e.preventDefault()
       setShowAnnotationTool(true)
     }
-    if (e.key === 'c' || e.key === 'C') reviewDetection('correct')
+     if (e.key === 'c' || e.key === 'C') reviewDetection('correct')
     if (e.key === 'Delete') deleteCurrentFrame()
   }
 
@@ -290,25 +270,20 @@ function Training({ initialVideoId, onViewArchive }) {
       setCurrentIndex(currentIndex + 1)
     }
   }
-
-  const previousDetection = () => {
+    const previousDetection = () => {
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1)
     }
   }
-
-  const exportAndSync = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    setSyncing(true)
-    
-    try {
+    const exportAndSync = async () => {    setSyncing(true)
+           try {
       // Export
-      const exportResponse = await fetch(`${apiUrl}/api/training/export`)
+      const exportResponse = await apiFetch(`/api/training/export`)
       if (!exportResponse.ok) throw new Error('Export failed')
       const exportData = await exportResponse.json()
       
       // Sync to Drive
-      const syncResponse = await fetch(`${apiUrl}/api/training/sync-to-drive`, {
+      const syncResponse = await apiFetch(`/api/training/sync-to-drive`, {
         method: 'POST'
       })
       if (!syncResponse.ok) throw new Error('Drive sync failed')
@@ -323,8 +298,7 @@ function Training({ initialVideoId, onViewArchive }) {
       setSyncing(false)
     }
   }
-
-  const handleFileSelect = (e) => {
+    const handleFileSelect = (e) => {
     const file = e.target.files[0]
     if (file) {
       const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/avi']
@@ -332,8 +306,7 @@ function Training({ initialVideoId, onViewArchive }) {
         setUploadError('Please select a valid video file (MP4, MOV, or AVI)')
         return
       }
-      
-      if (file.size > 100 * 1024 * 1024) {
+              if (file.size > 100 * 1024 * 1024) {
         setUploadError('File size must be less than 100MB')
         return
       }
@@ -356,8 +329,7 @@ function Training({ initialVideoId, onViewArchive }) {
       videoElement.src = URL.createObjectURL(file)
     }
   }
-
-  const handleVideoUpload = async () => {
+    const handleVideoUpload = async () => {
     if (!selectedFile) return
     
     setUploading(true)
@@ -367,11 +339,8 @@ function Training({ initialVideoId, onViewArchive }) {
     const formData = new FormData()
     formData.append('video', selectedFile)
     formData.append('sample_rate', sampleRate.toString())
-    
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
     try {
-      const response = await fetch(`${apiUrl}/api/videos/upload`, {
+         const response = await apiFetch(`/api/videos/upload`, {
         method: 'POST',
         body: formData
       })
@@ -380,8 +349,7 @@ function Training({ initialVideoId, onViewArchive }) {
         const errorData = await response.json()
         throw new Error(errorData.detail || 'Upload failed')
       }
-      
-      const data = await response.json()
+              const data = await response.json()
       setUploadSuccess(`✅ Video processed! ${data.frames_extracted} frames extracted (every ${sampleRate}${sampleRate === 1 ? 'st' : sampleRate === 2 ? 'nd' : sampleRate === 3 ? 'rd' : 'th'} frame), ${data.detections_found} with detections. Scroll down to review frames below.`)
       setSelectedFile(null)
       setEstimatedFrames(0)
@@ -402,21 +370,17 @@ function Training({ initialVideoId, onViewArchive }) {
       setUploading(false)
     }
   }
-
-  const handleResetUpload = () => {
+    const handleResetUpload = () => {
     setSelectedFile(null)
     setUploadError(null)
     setUploadSuccess(null)
   }
-
-  const handleSaveAnnotations = async (boxes) => {
+    const handleSaveAnnotations = async (boxes) => {
     if (!currentDetection) return
     
     setAnnotating(true)
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/detections/${currentDetection.id}/annotate`, {
+     try {
+         const response = await apiFetch(`/api/detections/${currentDetection.id}/annotate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -445,16 +409,11 @@ function Training({ initialVideoId, onViewArchive }) {
       setAnnotating(false)
     }
   }
-
-  const deleteCurrentFrame = async () => {
+    const deleteCurrentFrame = async () => {
     if (!currentDetection) return
-    
-    if (!confirm('Delete this frame? This cannot be undone.')) return
-    
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/detections/${currentDetection.id}`, {
+              if (!confirm('Delete this frame? This cannot be undone.')) return
+        try {
+         const response = await apiFetch(`/api/detections/${currentDetection.id}`, {
         method: 'DELETE'
       })
       
@@ -477,23 +436,18 @@ function Training({ initialVideoId, onViewArchive }) {
       alert('❌ Error deleting frame')
     }
   }
-
-  const clearAllFrames = async () => {
+    const clearAllFrames = async () => {
     if (detections.length === 0) return
-    
-    const message = filter === 'all' 
+              const message = filter === 'all' 
       ? `Delete all ${detections.length} frames? This cannot be undone.`
       : filter === 'reviewed'
       ? `Delete all ${detections.length} reviewed frames? This cannot be undone.`
       : `Delete all ${detections.length} unreviewed frames? This cannot be undone.`
     
     if (!confirm(message)) return
-    
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    try {
-      const ids = detections.map(d => d.id)
-      const response = await fetch(`${apiUrl}/api/detections/batch-delete`, {
+        try {
+         const ids = detections.map(d => d.id)
+      const response = await apiFetch(`/api/detections/batch-delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ids)
@@ -513,22 +467,18 @@ function Training({ initialVideoId, onViewArchive }) {
       alert('❌ Error deleting frames')
     }
   }
-
-  const handleStartReview = async (videoId = null) => {
+    const handleStartReview = async (videoId = null) => {
     if (videoId) {
-      // Direct annotation: find the video and go straight to review
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-      
-      try {
+      // Direct annotation: find the video and go straight to review      try {
         // First, get the video details
-        const videoResponse = await fetch(`${apiUrl}/api/videos/${videoId}`)
+        const videoResponse = await apiFetch(`/api/videos/${videoId}`)
         if (!videoResponse.ok) {
           throw new Error('Failed to load video')
         }
-        const video = await videoResponse.json()
+         const video = await videoResponse.json()
         
         // Check if frames are already extracted
-        const checkResponse = await fetch(`${apiUrl}/api/videos/${videoId}/has-frames`)
+        const checkResponse = await apiFetch(`/api/videos/${videoId}/has-frames`)
         if (checkResponse.ok) {
           const checkData = await checkResponse.json()
           
@@ -548,7 +498,7 @@ function Training({ initialVideoId, onViewArchive }) {
         const frameInterval = Math.round(fps / framesPerSec)
         
         setLoading(true)
-        const extractResponse = await fetch(`${apiUrl}/api/videos/${videoId}/extract-frames`, {
+        const extractResponse = await apiFetch(`/api/videos/${videoId}/extract-frames`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sampling_rate: frameInterval })
@@ -574,47 +524,37 @@ function Training({ initialVideoId, onViewArchive }) {
       setViewMode('selector')
     }
   }
-
-  const handleVideoSelected = (video) => {
+    const handleVideoSelected = (video) => {
     // Frames have been extracted or will be extracted, go to review view
     setSelectedVideo(video)
     setViewMode('review')
     setFilter('unreviewed')
     loadDetections()
   }
-
-  const handleBackToSelector = () => {
+    const handleBackToSelector = () => {
     setViewMode('selector') // Go back to video selector
     setSelectedVideo(null)
   }
-  
-  const handleBackToLibrary = () => {
+      const handleBackToLibrary = () => {
     setViewMode('library') // Go back to library from review
     setSelectedVideo(null)
   }
-
-  const handleBackFromSelector = () => {
+    const handleBackFromSelector = () => {
     setViewMode('library')
   }
-  
-  const handleViewSnapshots = () => {
+      const handleViewSnapshots = () => {
     setViewMode('snapshots')
   }
-
-  const handleTrainModel = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
-    // Confirm with user
+    const handleTrainModel = async () => {    // Confirm with user
     if (!confirm('🚀 Ready to train the model?\n\nThis will:\n1. Export all annotated frames to COCO format\n2. Sync training data to Google Drive\n3. Prepare for Colab training\n\nContinue?')) {
       return
     }
     
     // Set syncing state to show progress
     setSyncing(true)
-    
-    try {
+           try {
       console.log('Calling training API...')
-      const response = await fetch(`${apiUrl}/api/training/train-model`, {
+      const response = await apiFetch(`/api/training/train-model`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -625,8 +565,7 @@ function Training({ initialVideoId, onViewArchive }) {
         const error = await response.json()
         throw new Error(error.detail || 'Training pipeline failed')
       }
-      
-      const result = await response.json()
+              const result = await response.json()
       
       console.log('Training pipeline result:', result)
       
@@ -711,8 +650,7 @@ function Training({ initialVideoId, onViewArchive }) {
       />
     )
   }
-
-  if (loading) {
+    if (loading) {
     return (
       <div className="training-container">
         <div className="loading">Loading detections...</div>
@@ -944,7 +882,7 @@ function Training({ initialVideoId, onViewArchive }) {
                   <>
                     <img 
                       ref={imageRef}
-                      src={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}${currentDetection.image_path}`}
+                      src={`${API_URL}${currentDetection.image_path}`}
                       alt="Detection"
                       className="frame-image-fullscreen"
                       onError={(e) => {
@@ -977,7 +915,7 @@ function Training({ initialVideoId, onViewArchive }) {
       {/* Annotation Tool Modal */}
       {showAnnotationTool && currentDetection && (
         <AnnotationTool
-          imageSrc={`${import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'}${currentDetection.image_path}`}
+          imageSrc={`${API_URL}${currentDetection.image_path}`}
           existingBoxes={currentDetection.manual_annotations || []}
           onSave={handleSaveAnnotations}
           onCancel={() => setShowAnnotationTool(false)}

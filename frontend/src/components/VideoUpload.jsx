@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import './VideoUpload.css'
+import { apiFetch, API_URL } from '../api'
 
 function VideoUpload() {
   const [selectedFile, setSelectedFile] = useState(null)
@@ -29,8 +30,7 @@ function VideoUpload() {
       setResults(null)
     }
   }
-
-  const handleUpload = async () => {
+    const handleUpload = async () => {
     if (!selectedFile) return
     
     setUploading(true)
@@ -39,11 +39,8 @@ function VideoUpload() {
     
     const formData = new FormData()
     formData.append('video', selectedFile)
-    
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-    
     try {
-      const response = await fetch(`${apiUrl}/api/detect/video`, {
+         const response = await apiFetch(`/api/detect/video`, {
         method: 'POST',
         body: formData
       })
@@ -52,8 +49,7 @@ function VideoUpload() {
         const errorData = await response.json()
         throw new Error(errorData.detail || 'Upload failed')
       }
-      
-      const data = await response.json()
+              const data = await response.json()
       setResults(data)
       setCurrentFrameIndex(0) // Reset to first frame when new results arrive
     } catch (err) {
@@ -63,21 +59,18 @@ function VideoUpload() {
       setUploading(false)
     }
   }
-
-  const handleReset = () => {
+    const handleReset = () => {
     setSelectedFile(null)
     setResults(null)
     setError(null)
     setCurrentFrameIndex(0)
   }
-
-  const handleNextFrame = () => {
+    const handleNextFrame = () => {
     if (results && results.detections && currentFrameIndex < results.detections.length - 1) {
       setCurrentFrameIndex(currentFrameIndex + 1)
     }
   }
-
-  const handlePrevFrame = () => {
+    const handlePrevFrame = () => {
     if (currentFrameIndex > 0) {
       setCurrentFrameIndex(currentFrameIndex - 1)
     }

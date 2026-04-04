@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import './Dashboard.css'
 import BoundingBoxImage from './BoundingBoxImage'
 import AnnotationTool from './AnnotationTool'
+import { apiFetch, API_URL } from '../api'
 
 function Dashboard({ stats, settings }) {
   const [snapshots, setSnapshots] = useState([])
@@ -21,8 +22,6 @@ function Dashboard({ stats, settings }) {
   const [captureDateTime, setCaptureDateTime] = useState('')
   const [showAnnotationTool, setShowAnnotationTool] = useState(false)
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-
   // Camera ID to name mapping
   const CAMERA_NAMES = {
     '587a624d3fae': 'Driveway',
@@ -32,12 +31,10 @@ function Dashboard({ stats, settings }) {
     'c4dbad08f862': 'Side',
     'manual_upload': 'Manual Upload'
   }
-
-  const formatCameraName = (cameraId) => {
+    const formatCameraName = (cameraId) => {
     return CAMERA_NAMES[cameraId] || cameraId
   }
-
-  const formatTimestamp = (timestamp) => {
+    const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp)
     const month = String(date.getMonth() + 1).padStart(2, '0')
     const day = String(date.getDate()).padStart(2, '0')
@@ -64,7 +61,7 @@ function Dashboard({ stats, settings }) {
 
   const loadSnapshots = async () => {
     setLoading(true)
-    try {
+      try {
       // Build server-side filter params
       const displayParams = new URLSearchParams({ limit: '5000' })
       const deerParams = new URLSearchParams({ limit: '50000', with_deer: 'true' })
@@ -76,15 +73,13 @@ function Dashboard({ stats, settings }) {
         displayParams.set('camera_id', cameraFilter)
         deerParams.set('camera_id', cameraFilter)
       }
-
-      if (timeFilter !== 'all') {
+        if (timeFilter !== 'all') {
         const hours = timeFilter === 'last24h' ? '24' : '168'
         displayParams.set('time_hours', hours)
       }
-
-      const [displayRes, deerRes] = await Promise.all([
-        fetch(`${apiUrl}/api/snapshots?${displayParams}`),
-        fetch(`${apiUrl}/api/snapshots?${deerParams}`)
+        const [displayRes, deerRes] = await Promise.all([
+        apiFetch(`/api/snapshots?${displayParams}`),
+        apiFetch(`/api/snapshots?${deerParams}`)
       ])
 
       if (!displayRes.ok) throw new Error(`HTTP ${displayRes.status}: ${displayRes.statusText}`)
@@ -102,30 +97,27 @@ function Dashboard({ stats, settings }) {
       setLoading(false)
     }
   }
-
-  const handleUploadImage = async () => {
+    const handleUploadImage = async () => {
     if (!selectedFile) {
       setUploadResult({ success: false, message: 'Please select an image file' })
       return
     }
-
-    if (!captureDateTime) {
+      if (!captureDateTime) {
       setUploadResult({ success: false, message: 'Please enter the date/time when the photo was captured' })
       return
     }
 
     setUploadingImage(true)
     setUploadResult(null)
-
-    try {
-      const formData = new FormData()
+      try {
+         const formData = new FormData()
       formData.append('image', selectedFile)
       formData.append('threshold', settings?.detection_threshold || 0.75)
       formData.append('save_to_database', 'true')
       formData.append('camera_id', selectedCamera === 'side' ? 'c4dbad08f862' : '587a624d3fae')
       formData.append('captured_at', captureDateTime)
 
-      const response = await fetch(`${apiUrl}/api/test-detection`, {
+      const response = await apiFetch('/api/test-detection', {
         method: 'POST',
         body: formData
       })
@@ -154,10 +146,9 @@ function Dashboard({ stats, settings }) {
       setUploadingImage(false)
     }
   }
-
-  const updateSnapshotFeedback = async (snapshotId, hasDeer) => {
+    const updateSnapshotFeedback = async (snapshotId, hasDeer) => {
     try {
-      const response = await fetch(`${apiUrl}/api/ring-events/${snapshotId}`, {
+         const response = await apiFetch(`/api/ring-events/${snapshotId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deer_detected: hasDeer ? 1 : 0 })
@@ -202,19 +193,16 @@ function Dashboard({ stats, settings }) {
       confidence: b.confidence ?? null  // preserve original, null for manual
     }))
   }
-
-  const handleOpenAnnotation = () => {
+    const handleOpenAnnotation = () => {
     setShowAnnotationTool(true)
   }
-
-  const handleSaveAnnotation = async (normalizedBoxes) => {
+    const handleSaveAnnotation = async (normalizedBoxes) => {
     if (!selectedSnapshot) return
 
     // Ring snapshots are 640x360
     const bboxes = annotationToBboxFormat(normalizedBoxes, 640, 360)
-
-    try {
-      const response = await fetch(`${apiUrl}/api/snapshots/${selectedSnapshot.id}/bboxes`, {
+       try {
+         const response = await apiFetch(`/api/snapshots/${selectedSnapshot.id}/bboxes`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ detection_bboxes: bboxes })
@@ -230,7 +218,7 @@ function Dashboard({ stats, settings }) {
         setAllDeerSnapshots(prev => prev.map(updateSnapshot))
 
         // Also mark as deer in backend (drawing bboxes implies deer present)
-        await fetch(`${apiUrl}/api/ring-events/${selectedSnapshot.id}`, {
+        await apiFetch(`/api/ring-events/${selectedSnapshot.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ deer_detected: 1 })
@@ -273,7 +261,7 @@ function Dashboard({ stats, settings }) {
       sinSum += Math.sin(angle)
       cosSum += Math.cos(angle)
     }
-    let meanAngle = Math.atan2(sinSum / timeFilteredDeer.length, cosSum / timeFilteredDeer.length)
+     let meanAngle = Math.atan2(sinSum / timeFilteredDeer.length, cosSum / timeFilteredDeer.length)
     if (meanAngle < 0) meanAngle += 2 * Math.PI
     const meanHourFrac = (meanAngle / (2 * Math.PI)) * 24
     const avgHours = Math.floor(meanHourFrac)
@@ -425,7 +413,7 @@ function Dashboard({ stats, settings }) {
             >
               <div className="snapshot-thumbnail">
                 <BoundingBoxImage
-                  src={`${apiUrl}/api/snapshots/${snapshot.id}/image`}
+                  src={`${API_URL}/api/snapshots/${snapshot.id}/image`}
                   alt={`Snapshot ${snapshot.id}`}
                   detections={(snapshot.detection_bboxes?.length || 0) > 0 ? snapshot.detection_bboxes : null}
                   className="snapshot-img"
@@ -568,7 +556,7 @@ function Dashboard({ stats, settings }) {
             <div className="modal-content">
               <div className="modal-image-wrapper">
                 <BoundingBoxImage
-                  src={`${apiUrl}/api/snapshots/${selectedSnapshot.id}/image`}
+                  src={`${API_URL}/api/snapshots/${selectedSnapshot.id}/image`}
                   alt="Snapshot"
                   detections={(selectedSnapshot.detection_bboxes?.length || 0) > 0 ? selectedSnapshot.detection_bboxes : null}
                   className="modal-img"
@@ -642,7 +630,7 @@ function Dashboard({ stats, settings }) {
       {/* Annotation Tool Modal */}
       {showAnnotationTool && selectedSnapshot && (
         <AnnotationTool
-          imageSrc={`${apiUrl}/api/snapshots/${selectedSnapshot.id}/image`}
+          imageSrc={`${API_URL}/api/snapshots/${selectedSnapshot.id}/image`}
           existingBoxes={bboxesToAnnotationFormat(
             selectedSnapshot.detection_bboxes,
             640, 360

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './Settings.css'
+import { apiFetch, API_URL } from '../api'
 
 function Settings({ settings, setSettings }) {
   // Default settings that match backend defaults
@@ -42,16 +43,14 @@ function Settings({ settings, setSettings }) {
     '10cea9e4511f': 'Woods',
     'c4dbad08f862': 'Side'
   }
-
-  const formatCameraName = (cameraId) => {
+    const formatCameraName = (cameraId) => {
     return CAMERA_NAMES[cameraId] || cameraId
   }
   // Fetch Rainbird zones on component mount
   useEffect(() => {
     const fetchRainbirdZones = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-        const response = await fetch(`${apiUrl}/api/rainbird/zones`)
+          const response = await apiFetch(`/api/rainbird/zones`)
         const data = await response.json()
         
         if (data.zones && data.zones.length > 0) {
@@ -69,8 +68,7 @@ function Settings({ settings, setSettings }) {
   useEffect(() => {
     const fetchRingCameras = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-        const response = await fetch(`${apiUrl}/api/ring/cameras`)
+          const response = await apiFetch(`/api/ring/cameras`)
         const data = await response.json()
         
         if (data.cameras && data.cameras.length > 0) {
@@ -144,15 +142,13 @@ function Settings({ settings, setSettings }) {
     
     // Auto-save to backend for critical camera settings
     // Only auto-save if we have loaded settings from the API (not just defaults)
-    if (field === 'enabled_cameras' && settings) {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-      const cleanUpdated = {
+    if (field === 'enabled_cameras' && settings) {      const cleanUpdated = {
         ...updated,
         camera_zones: Object.fromEntries(
           Object.entries(updated.camera_zones || {}).filter(([, v]) => v != null)
         )
       }
-      fetch(`${apiUrl}/api/settings`, {
+      apiFetch(`/api/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cleanUpdated)
@@ -178,23 +174,18 @@ function Settings({ settings, setSettings }) {
       })
     }
   }
-
-  const setZoneForCamera = (cameraId, zoneNumber) => {
+    const setZoneForCamera = (cameraId, zoneNumber) => {
     const newZones = { ...cameraZones, [cameraId]: zoneNumber }
     setCameraZones(newZones)
     // Also update localSettings so it gets included in the save payload
     setLocalSettings(prev => ({ ...prev, camera_zones: newZones }))
   }
-
-  const handleSave = async () => {
+    const handleSave = async () => {
     setSaving(true)
     setMessage('')
     
     // Save to backend API first - this is the definitive source of truth
-    try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-      
-      // Filter out null zone values — backend expects Dict[str, int]
+    try {      // Filter out null zone values — backend expects Dict[str, int]
       const cleanSettings = {
         ...localSettings,
         camera_zones: Object.fromEntries(
@@ -202,10 +193,10 @@ function Settings({ settings, setSettings }) {
         )
       }
       
-      console.log('💾 Saving settings to backend (definitive source):', `${apiUrl}/api/settings`)
+      console.log('💾 Saving settings to backend (definitive source):', `${API_URL}/api/settings`)
       console.log('Settings data:', cleanSettings)
       
-      const response = await fetch(`${apiUrl}/api/settings`, {
+      const response = await apiFetch(`/api/settings`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -220,8 +211,7 @@ function Settings({ settings, setSettings }) {
         console.error('Response error:', errorText)
         throw new Error(`Backend returned ${response.status}`)
       }
-      
-      const data = await response.json()
+              const data = await response.json()
       
       // Update parent state to trigger re-render with backend data
       if (setSettings) {
@@ -245,14 +235,11 @@ function Settings({ settings, setSettings }) {
       setTimeout(() => setMessage(''), 5000)
     }
   }
-
-  const testIrrigation = async (zone, duration) => {
+    const testIrrigation = async (zone, duration) => {
     setTestingIrrigation(true)
     setTestMessage('')
-    
-    try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-      const response = await fetch(`${apiUrl}/api/test-irrigation`, {
+          try {
+        const response = await apiFetch(`/api/test-irrigation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -275,13 +262,11 @@ function Settings({ settings, setSettings }) {
       setTimeout(() => setTestMessage(''), 8000)
     }
   }
-
-  const stopIrrigation = async () => {
+    const stopIrrigation = async () => {
     setTestingIrrigation(true)
     setTestMessage('')
-    try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-      const response = await fetch(`${apiUrl}/api/stop-irrigation`, {
+     try {
+        const response = await apiFetch(`/api/stop-irrigation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -299,24 +284,20 @@ function Settings({ settings, setSettings }) {
       setTimeout(() => setTestMessage(''), 8000)
     }
   }
-
-  const loadCoordinatorStats = async () => {
+    const loadCoordinatorStats = async () => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-      const response = await fetch(`${apiUrl}/api/coordinator/stats`)
+        const response = await apiFetch(`/api/coordinator/stats`)
       const data = await response.json()
       setCoordinatorStats(data)
     } catch (err) {
       console.error('Failed to load coordinator stats:', err)
     }
   }
-
-  const viewRecentEvents = async () => {
+    const viewRecentEvents = async () => {
     setLoadingEvents(true)
     setShowEventLog(true)
-    try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://deer-api.rndpig.com'
-      const response = await fetch(`${apiUrl}/api/ring-events?hours=24`)
+      try {
+        const response = await apiFetch(`/api/ring-events?hours=24`)
       const data = await response.json()
       setEvents(data.events || [])
     } catch (error) {
@@ -326,8 +307,7 @@ function Settings({ settings, setSettings }) {
       setLoadingEvents(false)
     }
   }
-
-  const formatTimestamp = (timestamp) => {
+    const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp)
     // Don't adjust timezone for timestamps that are already in local time
     // (Only adjust for Ring camera snapshots which are in EST)
