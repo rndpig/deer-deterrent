@@ -1123,21 +1123,8 @@ async def stop_irrigation():
         raise HTTPException(status_code=503, detail=f"Stop irrigation failed: {str(e)}")
 
 
-@app.get("/api/coordinator/logs")
-async def get_coordinator_logs(lines: int = 100):
-    """Get recent coordinator logs."""
-    import docker
-    try:
-        client = docker.from_env()
-        container = client.containers.get("deer-coordinator")
-        logs = container.logs(tail=lines, timestamps=True).decode('utf-8')
-        return {
-            "logs": logs,
-            "lines": lines
-        }
-    except Exception as e:
-        logger.error(f"Failed to fetch coordinator logs: {e}")
-        raise HTTPException(status_code=503, detail=f"Failed to fetch logs: {str(e)}")
+# Note: /api/coordinator/logs endpoint removed — use `docker compose logs coordinator` instead.
+# The Docker socket mount was a security risk (container escape to root).
 
 
 @app.get("/api/detections", response_model=List[DetectionEvent])
