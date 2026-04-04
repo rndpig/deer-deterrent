@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional
+from contextlib import contextmanager
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,8 @@ def init_database():
     
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row  # Return rows as dictionaries
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 5000")
     cursor = conn.cursor()
     
     # Videos table
@@ -235,72 +238,92 @@ def load_settings() -> Optional[dict]:
 
 
 def get_connection():
-    """Get a database connection with row factory."""
+    """Get a database connection with row factory, WAL mode, and busy timeout.
+    
+    WAL mode allows concurrent readers with one writer.
+    Busy timeout prevents SQLITE_BUSY errors under contention.
+    """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 5000")  # 5 seconds
     return conn
+
+
+@contextmanager
+def db_connection():
+    """Context manager for database connections. Ensures cleanup on error.
+    
+    Usage:
+        with db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(...)
+            conn.commit()
+    """
+    conn = get_connection()
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 # Video operations
 def add_video(filename: str, camera_name: str, duration: float, fps: float, 
               total_frames: int, video_path: str) -> int:
     """Add a new video to the database."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        INSERT INTO videos (filename, upload_date, camera_name, duration_seconds, 
-                          fps, total_frames, video_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (filename, datetime.now().isoformat(), camera_name, duration, fps, total_frames, video_path))
-    
-    video_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    
-    return video_id
+    with db_connection() as conn:
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO videos (filename, upload_date, camera_name, duration_seconds, 
+                              fps, total_frames, video_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (filename, datetime.now().isoformat(), camera_name, duration, fps, total_frames, video_path))
+        
+        video_id = cursor.lastrowid
+        conn.commit()
+        
+        return video_id
 
 def get_all_videos() -> List[Dict]:
     """Get all non-archived videos with frame and detection counts."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT 
-            v.*,
-            COUNT(DISTINCT f.id) as frame_count,
-            COUNT(DISTINCT d.id) as detection_count,
-            COUNT(DISTINCT a.id) as annotation_count
-        FROM videos v
-        LEFT JOIN frames f ON v.id = f.video_id
-        LEFT JOIN detections d ON f.id = d.frame_id
-        LEFT JOIN annotations a ON f.id = a.frame_id
-        WHERE v.archived = 0 OR v.archived IS NULL
-        GROUP BY v.id
-        ORDER BY v.created_at DESC
-    """)
-    
-    videos = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    
-    return videos
+    with db_connection() as conn:
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                v.*,
+                COUNT(DISTINCT f.id) as frame_count,
+                COUNT(DISTINCT d.id) as detection_count,
+                COUNT(DISTINCT a.id) as annotation_count
+            FROM videos v
+            LEFT JOIN frames f ON v.id = f.video_id
+            LEFT JOIN detections d ON f.id = d.frame_id
+            LEFT JOIN annotations a ON f.id = a.frame_id
+            WHERE v.archived = 0 OR v.archived IS NULL
+            GROUP BY v.id
+            ORDER BY v.created_at DESC
+        """)
+        
+        videos = [dict(row) for row in cursor.fetchall()]
+        
+        return videos
 
 def video_has_annotations(video_id: int) -> bool:
     """Check if a video has any manual annotations on its frames."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT COUNT(*) as count
-        FROM annotations a
-        JOIN frames f ON a.frame_id = f.id
-        WHERE f.video_id = ?
-    """, (video_id,))
-    
-    result = cursor.fetchone()
-    conn.close()
-    
-    return result['count'] > 0 if result else False
+    with db_connection() as conn:
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT COUNT(*) as count
+            FROM annotations a
+            JOIN frames f ON a.frame_id = f.id
+            WHERE f.video_id = ?
+        """, (video_id,))
+        
+        result = cursor.fetchone()
+        
+        return result['count'] > 0 if result else False
 
 def video_fully_annotated(video_id: int) -> bool:
     """Check if ALL frames from a video have been annotated or reviewed."""
