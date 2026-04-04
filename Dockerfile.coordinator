@@ -682,6 +682,8 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
     """
     import subprocess
     
+    temp_video = None  # Track temp file for cleanup in finally
+    
     try:
         # Use original motion event time for timestamps, fall back to now
         if motion_time:
@@ -868,11 +870,11 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
         logger.error(f"Error in video frame extraction for camera {camera_id}: {e}", exc_info=True)
     finally:
         # Clean up temp file if it still exists
-        try:
-            temp_video = Path(f"/app/snapshots/video_{now.strftime('%Y%m%d_%H%M%S')}_{camera_id}.mp4")
-            temp_video.unlink(missing_ok=True)
-        except Exception:
-            pass
+        if temp_video is not None:
+            try:
+                temp_video.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 def on_mqtt_connect(client, userdata, flags, rc):
