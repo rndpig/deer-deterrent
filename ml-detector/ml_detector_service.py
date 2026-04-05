@@ -51,6 +51,9 @@ CLAHE_CLIP_LIMIT = 2.0
 CLAHE_TILE_SIZE = (8, 8)
 ENABLE_CLAHE = os.getenv("ENABLE_CLAHE", "true").lower() == "true"
 
+# API key for service-to-service auth
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
+
 # Settings refresh task
 settings_refresh_task = None
 
@@ -59,8 +62,15 @@ async def fetch_settings_from_backend():
     """Fetch confidence threshold from backend API"""
     global CONFIDENCE_THRESHOLD
     try:
+        headers = {}
+        if INTERNAL_API_KEY:
+            headers["X-API-Key"] = INTERNAL_API_KEY
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"{BACKEND_API_URL}/api/settings", timeout=5) as response:
+            async with session.get(
+                f"{BACKEND_API_URL}/api/settings",
+                headers=headers,
+                timeout=5
+            ) as response:
                 if response.status == 200:
                     settings = await response.json()
                     new_threshold = settings.get('confidence_threshold')

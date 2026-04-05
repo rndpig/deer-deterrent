@@ -162,7 +162,11 @@ async def fetch_settings_from_backend():
     """Fetch settings from backend API"""
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{CONFIG['BACKEND_API_URL']}/api/settings", timeout=5.0)
+            response = await client.get(
+                f"{CONFIG['BACKEND_API_URL']}/api/settings",
+                headers=get_api_headers(),
+                timeout=5.0
+            )
             if response.status_code == 200:
                 settings = response.json()
                 # Update confidence threshold if changed
