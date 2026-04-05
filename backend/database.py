@@ -1048,13 +1048,14 @@ def auto_archive_old_snapshots(days: int = 3) -> int:
     cutoff = (datetime.now() - timedelta(days=days)).isoformat()
     
     # Find snapshots to archive that have files on disk
+    # Include deer_detected = 0 OR NULL (not detected = no deer)
     cursor.execute("""
         SELECT id, snapshot_path, timestamp, camera_id
         FROM ring_events 
         WHERE snapshot_path IS NOT NULL 
         AND archived = 0 
         AND timestamp < ?
-        AND deer_detected = 0
+        AND (deer_detected = 0 OR deer_detected IS NULL)
     """, (cutoff,))
     rows = cursor.fetchall()
     
@@ -1100,14 +1101,14 @@ def auto_archive_old_snapshots(days: int = 3) -> int:
     if training_archived > 0:
         logger.info(f"Copied {training_archived} snapshots to training archive before archiving")
     
-    # Mark all as archived in database
+    # Mark all as archived in database (deer_detected = 0 OR NULL means no deer)
     query = """
         UPDATE ring_events 
         SET archived = 1 
         WHERE snapshot_path IS NOT NULL 
         AND archived = 0 
         AND timestamp < ?
-        AND deer_detected = 0
+        AND (deer_detected = 0 OR deer_detected IS NULL)
     """
     cursor.execute(query, (cutoff,))
     count = cursor.rowcount
