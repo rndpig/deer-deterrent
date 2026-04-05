@@ -1,0 +1,1436 @@
+#!/usr/bin/env python3
+"""
+Coordinator Service - Ring Camera → ML Detection → Irrigation Activation
+Handles the complete flow from camera event to deterrent action
+"""
+
+import os
+import logging
+import json
+import base64
+import hashlib
+import itertools
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Optional, Dict, Any
+import asyncio
+import queue
+import threading
+
+from fastapi import FastAPI, Request, BackgroundTasks, HTTPException
+from fastapi.responses import JSONResponse
+import httpx
+import requests
+import paho.mqtt.client as mqtt
+
+# Configure logging
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('/app/logs/coordinator.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Deer Deterrent Coordinator",
+    description="Coordinates Ring cameras, ML detection, and irrigation activation",
+    version="1.0.0"
+)
+
+# Configuration
+CONFIG = {
+    "ML_DETECTOR_URL": os.getenv("ML_DETECTOR_URL", "http://ml-detector:8001"),
+    "BACKEND_API_URL": os.getenv("BACKEND_API_URL", "http://backend:8000"),
+    "MQTT_HOST": os.getenv("MQTT_HOST", "mosquitto"),
+    "MQTT_PORT": int(os.getenv("MQTT_PORT", "1883")),
+    "MQTT_USER": os.getenv("MQTT_USER", ""),
+    "MQTT_PASSWORD": os.getenv("MQTT_PASSWORD", ""),
+    "RAINBIRD_IP": os.getenv("RAINBIRD_IP", ""),
+    "RAINBIRD_PASSWORD": os.getenv("RAINBIRD_PASSWORD", ""),
+    "RAINBIRD_ZONE": os.getenv("RAINBIRD_ZONE", "1"),
+    "RAINBIRD_DURATION_SECONDS": int(os.getenv("RAINBIRD_DURATION_SECONDS", "30")),
+    "CONFIDENCE_THRESHOLD": float(os.getenv("CONFIDENCE_THRESHOLD", "0.30")),
+    "COOLDOWN_SECONDS": int(os.getenv("COOLDOWN_SECONDS", "300")),
+    "ENABLE_IRRIGATION": os.getenv("ENABLE_IRRIGATION", "true").lower() == "true",
+    "ACTIVE_HOURS_ENABLED": True,  # Will be synced from backend settings
+    "ACTIVE_HOURS_START": int(os.getenv("ACTIVE_HOURS_START", "20")),
+    "ACTIVE_HOURS_END": int(os.getenv("ACTIVE_HOURS_END", "6")),
+    "ENABLED_CAMERAS": [c.strip() for c in os.getenv("ENABLED_CAMERAS", "").split(",") if c.strip()],  # Synced from backend settings
+    # Periodic snapshot polling (interval derived from snapshot_frequency setting)
+    "ENABLE_PERIODIC_SNAPSHOTS": os.getenv("ENABLE_PERIODIC_SNAPSHOTS", "false").lower() == "true",
+    "SNAPSHOT_FREQUENCY": 60,  # Ring capture frequency in seconds, synced from backend settings
+    "RING_LOCATION_ID": os.getenv("RING_LOCATION_ID", ""),  # Needed for MQTT topics
+    "CAMERA_ZONES": {},  # Camera ID → Rainbird zone number, synced from backend settings
+    "INTERNAL_API_KEY": os.getenv("INTERNAL_API_KEY", ""),  # API key for service-to-service auth
+}
+
+
+def get_api_headers() -> Dict[str, str]:
+    """Get headers for backend API calls (includes API key if configured)."""
+    headers = {"Content-Type": "application/json"}
+    if CONFIG["INTERNAL_API_KEY"]:
+        headers["X-API-Key"] = CONFIG["INTERNAL_API_KEY"]
+    return headers
+
+
+# State tracking
+last_activation_time: Optional[datetime] = None
+mqtt_client: Optional[mqtt.Client] = None
+event_queue: queue.PriorityQueue = queue.PriorityQueue()  # Priority queue: motion > periodic
+event_counter = itertools.count()  # Monotonic counter for PriorityQueue tiebreaking
+camera_snapshots: Dict[str, bytes] = {}  # Store latest snapshot for each camera
+last_periodic_snapshot_time: Dict[str, datetime] = {}  # Track last periodic snapshot per camera
+last_snapshot_hash: Dict[str, str] = {}  # Track snapshot hashes to prevent duplicate processing
+
+# Video queue: accumulate recording URLs during active hours, process after
+PENDING_VIDEOS_FILE = Path("/app/data/pending_videos.json")
+
+
+def load_pending_videos() -> list:
+    """Load pending video queue from disk (crash-resilient)."""
+    try:
+        if PENDING_VIDEOS_FILE.exists():
+            data = json.loads(PENDING_VIDEOS_FILE.read_text())
+            if isinstance(data, list):
+                return data
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"Failed to load pending videos file: {e}")
+    return []
+
+
+def save_pending_videos(queue_list: list):
+    """Persist pending video queue to disk."""
+    try:
+        PENDING_VIDEOS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        PENDING_VIDEOS_FILE.write_text(json.dumps(queue_list, indent=2))
+    except OSError as e:
+        logger.error(f"Failed to save pending videos file: {e}")
+
+
+def extract_recording_time_from_url(url: str) -> Optional[str]:
+    """Extract the actual recording start time from a Ring download URL's JWT token.
+    
+    Ring download URLs contain a security_token JWT with a 'start' field
+    (epoch milliseconds) indicating when the video was actually recorded.
+    This is more accurate than datetime.now() since Ring may deliver
+    recording URLs hours after the video was captured.
+    """
+    try:
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(url)
+        qs = parse_qs(parsed.query)
+        token = qs.get("security_token", [None])[0]
+        if not token:
+            return None
+        # Decode JWT payload (second segment) without verification
+        payload_b64 = token.split(".")[1]
+        # Add padding
+        payload_b64 += "=" * (-len(payload_b64) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+        start_ms = payload.get("start")
+        if start_ms:
+            recording_time = datetime.fromtimestamp(start_ms / 1000)
+            logger.debug(f"Extracted recording time from URL JWT: {recording_time.isoformat()}")
+            return recording_time.isoformat()
+    except Exception as e:
+        logger.debug(f"Could not extract recording time from URL: {e}")
+    return None
+
+
+def queue_video_for_processing(camera_id: str, recording_url: str, motion_time: str = None):
+    """Append a video URL to the pending queue (persisted to disk)."""
+    pending = load_pending_videos()
+    # Deduplicate by URL
+    if any(v.get("url") == recording_url for v in pending):
+        logger.debug(f"Video URL already queued for camera {camera_id}, skipping")
+        return
+    pending.append({
+        "camera_id": camera_id,
+        "url": recording_url,
+        "queued_at": datetime.now().isoformat(),
+        "motion_time": motion_time or datetime.now().isoformat()
+    })
+    save_pending_videos(pending)
+    logger.info(f"📹 Queued video for deferred processing (camera {camera_id}, queue size: {len(pending)})")
+
+
+async def fetch_settings_from_backend():
+    """Fetch settings from backend API"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{CONFIG['BACKEND_API_URL']}/api/settings", timeout=5.0)
+            if response.status_code == 200:
+                settings = response.json()
+                # Update confidence threshold if changed
+                new_threshold = settings.get('confidence_threshold')
+                if new_threshold is not None:
+                    old_threshold = CONFIG["CONFIDENCE_THRESHOLD"]
+                    CONFIG["CONFIDENCE_THRESHOLD"] = float(new_threshold)
+                    if old_threshold != CONFIG["CONFIDENCE_THRESHOLD"]:
+                        logger.info(f"Updated confidence threshold from {old_threshold} to {CONFIG['CONFIDENCE_THRESHOLD']}")
+                
+                # Update enabled cameras (controls detection AND polling)
+                new_cameras = settings.get('enabled_cameras')
+                if new_cameras is not None:
+                    old_cameras = CONFIG.get("ENABLED_CAMERAS", [])
+                    CONFIG["ENABLED_CAMERAS"] = new_cameras
+                    if old_cameras != CONFIG["ENABLED_CAMERAS"]:
+                        logger.info(f"Updated enabled cameras from {old_cameras} to {CONFIG['ENABLED_CAMERAS']}")
+                
+                # Sync active hours from backend (frontend is source of truth)
+                active_enabled = settings.get('active_hours_enabled')
+                active_start = settings.get('active_hours_start')
+                active_end = settings.get('active_hours_end')
+                
+                if active_enabled is not None:
+                    old_enabled = CONFIG.get("ACTIVE_HOURS_ENABLED", True)
+                    CONFIG["ACTIVE_HOURS_ENABLED"] = bool(active_enabled)
+                    if old_enabled != CONFIG["ACTIVE_HOURS_ENABLED"]:
+                        logger.info(f"Updated active_hours_enabled from {old_enabled} to {CONFIG['ACTIVE_HOURS_ENABLED']}")
+                
+                if active_start is not None:
+                    old_start = CONFIG["ACTIVE_HOURS_START"]
+                    CONFIG["ACTIVE_HOURS_START"] = int(active_start)
+                    if old_start != CONFIG["ACTIVE_HOURS_START"]:
+                        logger.info(f"Updated active_hours_start from {old_start} to {CONFIG['ACTIVE_HOURS_START']}")
+                
+                if active_end is not None:
+                    old_end = CONFIG["ACTIVE_HOURS_END"]
+                    CONFIG["ACTIVE_HOURS_END"] = int(active_end)
+                    if old_end != CONFIG["ACTIVE_HOURS_END"]:
+                        logger.info(f"Updated active_hours_end from {old_end} to {CONFIG['ACTIVE_HOURS_END']}")
+                
+                # Sync snapshot frequency (drives polling interval)
+                new_freq = settings.get('snapshot_frequency')
+                if new_freq is not None:
+                    old_freq = CONFIG.get("SNAPSHOT_FREQUENCY", 60)
+                    CONFIG["SNAPSHOT_FREQUENCY"] = int(new_freq)
+                    if old_freq != CONFIG["SNAPSHOT_FREQUENCY"]:
+                        logger.info(f"Updated snapshot_frequency from {old_freq}s to {CONFIG['SNAPSHOT_FREQUENCY']}s (polling interval: {CONFIG['SNAPSHOT_FREQUENCY'] + 10}s)")
+                
+                # Sync per-camera irrigation zone mapping
+                new_zones = settings.get('camera_zones')
+                if new_zones is not None:
+                    old_zones = CONFIG.get("CAMERA_ZONES", {})
+                    CONFIG["CAMERA_ZONES"] = new_zones
+                    if old_zones != CONFIG["CAMERA_ZONES"]:
+                        logger.info(f"Updated camera_zones: {CONFIG['CAMERA_ZONES']}")
+                
+                # Sync irrigation duration (stored in seconds in backend)
+                new_duration = settings.get('irrigation_duration')
+                if new_duration is not None:
+                    old_duration = CONFIG["RAINBIRD_DURATION_SECONDS"]
+                    CONFIG["RAINBIRD_DURATION_SECONDS"] = int(new_duration)
+                    if old_duration != CONFIG["RAINBIRD_DURATION_SECONDS"]:
+                        logger.info(f"Updated irrigation_duration from {old_duration}s to {CONFIG['RAINBIRD_DURATION_SECONDS']}s")
+                
+                # Sync zone cooldown (stored in seconds in backend)
+                new_cooldown = settings.get('zone_cooldown')
+                if new_cooldown is not None:
+                    old_cooldown = CONFIG["COOLDOWN_SECONDS"]
+                    CONFIG["COOLDOWN_SECONDS"] = int(new_cooldown)
+                    if old_cooldown != CONFIG["COOLDOWN_SECONDS"]:
+                        logger.info(f"Updated cooldown from {old_cooldown}s to {CONFIG['COOLDOWN_SECONDS']}s")
+                
+                # Sync dry_run → ENABLE_IRRIGATION (dry_run=true means irrigation disabled)
+                new_dry_run = settings.get('dry_run')
+                if new_dry_run is not None:
+                    old_enabled = CONFIG["ENABLE_IRRIGATION"]
+                    CONFIG["ENABLE_IRRIGATION"] = not bool(new_dry_run)
+                    if old_enabled != CONFIG["ENABLE_IRRIGATION"]:
+                        logger.info(f"Updated ENABLE_IRRIGATION from {old_enabled} to {CONFIG['ENABLE_IRRIGATION']} (dry_run={new_dry_run})")
+                
+                return True
+    except httpx.TimeoutException:
+        logger.warning("Timeout fetching settings from backend")
+    except Exception as e:
+        logger.warning(f"Could not fetch settings from backend: {e}")
+    return False
+
+
+async def settings_refresh_loop():
+    """Background task to periodically refresh settings from backend"""
+    logger.info("Starting settings refresh loop")
+    # Initial fetch
+    await fetch_settings_from_backend()
+    
+    # Refresh every 30 seconds
+    while True:
+        await asyncio.sleep(30)
+        await fetch_settings_from_backend()
+
+
+def is_active_hours() -> bool:
+    """Check if current time is within active hours (synced from backend/frontend settings)"""
+    # If active hours feature is disabled, always return True
+    if not CONFIG.get("ACTIVE_HOURS_ENABLED", True):
+        return True
+    
+    current_hour = datetime.now().hour
+    start = CONFIG["ACTIVE_HOURS_START"]
+    end = CONFIG["ACTIVE_HOURS_END"]
+    
+    if start <= end:
+        return start <= current_hour < end
+    else:  # Wraps midnight (e.g., 20:00 to 6:00)
+        return current_hour >= start or current_hour < end
+
+
+async def request_high_res_snapshot(camera_id: str) -> Optional[bytes]:
+    """Request a fresh high-resolution snapshot from Ring via ring-mqtt"""
+    try:
+        # Ring-MQTT: set a short snapshot interval to trigger a fresh snapshot
+        if mqtt_client and mqtt_client.is_connected():
+            location_id = CONFIG.get("RING_LOCATION_ID", "")
+            if not location_id:
+                logger.warning("RING_LOCATION_ID not set, cannot request snapshot")
+                return camera_snapshots.get(camera_id)
+            
+            # Clear cached snapshot to detect when a new one arrives
+            old_snapshot = camera_snapshots.pop(camera_id, None)
+            
+            # Use snapshot_interval/command to request fresh snapshot (ring-mqtt topic)
+            refresh_topic = f"ring/{location_id}/camera/{camera_id}/snapshot_interval/command"
+            
+            logger.info(f"Requesting high-res snapshot for camera {camera_id}...")
+            mqtt_client.publish(refresh_topic, "10")
+            
+            # Wait up to 3 seconds for the new snapshot to arrive
+            for i in range(30):  # 30 * 0.1s = 3 seconds
+                await asyncio.sleep(0.1)
+                if camera_id in camera_snapshots:
+                    snapshot_bytes = camera_snapshots[camera_id]
+                    # Check if it's reasonably sized (>50KB suggests high-res)
+                    if len(snapshot_bytes) > 50000:
+                        logger.info(f"✓ Received high-res snapshot: {len(snapshot_bytes)} bytes")
+                        return snapshot_bytes
+            
+            # If we got here, we either got a low-res or no snapshot
+            if camera_id in camera_snapshots:
+                snapshot_bytes = camera_snapshots[camera_id]
+                logger.warning(f"Snapshot may be low-res: {len(snapshot_bytes)} bytes")
+                return snapshot_bytes
+            else:
+                logger.warning(f"No snapshot received after refresh request")
+                return None
+    except Exception as e:
+        logger.error(f"Failed to request high-res snapshot: {e}")
+        return None
+
+
+async def download_snapshot(url: str) -> bytes:
+    """Download image from URL"""
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            logger.info(f"Downloaded snapshot: {len(response.content)} bytes")
+            return response.content
+    except Exception as e:
+        logger.error(f"Failed to download snapshot: {e}")
+        raise
+
+
+async def detect_deer(image_bytes: bytes) -> Dict[str, Any]:
+    """Send image to ML detector"""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            files = {"file": ("snapshot.jpg", image_bytes, "image/jpeg")}
+            response = await client.post(
+                f"{CONFIG['ML_DETECTOR_URL']}/detect",
+                files=files
+            )
+            response.raise_for_status()
+            result = response.json()
+            logger.info(f"ML detection: {result['num_detections']} objects, deer={result['deer_detected']}")
+            return result
+    except Exception as e:
+        logger.error(f"ML detection failed: {e}")
+        raise
+
+
+async def activate_rainbird(zone: str, duration: int) -> bool:
+    """Activate Rainbird irrigation zone via pyrainbird library.
+    
+    Args:
+        zone: Zone number as string (e.g. "1")
+        duration: Duration in seconds
+    """
+    if not CONFIG["RAINBIRD_IP"]:
+        logger.warning("Rainbird IP not configured, skipping activation")
+        return False
+    
+    if not CONFIG["ENABLE_IRRIGATION"]:
+        logger.info("Irrigation activation disabled (dry-run mode)")
+        return False
+    
+    try:
+        import aiohttp
+        from pyrainbird import async_client
+        
+        zone_num = int(zone)
+        # pyrainbird expects duration in minutes, minimum 1
+        duration_minutes = max(1, round(duration / 60))
+        
+        logger.info(f"Activating Rainbird zone {zone_num} for {duration_minutes} min ({duration}s requested)")
+        
+        async with aiohttp.ClientSession() as session:
+            controller = await async_client.create_controller(
+                session,
+                CONFIG["RAINBIRD_IP"],
+                CONFIG["RAINBIRD_PASSWORD"]
+            )
+            await controller.irrigate_zone(zone_num, duration_minutes)
+        
+        logger.info(f"✓ Irrigation zone {zone_num} activated for {duration_minutes} min")
+        return True
+            
+    except Exception as e:
+        logger.error(f"Failed to activate irrigation: {e}")
+        return False
+
+
+async def stop_rainbird() -> bool:
+    """Stop all Rainbird irrigation zones."""
+    if not CONFIG["RAINBIRD_IP"]:
+        logger.warning("Rainbird IP not configured")
+        return False
+    
+    try:
+        import aiohttp
+        from pyrainbird import async_client
+        
+        logger.info("Stopping all irrigation zones")
+        
+        async with aiohttp.ClientSession() as session:
+            controller = await async_client.create_controller(
+                session,
+                CONFIG["RAINBIRD_IP"],
+                CONFIG["RAINBIRD_PASSWORD"]
+            )
+            await controller.stop_irrigation()
+        
+        logger.info("✓ All irrigation zones stopped")
+        return True
+            
+    except Exception as e:
+        logger.error(f"Failed to stop irrigation: {e}")
+        return False
+
+
+def log_ring_event(camera_id: str, event_type: str, snapshot_available: bool = False,
+                   snapshot_size: int = None, snapshot_path: str = None, recording_url: str = None,
+                   timestamp: str = None) -> Optional[int]:
+    """Log Ring event to backend database for diagnostics (synchronous for MQTT thread)"""
+    try:
+        response = requests.post(
+            f"{CONFIG['BACKEND_API_URL']}/api/ring-events",
+            json={
+                "camera_id": camera_id,
+                "event_type": event_type,
+                "timestamp": timestamp or datetime.now().isoformat(),
+                "snapshot_available": snapshot_available,
+                "snapshot_size": snapshot_size,
+                "snapshot_path": snapshot_path,
+                "recording_url": recording_url
+            },
+            headers=get_api_headers(),
+            timeout=5.0
+        )
+        if response.status_code == 200:
+            result = response.json()
+            return result.get("event_id")
+    except Exception as e:
+        logger.error(f"Failed to log Ring event: {e}")
+    return None
+
+
+async def log_to_backend(event_data: Dict[str, Any]):
+    """Log detection event to backend database"""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(
+                f"{CONFIG['BACKEND_API_URL']}/api/detections",
+                json=event_data,
+                headers=get_api_headers()
+            )
+            logger.info("Logged event to backend")
+    except Exception as e:
+        logger.error(f"Failed to log to backend: {e}")
+
+
+async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: bytes = None, snapshot_url: str = None, request_snapshot: bool = False, source: str = "unknown", ring_event_id: int = None):
+    """Process a camera motion event"""
+    global last_activation_time
+    
+    try:
+        logger.info(f"Processing camera event: {camera_id} at {timestamp} (source: {source})")
+        
+        # Check if camera is enabled for detection
+        enabled_cameras = CONFIG.get("ENABLED_CAMERAS", [])
+        if enabled_cameras and camera_id not in enabled_cameras:
+            logger.info(f"Camera {camera_id} not in enabled cameras list {enabled_cameras}, skipping detection")
+            return
+        
+        # Check if within active hours
+        if not is_active_hours():
+            logger.info(f"Outside active hours ({CONFIG['ACTIVE_HOURS_START']}-{CONFIG['ACTIVE_HOURS_END']}), skipping")
+            return
+        
+        # Get image bytes - prioritize high-res snapshot request
+        if request_snapshot:
+            # Request a fresh high-resolution snapshot
+            logger.info(f"Requesting fresh high-resolution snapshot from Ring...")
+            image_bytes = await request_high_res_snapshot(camera_id)
+            
+            if not image_bytes:
+                logger.error(f"Failed to get high-res snapshot for camera {camera_id}")
+                return
+            
+            # Save for debugging
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            snapshot_path = Path(f"/app/snapshots/{ts}_{camera_id}_highres.jpg")
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_path.write_bytes(image_bytes)
+            logger.info(f"Saved high-res snapshot: {snapshot_path} ({len(image_bytes)} bytes)")
+            
+        elif snapshot_bytes:
+            # FAST PATH: Use cached snapshot from MQTT
+            logger.info(f"✓ Using cached snapshot: {len(snapshot_bytes)} bytes")
+            image_bytes = snapshot_bytes
+            
+            # Save for debugging
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            snapshot_path = Path(f"/app/snapshots/{ts}_{camera_id}.jpg")
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_path.write_bytes(image_bytes)
+            
+        elif snapshot_url:
+            # SLOW PATH: Download and extract from video
+            logger.info(f"Downloading from URL: {snapshot_url[:80]}...")
+            media_bytes = await download_snapshot(snapshot_url)
+            
+            # Save media file temporarily
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            temp_path = Path(f"/app/snapshots/{ts}_{camera_id}_temp")
+            temp_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_path.write_bytes(media_bytes)
+            
+            # Extract first frame if it's a video (MP4), otherwise use as-is
+            snapshot_path = Path(f"/app/snapshots/{ts}_{camera_id}.jpg")
+            if snapshot_url.lower().endswith('.mp4'):
+                logger.info(f"Extracting frame from MP4 video...")
+                import subprocess
+                result = subprocess.run([
+                    'ffmpeg', '-i', str(temp_path), 
+                    '-vframes', '1', '-f', 'image2',
+                    '-y', str(snapshot_path)
+                ], capture_output=True, text=True)
+                
+                if result.returncode != 0:
+                    logger.error(f"FFmpeg failed: {result.stderr}")
+                    temp_path.unlink()
+                    return
+                
+                temp_path.unlink()  # Clean up temp file
+                logger.info(f"Extracted frame: {snapshot_path}")
+            else:
+                # Already an image, just rename
+                temp_path.rename(snapshot_path)
+                logger.info(f"Saved snapshot: {snapshot_path}")
+            
+            # Read the image for ML detection
+            image_bytes = snapshot_path.read_bytes()
+        else:
+            logger.error("No snapshot_bytes or snapshot_url provided!")
+            return
+        
+        # Run ML detection
+        detection_result = await detect_deer(image_bytes)
+        
+        # Check if deer detected
+        deer_detected = detection_result.get("deer_detected", False)
+        confidence = 0.0
+        
+        if deer_detected and detection_result.get("detections"):
+            # Get highest confidence deer detection (only actual deer class)
+            deer_detections = [
+                d for d in detection_result["detections"]
+                if d["class"].lower() == 'deer'
+            ]
+            if deer_detections:
+                confidence = max(d["confidence"] for d in deer_detections)
+        
+        logger.info(f"Detection result: deer={deer_detected}, confidence={confidence:.2f}")
+        
+        # Prepare event data
+        event_data = {
+            "timestamp": timestamp,
+            "camera_id": camera_id,
+            "deer_detected": deer_detected,
+            "confidence": confidence,
+            "snapshot_path": str(snapshot_path),
+            "detections": detection_result.get("detections", []),
+            "irrigation_activated": False
+        }
+        
+        # If deer detected, check cooldown and activate irrigation
+        if deer_detected:
+            now = datetime.now()
+            
+            # Check cooldown — effective minimum is irrigation duration so zones don't overlap
+            if last_activation_time:
+                effective_cooldown = max(CONFIG["COOLDOWN_SECONDS"], CONFIG["RAINBIRD_DURATION_SECONDS"])
+                elapsed = (now - last_activation_time).total_seconds()
+                if elapsed < effective_cooldown:
+                    logger.info(f"Cooldown active: {elapsed:.0f}s/{effective_cooldown}s")
+                else:
+                    last_activation_time = None  # Cooldown expired, allow activation
+            
+            if last_activation_time is None:
+                # Determine zone: per-camera mapping from settings, fallback to env var
+                camera_zone = CONFIG.get("CAMERA_ZONES", {}).get(camera_id)
+                zone = str(camera_zone) if camera_zone else CONFIG["RAINBIRD_ZONE"]
+                # Activate irrigation
+                success = await activate_rainbird(
+                    zone,
+                    CONFIG["RAINBIRD_DURATION_SECONDS"]
+                )
+                
+                if success:
+                    last_activation_time = now
+                    event_data["irrigation_activated"] = True
+                    logger.info("✓✓✓ DEER DETERRENT ACTIVATED ✓✓✓")
+        
+        # Update Ring event with detection result (including bboxes and irrigation status)
+        if ring_event_id:
+            try:
+                update_payload = {
+                    "processed": True,
+                    "deer_detected": deer_detected,
+                    "confidence": confidence,
+                    "detection_bboxes": detection_result.get("detections", []) if deer_detected else [],
+                    "model_version": detection_result.get("model_version", "YOLO26s v3.0"),
+                    "irrigation_activated": event_data["irrigation_activated"]
+                }
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    await client.patch(
+                        f"{CONFIG['BACKEND_API_URL']}/api/ring-events/{ring_event_id}",
+                        json=update_payload,
+                        headers=get_api_headers()
+                    )
+            except Exception as e:
+                logger.error(f"Failed to update Ring event: {e}")
+        
+        # Log to backend
+        await log_to_backend(event_data)
+        
+    except Exception as e:
+        logger.error(f"Error processing camera event: {e}", exc_info=True)
+
+
+async def process_video_frames(camera_id: str, recording_url: str, motion_time: str = None):
+    """Download Ring motion video and extract frames for training data collection.
+    
+    Extracts frames at the configured snapshot_frequency cadence, runs ML detection
+    on each, and logs results as ring_events with event_type='video_frame'.
+    No irrigation is triggered from video frames — this is purely for model improvement.
+    Called from the batch processor after active hours end.
+    
+    Args:
+        motion_time: ISO timestamp of the original motion event (used for frame timestamps).
+    """
+    import subprocess
+    
+    temp_video = None  # Track temp file for cleanup in finally
+    
+    try:
+        # Use original motion event time for timestamps, fall back to now
+        if motion_time:
+            try:
+                event_time = datetime.fromisoformat(motion_time)
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid motion_time '{motion_time}', using current time")
+                event_time = datetime.now()
+        else:
+            event_time = datetime.now()
+        now = datetime.now()
+        
+        logger.info(f"📹 Downloading motion video for camera {camera_id}: {recording_url[:80]}...")
+        
+        # Download the MP4 file
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+            response = await client.get(recording_url)
+            response.raise_for_status()
+            video_bytes = response.content
+        
+        if len(video_bytes) < 1000:
+            logger.warning(f"Video too small ({len(video_bytes)} bytes), likely invalid — skipping")
+            return
+        
+        logger.info(f"Downloaded video: {len(video_bytes)} bytes")
+        
+        # Save video to temp file (use event_time for naming)
+        ts = event_time.strftime("%Y%m%d_%H%M%S")
+        temp_video = Path(f"/app/snapshots/video_{ts}_{camera_id}.mp4")
+        temp_video.parent.mkdir(parents=True, exist_ok=True)
+        temp_video.write_bytes(video_bytes)
+        
+        # Get video duration and fps via ffprobe
+        probe_result = subprocess.run([
+            'ffprobe', '-v', 'quiet', '-print_format', 'json',
+            '-show_format', '-show_streams', str(temp_video)
+        ], capture_output=True, text=True)
+        
+        duration = 0.0
+        fps = 15.0
+        if probe_result.returncode == 0:
+            try:
+                probe_data = json.loads(probe_result.stdout)
+                duration = float(probe_data.get('format', {}).get('duration', 0))
+                for stream in probe_data.get('streams', []):
+                    if stream.get('codec_type') == 'video':
+                        # Parse fps from r_frame_rate (e.g., "15/1")
+                        r_fps = stream.get('r_frame_rate', '15/1')
+                        if '/' in r_fps:
+                            num, den = r_fps.split('/')
+                            fps = float(num) / float(den) if float(den) > 0 else 15.0
+                        else:
+                            fps = float(r_fps)
+                        break
+            except (json.JSONDecodeError, ValueError, KeyError) as e:
+                logger.warning(f"Failed to parse ffprobe output: {e}")
+        
+        if duration <= 0:
+            logger.warning(f"Could not determine video duration, cleaning up")
+            temp_video.unlink(missing_ok=True)
+            return
+        
+        logger.info(f"Video info: duration={duration:.1f}s, fps={fps:.1f}")
+        
+        # Determine frame extraction cadence from snapshot_frequency setting
+        cadence = max(CONFIG.get("SNAPSHOT_FREQUENCY", 60), 10)  # At least every 10s
+        
+        # Calculate frame extraction times (seconds into the video)
+        # Always extract the first frame at t=2s (skip initial black frames)
+        extract_times = [2.0]
+        t = 2.0 + cadence
+        while t < duration - 1:
+            extract_times.append(t)
+            t += cadence
+        
+        # Also extract a frame at the midpoint if cadence is very long relative to video
+        if cadence >= duration and duration > 5:
+            mid = duration / 2
+            if mid not in extract_times:
+                extract_times.append(mid)
+                extract_times.sort()
+        
+        logger.info(f"Extracting {len(extract_times)} frames at cadence={cadence}s from {duration:.1f}s video")
+        
+        frames_processed = 0
+        deer_found = 0
+        
+        for frame_time in extract_times:
+            try:
+                # Extract single frame at specific timestamp using ffmpeg
+                frame_filename = f"video_{ts}_{camera_id}_f{frame_time:.0f}.jpg"
+                frame_path = Path(f"/app/data/snapshots/{frame_filename}")
+                frame_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                extract_result = subprocess.run([
+                    'ffmpeg', '-ss', str(frame_time),
+                    '-i', str(temp_video),
+                    '-vframes', '1', '-q:v', '2',
+                    '-y', str(frame_path)
+                ], capture_output=True, text=True, timeout=15)
+                
+                if extract_result.returncode != 0 or not frame_path.exists():
+                    logger.warning(f"Failed to extract frame at t={frame_time:.1f}s: {extract_result.stderr[:200]}")
+                    continue
+                
+                frame_bytes = frame_path.read_bytes()
+                if len(frame_bytes) < 500:
+                    logger.warning(f"Extracted frame too small ({len(frame_bytes)} bytes) at t={frame_time:.1f}s, skipping")
+                    frame_path.unlink(missing_ok=True)
+                    continue
+                
+                # Compute frame timestamp: original motion time + frame offset into video
+                frame_timestamp = event_time + timedelta(seconds=frame_time)
+                
+                # Log ring event for this frame (use computed timestamp from motion event)
+                snapshot_rel_path = f"data/snapshots/{frame_filename}"
+                ring_event_id = log_ring_event(
+                    camera_id=camera_id,
+                    event_type="video_frame",
+                    snapshot_available=True,
+                    snapshot_size=len(frame_bytes),
+                    snapshot_path=snapshot_rel_path,
+                    recording_url=recording_url,
+                    timestamp=frame_timestamp.isoformat()
+                )
+                
+                if not ring_event_id:
+                    logger.error(f"Failed to log ring event for video frame at t={frame_time:.1f}s")
+                    continue
+                
+                # Run ML detection
+                detection_result = await detect_deer(frame_bytes)
+                
+                deer_detected = detection_result.get("deer_detected", False)
+                confidence = 0.0
+                if deer_detected and detection_result.get("detections"):
+                    deer_detections = [
+                        d for d in detection_result["detections"]
+                        if d["class"].lower() == 'deer'
+                    ]
+                    if deer_detections:
+                        confidence = max(d["confidence"] for d in deer_detections)
+                
+                # Update ring event with detection results (same as periodic snapshots)
+                try:
+                    update_payload = {
+                        "processed": True,
+                        "deer_detected": deer_detected,
+                        "confidence": confidence,
+                        "detection_bboxes": detection_result.get("detections", []) if deer_detected else [],
+                        "model_version": detection_result.get("model_version", "YOLO26s v3.0")
+                    }
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        await client.patch(
+                            f"{CONFIG['BACKEND_API_URL']}/api/ring-events/{ring_event_id}",
+                            json=update_payload,
+                            headers=get_api_headers()
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to update ring event #{ring_event_id}: {e}")
+                
+                frames_processed += 1
+                if deer_detected:
+                    deer_found += 1
+                    logger.info(f"🦌 Deer detected in video frame at t={frame_time:.1f}s (confidence={confidence:.2f})")
+                else:
+                    logger.debug(f"No deer in video frame at t={frame_time:.1f}s")
+                
+            except subprocess.TimeoutExpired:
+                logger.warning(f"ffmpeg timed out extracting frame at t={frame_time:.1f}s")
+            except Exception as e:
+                logger.error(f"Error processing video frame at t={frame_time:.1f}s: {e}")
+        
+        # Clean up temp video file
+        temp_video.unlink(missing_ok=True)
+        
+        logger.info(f"📹 Video frame extraction complete: {frames_processed} frames processed, {deer_found} with deer")
+        
+    except httpx.TimeoutException:
+        logger.error(f"Timeout downloading video for camera {camera_id}")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error downloading video for camera {camera_id}: {e.response.status_code}")
+    except Exception as e:
+        logger.error(f"Error in video frame extraction for camera {camera_id}: {e}", exc_info=True)
+    finally:
+        # Clean up temp file if it still exists
+        if temp_video is not None:
+            try:
+                temp_video.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+
+def on_mqtt_connect(client, userdata, flags, rc):
+    """MQTT connection callback"""
+    logger.info(f"MQTT on_connect callback fired with rc={rc}")
+    if rc == 0:
+        logger.info("✓ MQTT broker connection established in callback")
+        # Subscribe to Ring camera motion events (Ring-MQTT v5.x format)
+        topics = [
+            ("ring/#", 0),  # Subscribe to ALL Ring topics for debugging
+            ("ring/+/camera/+/event_select/attributes", 0),
+            ("ring/+/camera/+/motion", 0),
+            ("ring/+/camera/+/ding", 0),
+        ]
+        result = client.subscribe(topics)
+        logger.info(f"✓ Subscribed to Ring motion topics with result: {result}")
+        logger.info(f"  Topics: {[t[0] for t in topics]}")
+    else:
+        logger.error(f"MQTT connection failed with code {rc}")
+
+
+def on_mqtt_message(client, userdata, msg):
+    """MQTT message callback"""
+    try:
+        topic = msg.topic
+        parts = topic.split('/')
+        
+        # Extract location_id from topic if not yet configured
+        if not CONFIG["RING_LOCATION_ID"] and len(parts) >= 2 and parts[0] == "ring":
+            CONFIG["RING_LOCATION_ID"] = parts[1]
+            logger.info(f"Detected Ring location ID: {CONFIG['RING_LOCATION_ID']}")
+        
+        # Handle binary snapshot images - store them for instant access
+        if len(parts) >= 6 and parts[0] == "ring" and parts[2] == "camera" and parts[4] == "snapshot" and parts[5] == "image":
+            camera_id = parts[3]
+            camera_snapshots[camera_id] = msg.payload
+            logger.debug(f"Cached snapshot for camera {camera_id}: {len(msg.payload)} bytes")
+            return
+        
+        # Try to decode text messages
+        try:
+            payload = msg.payload.decode()
+        except UnicodeDecodeError:
+            # Unknown binary message, skip
+            return
+        
+        # Handle motion/state messages (INSTANT - 1-2 seconds after motion)
+        if len(parts) >= 6 and parts[0] == "ring" and parts[2] == "camera" and parts[4] == "motion" and parts[5] == "state":
+            camera_id = parts[3]
+            
+            if payload.upper() == "ON":
+                logger.info(f"⚡ INSTANT motion detected on camera {camera_id}")
+                
+                # Skip cameras not in enabled list
+                enabled_cameras = CONFIG.get("ENABLED_CAMERAS", [])
+                if enabled_cameras and camera_id not in enabled_cameras:
+                    logger.debug(f"Camera {camera_id} not enabled, skipping motion event")
+                    return
+                
+                # Log Ring event if within active hours (synchronous call)
+                ring_event_id = None
+                snapshot_path = None
+                if is_active_hours():
+                    snapshot_available = camera_id in camera_snapshots
+                    snapshot_size = len(camera_snapshots[camera_id]) if snapshot_available else None
+                    
+                    # Save snapshot to disk for later analysis/testing
+                    if snapshot_available:
+                        try:
+                            from pathlib import Path
+                            snapshot_dir = Path("/app/snapshots")
+                            snapshot_dir.mkdir(parents=True, exist_ok=True)
+                            
+                            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            snapshot_filename = f"event_{timestamp_str}_{camera_id}_snapshot.jpg"
+                            snapshot_path_obj = snapshot_dir / snapshot_filename
+                            snapshot_path_obj.write_bytes(camera_snapshots[camera_id])
+                            snapshot_path = f"snapshots/{snapshot_filename}"
+                            
+                            logger.info(f"✓ Saved snapshot to {snapshot_path}")
+                        except Exception as e:
+                            logger.error(f"Failed to save snapshot: {e}")
+                            snapshot_path = None
+                    
+                    # Call synchronous logging function (runs in MQTT thread)
+                    ring_event_id = log_ring_event(
+                        camera_id=camera_id,
+                        event_type="motion",
+                        snapshot_available=snapshot_available,
+                        snapshot_size=snapshot_size,
+                        snapshot_path=snapshot_path
+                    )
+                    if ring_event_id:
+                        logger.info(f"Logged Ring event #{ring_event_id}")
+                    
+                    # Use instant snapshot for real-time detection (low-res but fast)
+                    if camera_id in camera_snapshots:
+                        # Update snapshot hash so periodic poller skips this same image
+                        motion_hash = hashlib.md5(camera_snapshots[camera_id]).hexdigest()
+                        last_snapshot_hash[camera_id] = motion_hash
+                        logger.info(f"✓ Using instant snapshot for real-time detection")
+                        event_queue.put((0, next(event_counter), {  # Priority 0 = highest (motion events)
+                            "camera_id": camera_id,
+                            "snapshot_bytes": camera_snapshots[camera_id],
+                            "timestamp": datetime.now().isoformat(),
+                            "source": "instant_snapshot",
+                            "ring_event_id": ring_event_id
+                        }))
+                    else:
+                        logger.warning(f"No cached snapshot available for {camera_id}")
+                else:
+                    logger.info(f"Outside active hours ({CONFIG['ACTIVE_HOURS_START']}-{CONFIG['ACTIVE_HOURS_END']}), skipping motion event")
+            return
+        
+        # Handle event_select messages — queue video URLs for deferred processing
+        if "event_select" in topic and len(parts) >= 6 and parts[4] == "event_select":
+            camera_id = parts[3]
+            
+            # Only queue for enabled cameras during active hours
+            enabled_cameras = CONFIG.get("ENABLED_CAMERAS", [])
+            if enabled_cameras and camera_id not in enabled_cameras:
+                logger.debug(f"Camera {camera_id} not enabled, skipping video queuing")
+                return
+            
+            if not is_active_hours():
+                logger.debug(f"Outside active hours, skipping video queuing")
+                return
+            
+            try:
+                payload_json = json.loads(payload)
+                logger.info(f"📹 event_select payload for camera {camera_id}: {json.dumps(payload_json)[:500]}")
+                # Ring-MQTT event_select/attributes payload contains recording URL
+                recording_url = None
+                
+                # Try common ring-mqtt payload structures
+                if isinstance(payload_json, dict):
+                    recording_url = (
+                        payload_json.get("recordingUrl") or
+                        payload_json.get("recording_url") or
+                        payload_json.get("recording", {}).get("url") or
+                        payload_json.get("videoUrl") or
+                        payload_json.get("ding_url") or
+                        payload_json.get("url")
+                    )
+                
+                if recording_url and '.mp4' in recording_url.lower():
+                    recording_time = extract_recording_time_from_url(recording_url)
+                    if recording_time:
+                        logger.info(f"📹 Extracted recording time from URL for camera {camera_id}: {recording_time}")
+                    queue_video_for_processing(camera_id, recording_url, motion_time=recording_time or datetime.now().isoformat())
+                elif recording_url:
+                    logger.info(f"event_select URL is not MP4 for camera {camera_id}: {recording_url[:120]}")
+                else:
+                    logger.info(f"No recording URL found in event_select payload for camera {camera_id}")
+            except (json.JSONDecodeError, TypeError) as e:
+                # Payload might be a direct URL string
+                if payload and '.mp4' in payload.lower() and payload.startswith('http'):
+                    recording_time = extract_recording_time_from_url(payload)
+                    queue_video_for_processing(camera_id, payload, motion_time=recording_time or datetime.now().isoformat())
+                else:
+                    logger.warning(f"Could not parse event_select payload: {e} — raw: {payload[:200]}")
+            return
+        
+    except Exception as e:
+        logger.error(f"Error processing MQTT message: {e}", exc_info=True)
+
+
+def setup_mqtt():
+    """Setup MQTT client"""
+    global mqtt_client
+    
+    try:
+        mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1)
+        mqtt_client.on_connect = on_mqtt_connect
+        mqtt_client.on_message = on_mqtt_message
+        
+        if CONFIG["MQTT_USER"]:
+            mqtt_client.username_pw_set(CONFIG["MQTT_USER"], CONFIG["MQTT_PASSWORD"])
+        
+        logger.info(f"Connecting to MQTT broker at {CONFIG['MQTT_HOST']}:{CONFIG['MQTT_PORT']}")
+        mqtt_client.connect(CONFIG["MQTT_HOST"], CONFIG["MQTT_PORT"], 60)
+        mqtt_client.loop_start()
+        
+        logger.info(f"MQTT client loop started (waiting for on_connect callback...)")
+        
+    except Exception as e:
+        logger.error(f"Failed to setup MQTT: {e}")
+
+
+async def process_event_queue():
+    """Background task to process events from MQTT queue"""
+    logger.info("Event queue processor started")
+    
+    while True:
+        try:
+            # Check queue for events (non-blocking)
+            try:
+                priority, _counter, event = event_queue.get_nowait()  # Get tuple (priority, counter, event)
+                source = event.get("source", "unknown")
+                logger.info(f"Processing queued event for camera {event['camera_id']} (priority={priority}, source={source})")
+                
+                # Process the event with either cached snapshot or URL
+                await process_camera_event(
+                    camera_id=event["camera_id"],
+                    timestamp=event["timestamp"],
+                    snapshot_bytes=event.get("snapshot_bytes"),
+                    snapshot_url=event.get("snapshot_url"),
+                    request_snapshot=event.get("request_snapshot", False),
+                    source=event.get("source", "unknown"),
+                    ring_event_id=event.get("ring_event_id")
+                )
+                
+                event_queue.task_done()
+                
+            except queue.Empty:
+                # No events in queue, sleep briefly
+                await asyncio.sleep(0.1)
+                
+        except Exception as e:
+            logger.error(f"Error in event queue processor: {e}", exc_info=True)
+            await asyncio.sleep(1)
+
+
+async def periodic_snapshot_poller():
+    """Request snapshots from configured cameras at regular intervals"""
+    logger.info("Periodic snapshot poller started")
+    
+    if not CONFIG["ENABLE_PERIODIC_SNAPSHOTS"]:
+        logger.info("Periodic snapshots disabled, poller exiting")
+        return
+    
+    if not CONFIG["RING_LOCATION_ID"]:
+        logger.error("RING_LOCATION_ID not configured, periodic snapshots disabled")
+        return
+    
+    polling_interval = CONFIG["SNAPSHOT_FREQUENCY"] + 10
+    logger.info(f"Periodic snapshots enabled for cameras: {CONFIG['ENABLED_CAMERAS']} (snapshot frequency: {CONFIG['SNAPSHOT_FREQUENCY']}s, polling every {polling_interval}s, active hours: {CONFIG['ACTIVE_HOURS_START']}:00-{CONFIG['ACTIVE_HOURS_END']}:00)")
+    
+    # Subscribe to snapshot response topics for enabled cameras
+    subscribed_cameras = set()
+    for camera_id in CONFIG["ENABLED_CAMERAS"]:
+        topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{camera_id}/snapshot/image"
+        mqtt_client.subscribe(topic)
+        subscribed_cameras.add(camera_id)
+        logger.info(f"Subscribed to periodic snapshots: {topic}")
+    
+    while True:
+        try:
+            # Poll interval = snapshot_frequency + 10s buffer (dynamically updated via settings sync)
+            poll_interval = CONFIG["SNAPSHOT_FREQUENCY"] + 10
+            await asyncio.sleep(poll_interval)
+            
+            if not is_active_hours():
+                logger.debug("Outside active hours, skipping periodic snapshots")
+                continue
+            
+            # Re-subscribe if enabled cameras changed
+            current_enabled = set(CONFIG.get("ENABLED_CAMERAS", []))
+            if current_enabled != subscribed_cameras:
+                # Unsubscribe removed cameras
+                for cam in subscribed_cameras - current_enabled:
+                    topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{cam}/snapshot/image"
+                    mqtt_client.unsubscribe(topic)
+                    logger.info(f"Unsubscribed from removed camera: {topic}")
+                # Subscribe new cameras
+                for cam in current_enabled - subscribed_cameras:
+                    topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{cam}/snapshot/image"
+                    mqtt_client.subscribe(topic)
+                    logger.info(f"Subscribed to new camera: {topic}")
+                subscribed_cameras = current_enabled
+                logger.info(f"Updated polling cameras to: {subscribed_cameras}")
+            
+            for camera_id in CONFIG["ENABLED_CAMERAS"]:
+                # Request snapshot refresh via MQTT (ring-mqtt updates its interval)
+                topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{camera_id}/snapshot_interval/command"
+                mqtt_client.publish(topic, "10")
+                
+            # Wait for all cameras to potentially deliver fresh snapshots
+            await asyncio.sleep(8)
+            
+            for camera_id in CONFIG["ENABLED_CAMERAS"]:
+                # Use whatever snapshot is currently cached from the MQTT stream
+                # Ring-mqtt publishes snapshots every ~10s, so camera_snapshots
+                # should always have recent data if MQTT is connected
+                if camera_id not in camera_snapshots:
+                    logger.warning(f"No cached snapshot for camera {camera_id}")
+                    continue
+                
+                snapshot_bytes = camera_snapshots[camera_id]
+                
+                # Check if this is the same snapshot as last time (prevent duplicates)
+                snapshot_hash = hashlib.md5(snapshot_bytes).hexdigest()
+                
+                if camera_id in last_snapshot_hash and last_snapshot_hash[camera_id] == snapshot_hash:
+                    logger.debug(f"Skipping duplicate snapshot for camera {camera_id} (same hash)")
+                    continue
+                
+                # Update hash tracker
+                last_snapshot_hash[camera_id] = snapshot_hash
+                
+                # Log Ring event (synchronous)
+                snapshot_size = len(snapshot_bytes)
+                
+                # Save snapshot to disk
+                timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                snapshot_filename = f"periodic_{timestamp_str}_{camera_id}.jpg"
+                snapshot_path_obj = Path(f"/app/data/snapshots/{snapshot_filename}")
+                snapshot_path_obj.parent.mkdir(parents=True, exist_ok=True)
+                snapshot_path_obj.write_bytes(snapshot_bytes)
+                snapshot_path = f"data/snapshots/{snapshot_filename}"
+                
+                logger.info(f"✓ Saved periodic snapshot to {snapshot_path} ({snapshot_size} bytes)")
+                
+                ring_event_id = log_ring_event(
+                    camera_id=camera_id,
+                    event_type="periodic_snapshot",
+                    snapshot_available=True,
+                    snapshot_size=snapshot_size,
+                    snapshot_path=snapshot_path
+                )
+                
+                if ring_event_id:
+                    logger.info(f"Logged periodic snapshot event #{ring_event_id}")
+                
+                # Queue for ML detection (lower priority than motion events)
+                event_queue.put((1, next(event_counter), {  # Priority 1 = lower (periodic snapshots)
+                    "camera_id": camera_id,
+                    "snapshot_bytes": snapshot_bytes,
+                    "timestamp": datetime.now().isoformat(),
+                    "source": "periodic_snapshot",
+                    "ring_event_id": ring_event_id
+                }))
+                
+                last_periodic_snapshot_time[camera_id] = datetime.now()
+        
+        except Exception as e:
+            logger.error(f"Error in periodic snapshot poller: {e}", exc_info=True)
+            await asyncio.sleep(60)
+
+
+async def cleanup_no_deer_snapshots():
+    """Delete snapshots older than 48h with no deer detection"""
+    logger.info("Snapshot cleanup task started")
+    
+    while True:
+        try:
+            # Run every hour
+            await asyncio.sleep(3600)
+            
+            # Calculate cutoff time (48 hours ago)
+            cutoff = datetime.now() - timedelta(hours=48)
+            
+            # Call backend API to delete old no-deer periodic snapshots
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{CONFIG['BACKEND_API_URL']}/api/cleanup-old-snapshots",
+                    json={
+                        "event_type": "periodic_snapshot",
+                        "deer_detected": False,
+                        "older_than": cutoff.isoformat()
+                    },
+                    headers=get_api_headers()
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    deleted_count = result.get("deleted", 0)
+                    if deleted_count > 0:
+                        logger.info(f"Cleaned up {deleted_count} old no-deer periodic snapshots")
+                else:
+                    logger.warning(f"Cleanup request failed: HTTP {response.status_code}")
+        
+        except Exception as e:
+            logger.error(f"Error in snapshot cleanup task: {e}", exc_info=True)
+
+
+async def video_batch_processor():
+    """Process queued videos after active hours end.
+    
+    Monitors for the active→inactive transition and then batch-processes
+    all accumulated video URLs. This avoids CPU contention with real-time
+    snapshot detection during the nightly monitoring window.
+    """
+    logger.info("Video batch processor started")
+    was_active = is_active_hours()
+    
+    while True:
+        try:
+            await asyncio.sleep(60)  # Check every minute
+            
+            currently_active = is_active_hours()
+            
+            if was_active and not currently_active:
+                # Transition: active hours just ended — process the queue
+                pending = load_pending_videos()
+                if pending:
+                    # Filter to only videos from active monitoring hours
+                    start_h = CONFIG.get("ACTIVE_HOURS_START", 20)
+                    end_h = CONFIG.get("ACTIVE_HOURS_END", 6)
+                    valid = []
+                    skipped = 0
+                    for entry in pending:
+                        mt = entry.get("motion_time", entry.get("queued_at", ""))
+                        try:
+                            mt_dt = datetime.fromisoformat(mt)
+                            h = mt_dt.hour
+                            if start_h <= end_h:
+                                in_active = start_h <= h < end_h
+                            else:
+                                in_active = h >= start_h or h < end_h
+                            if in_active:
+                                valid.append(entry)
+                            else:
+                                skipped += 1
+                                logger.info(f"Skipping video from {mt} — outside active hours ({start_h}:00-{end_h}:00)")
+                        except (ValueError, TypeError):
+                            valid.append(entry)  # Can't parse time, process anyway
+                    if skipped:
+                        logger.info(f"🎬 Filtered {skipped}/{len(pending)} videos outside active hours")
+                    logger.info(f"🎬 Active hours ended — processing {len(valid)} queued videos")
+                    processed = 0
+                    for entry in valid:
+                        cam = entry.get("camera_id", "unknown")
+                        url = entry.get("url", "")
+                        mt = entry.get("motion_time")
+                        if url:
+                            await process_video_frames(cam, url, motion_time=mt)
+                            processed += 1
+                    logger.info(f"🎬 Batch video processing complete: {processed}/{len(valid)} videos processed")
+                    # Clear the queue
+                    save_pending_videos([])
+                else:
+                    logger.info("Active hours ended — no videos queued")
+            
+            was_active = currently_active
+            
+        except Exception as e:
+            logger.error(f"Error in video batch processor: {e}", exc_info=True)
+            await asyncio.sleep(60)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize on startup"""
+    logger.info("Starting Deer Deterrent Coordinator")
+    logger.info(f"Configuration: {json.dumps(CONFIG, indent=2)}")
+    setup_mqtt()
+    
+    # Start background task to fetch settings from backend
+    asyncio.create_task(settings_refresh_loop())
+    
+    # Start background task to process MQTT events
+    asyncio.create_task(process_event_queue())
+    
+    # Start periodic snapshot polling if enabled
+    if CONFIG["ENABLE_PERIODIC_SNAPSHOTS"]:
+        asyncio.create_task(periodic_snapshot_poller())
+        asyncio.create_task(cleanup_no_deer_snapshots())
+        logger.info("Started periodic snapshot polling and cleanup tasks")
+    
+    # Start video batch processor (processes queued videos after active hours end)
+    asyncio.create_task(video_batch_processor())
+    pending_count = len(load_pending_videos())
+    if pending_count > 0:
+        logger.info(f"📹 {pending_count} videos pending from previous session")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    if mqtt_client:
+        mqtt_client.loop_stop()
+        mqtt_client.disconnect()
+    logger.info("Coordinator shut down")
+
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "service": "Deer Deterrent Coordinator",
+        "status": "running",
+        "version": "1.0.0"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """Health check"""
+    pending_videos = load_pending_videos()
+    return {
+        "status": "healthy",
+        "mqtt_connected": mqtt_client and mqtt_client.is_connected() if mqtt_client else False,
+        "last_activation": last_activation_time.isoformat() if last_activation_time else None,
+        "active_hours": is_active_hours(),
+        "pending_videos": len(pending_videos),
+        "config": {
+            "rainbird_configured": bool(CONFIG["RAINBIRD_IP"]),
+            "irrigation_enabled": CONFIG["ENABLE_IRRIGATION"],
+            "cooldown_seconds": CONFIG["COOLDOWN_SECONDS"],
+            "confidence_threshold": CONFIG["CONFIDENCE_THRESHOLD"]
+        }
+    }
+
+
+@app.post("/test-irrigation")
+async def test_irrigation(request: Request):
+    """Test irrigation by activating a specific zone."""
+    try:
+        payload = await request.json()
+        zone = payload.get("zone", "1")
+        duration = payload.get("duration", 60)  # seconds
+        
+        if not CONFIG["RAINBIRD_IP"]:
+            return {"status": "error", "message": "Rainbird IP not configured in server .env"}
+        
+        success = await activate_rainbird(str(zone), int(duration))
+        
+        if success:
+            return {"status": "success", "message": f"Zone {zone} activated for {max(1, round(int(duration)/60))} min"}
+        else:
+            return {"status": "error", "message": f"Failed to activate zone {zone}"}
+    except Exception as e:
+        logger.error(f"Test irrigation error: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/stop-irrigation")
+async def stop_irrigation_endpoint():
+    """Stop all irrigation zones."""
+    try:
+        if not CONFIG["RAINBIRD_IP"]:
+            return {"status": "error", "message": "Rainbird IP not configured in server .env"}
+        
+        success = await stop_rainbird()
+        
+        if success:
+            return {"status": "success", "message": "All irrigation zones stopped"}
+        else:
+            return {"status": "error", "message": "Failed to stop irrigation"}
+    except Exception as e:
+        logger.error(f"Stop irrigation error: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/webhook/test")
+async def test_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Test endpoint for manual triggering"""
+    try:
+        payload = await request.json()
+        
+        camera_id = payload.get("camera_id", "test-camera")
+        snapshot_url = payload.get("snapshot_url")
+        timestamp = payload.get("timestamp", datetime.now().isoformat())
+        
+        if not snapshot_url:
+            raise HTTPException(status_code=400, detail="Missing snapshot_url")
+        
+        background_tasks.add_task(process_camera_event, camera_id, timestamp, snapshot_url=snapshot_url)
+        
+        return {"status": "accepted", "message": "Processing test event"}
+        
+    except Exception as e:
+        logger.error(f"Test webhook error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/stats")
+async def get_stats():
+    """Get coordinator statistics"""
+    snapshot_dir = Path("/app/snapshots")
+    snapshot_count = len(list(snapshot_dir.glob("*.jpg"))) if snapshot_dir.exists() else 0
+    
+    cooldown_remaining = 0
+    if last_activation_time:
+        elapsed = (datetime.now() - last_activation_time).total_seconds()
+        cooldown_remaining = max(0, CONFIG["COOLDOWN_SECONDS"] - elapsed)
+    
+    return {
+        "total_snapshots": snapshot_count,
+        "last_activation": last_activation_time.isoformat() if last_activation_time else None,
+        "cooldown_remaining_seconds": int(cooldown_remaining),
+        "active_hours": is_active_hours(),
+        "mqtt_connected": mqtt_client.is_connected() if mqtt_client else False
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=5000,
+        log_level=os.getenv("LOG_LEVEL", "info").lower()
+    )
