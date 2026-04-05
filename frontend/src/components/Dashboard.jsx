@@ -10,7 +10,7 @@ function Dashboard({ stats, settings }) {
   const [loading, setLoading] = useState(true)
   const [timeFilter, setTimeFilter] = useState('last24h') // last24h, last7d, all
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage] = useState(100)
+  const [itemsPerPage] = useState(99) // 99 = 33 rows × 3 cards (no orphans)
   const [feedbackFilter, setFeedbackFilter] = useState('with_deer') // all, with_deer, without_deer
   const [cameraFilter, setCameraFilter] = useState('all') // all, or specific camera ID
   const [selectedSnapshot, setSelectedSnapshot] = useState(null)
