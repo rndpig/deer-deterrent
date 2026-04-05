@@ -175,15 +175,24 @@ async def auth_middleware(request: Request, call_next):
             if path.startswith(prefix):
                 return await call_next(request)
 
-    # GET /api/settings requires API key (coordinator + ml-detector poll this)
-    # Frontend should use PUT with Firebase auth to modify settings
+    # GET /api/settings - accept both API key (services) and Firebase auth (frontend)
     if path == "/api/settings" and method == "GET":
+        # Check API key first (for coordinator/ml-detector)
         api_key = request.headers.get("X-API-Key")
         if api_key and auth_module._verify_api_key(api_key):
             request.state.user_id = "service"
             request.state.auth_type = "api_key"
             return await call_next(request)
-        return JSONResponse(status_code=401, content={"detail": "API key required for settings endpoint"})
+        # Check Firebase token (for frontend)
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            decoded = auth_module._verify_firebase_token(token)
+            if decoded:
+                request.state.user_id = decoded.get("uid", "unknown")
+                request.state.auth_type = "firebase"
+                return await call_next(request)
+        return JSONResponse(status_code=401, content={"detail": "Authentication required for settings endpoint"})
 
     # WebSocket upgrade — handled separately (can't use middleware well for WS)
     if path == "/ws":
