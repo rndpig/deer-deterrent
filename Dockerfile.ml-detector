@@ -43,8 +43,13 @@ COPY src/ /app/src/
 # Create directories
 RUN mkdir -p /app/models /app/logs /app/temp
 
+# Create non-root user for security
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+USER appuser
+
 # Copy the ML detector service code
-COPY ml-detector/ml_detector_service.py /app/ml_detector_service.py
+COPY --chown=appuser:appuser ml-detector/ml_detector_service.py /app/ml_detector_service.py
 
 # Make the script executable
 RUN chmod +x /app/ml_detector_service.py

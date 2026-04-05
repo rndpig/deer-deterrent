@@ -30,10 +30,15 @@ RUN pip install --no-cache-dir \
     aiohttp>=3.9.0
 
 # Create directories
-RUN mkdir -p /app/logs /app/snapshots /app/config
+RUN mkdir -p /app/logs /app/snapshots /app/config /app/data
+
+# Create non-root user for security
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+USER appuser
 
 # Copy the coordinator service code
-COPY coordinator/coordinator_service.py /app/coordinator_service.py
+COPY --chown=appuser:appuser coordinator/coordinator_service.py /app/coordinator_service.py
 
 # Make the script executable
 RUN chmod +x /app/coordinator_service.py

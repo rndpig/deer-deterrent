@@ -175,9 +175,15 @@ async def auth_middleware(request: Request, call_next):
             if path.startswith(prefix):
                 return await call_next(request)
 
-    # GET /api/settings is open (coordinator + ml-detector poll this)
+    # GET /api/settings requires API key (coordinator + ml-detector poll this)
+    # Frontend should use PUT with Firebase auth to modify settings
     if path == "/api/settings" and method == "GET":
-        return await call_next(request)
+        api_key = request.headers.get("X-API-Key")
+        if api_key and auth_module._verify_api_key(api_key):
+            request.state.user_id = "service"
+            request.state.auth_type = "api_key"
+            return await call_next(request)
+        return JSONResponse(status_code=401, content={"detail": "API key required for settings endpoint"})
 
     # WebSocket upgrade — handled separately (can't use middleware well for WS)
     if path == "/ws":
@@ -817,8 +823,8 @@ async def rerun_snapshot_detection(event_id: int, threshold: float = 0.15):
         }
         
     except Exception as e:
-        logger.error(f"Detection error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Detection error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Detection failed")
 
 
 @app.get("/api/snapshots/archived")
@@ -994,8 +1000,8 @@ async def test_detection(
             logger.error(f"Failed to connect to ml-detector service: {e}")
             raise HTTPException(status_code=503, detail="ML detector service unavailable")
         except Exception as e:
-            logger.error(f"ML detection failed: {e}")
-            raise HTTPException(status_code=500, detail=f"Detection failed: {str(e)}")
+            logger.error(f"ML detection failed: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Detection failed")
         
         # Extract detection results from ml-detector response
         deer_detected = ml_result['deer_detected']
@@ -1070,8 +1076,8 @@ async def test_detection(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error testing detection: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error testing detection: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Detection test failed")
 
 
 @app.get("/api/coordinator/stats")
@@ -1489,7 +1495,8 @@ async def run_video_detection(video: UploadFile = File(...)):
         return results
     
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing video: {str(e)}")
+        logger.error(f"Error processing video: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Video processing failed")
     finally:
         await video.close()
 
@@ -1833,7 +1840,8 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
         }
     
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing video: {str(e)}")
+        logger.error(f"Error processing video: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Video processing failed")
     finally:
         await video.close()
 
@@ -2052,9 +2060,21 @@ async def get_detection_image(image_name: str):
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket for real-time updates."""
+    """WebSocket for real-time updates. Requires Firebase token in query param."""
+    # Validate token before accepting connection
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4001, reason="Token required")
+        return
+    
+    decoded = auth_module._verify_firebase_token(token)
+    if not decoded:
+        await websocket.close(code=4001, reason="Invalid or expired token")
+        return
+    
     await websocket.accept()
     active_websockets.append(websocket)
+    logger.info(f"WebSocket connected for user {decoded.get('uid', 'unknown')}")
     
     try:
         # Send initial state
@@ -2072,6 +2092,7 @@ async def websocket_endpoint(websocket: WebSocket):
     
     except WebSocketDisconnect:
         active_websockets.remove(websocket)
+        logger.info(f"WebSocket disconnected for user {decoded.get('uid', 'unknown')}")
 
 
 async def broadcast_message(message: dict):
@@ -2690,8 +2711,8 @@ async def reanalyze_all_videos():
         }
         
     except Exception as e:
-        logger.error(f"Re-analysis failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Re-analysis failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Re-analysis failed")
 
 
 @app.patch("/api/videos/{video_id}")
@@ -2852,8 +2873,8 @@ async def clear_video_training_frames(video_id: int):
             "message": f"Deleted {deleted_count} training frames from video"
         }
     except Exception as e:
-        logger.error(f"Error clearing frames for video {video_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error clearing frames for video {video_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to clear frames")
 
 
 @app.post("/api/videos/{video_id}/extract-frames")
@@ -4616,8 +4637,8 @@ async def trigger_r2_sync(hours: int = 24, limit: int = 100):
         }
         
     except Exception as e:
-        logger.error(f"R2 sync failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"R2 sync failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="R2 sync failed")
 
 
 @app.get("/api/storage/r2-status")
@@ -4668,8 +4689,8 @@ async def clear_r2_bucket():
             "results": results
         }
     except Exception as e:
-        logger.error(f"Failed to clear R2 bucket: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to clear R2 bucket: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to clear R2 bucket")
 
 
 @app.post("/api/storage/r2-sync-training")
@@ -4692,8 +4713,8 @@ async def sync_training_data_to_r2():
             "results": results
         }
     except Exception as e:
-        logger.error(f"Failed to sync training data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to sync training data: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to sync training data")
 
 
 @app.post("/api/stats/synopsis")

@@ -24,38 +24,52 @@ function App() {
   useEffect(() => {
     if (!user) return // Only connect if authenticated
     
-    const wsUrl = API_URL.replace('http', 'ws') + '/ws'
-    
-    const websocket = new WebSocket(wsUrl)
-    
-    websocket.onopen = () => {
-      console.log('WebSocket connected')
-    }
-    
-    websocket.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      console.log('WebSocket message:', data)
-      
-      if (data.type === 'connected') {
-        setStats(data.stats)
-        setSettings(data.settings)
-      } else if (data.type === 'settings_updated') {
-        setSettings(data.settings)
+    // Get Firebase token for WebSocket authentication
+    const connectWebSocket = async () => {
+      try {
+        const token = await user.getIdToken()
+        const wsUrl = API_URL.replace('http', 'ws') + '/ws?token=' + encodeURIComponent(token)
+        
+        const websocket = new WebSocket(wsUrl)
+        
+        websocket.onopen = () => {
+          console.log('WebSocket connected')
+        }
+        
+        websocket.onmessage = (event) => {
+          const data = JSON.parse(event.data)
+          console.log('WebSocket message:', data)
+          
+          if (data.type === 'connected') {
+            setStats(data.stats)
+            setSettings(data.settings)
+          } else if (data.type === 'settings_updated') {
+            setSettings(data.settings)
+          }
+        }
+        
+        websocket.onerror = (error) => {
+          console.error('WebSocket error:', error)
+        }
+        
+        websocket.onclose = () => {
+          console.log('WebSocket disconnected')
+        }
+        
+        setWs(websocket)
+        
+        return websocket
+      } catch (error) {
+        console.error('Failed to get token for WebSocket:', error)
+        return null
       }
     }
     
-    websocket.onerror = (error) => {
-      console.error('WebSocket error:', error)
-    }
-    
-    websocket.onclose = () => {
-      console.log('WebSocket disconnected')
-    }
-    
-    setWs(websocket)
+    let websocket = null
+    connectWebSocket().then(ws => { websocket = ws })
     
     return () => {
-      websocket.close()
+      if (websocket) websocket.close()
     }
   }, [user])
 
