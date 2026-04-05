@@ -1030,8 +1030,11 @@ def unarchive_ring_snapshot(event_id: int) -> bool:
     return success
 
 
-def auto_archive_old_snapshots(days: int = 3) -> int:
-    """Archive snapshots older than specified days. 
+def auto_archive_old_snapshots(cycles: int = 3, active_hours_start: int = 20, active_hours_end: int = 6) -> int:
+    """Archive snapshots older than specified number of nightly capture cycles.
+    
+    A 'cycle' is one complete night of snapshot capture (e.g., 8pm-6am).
+    With cycles=3, we retain the last 3 complete nightly capture sessions.
     
     Before marking as archived, copies 1 per camera per hour to training archive.
     Returns count of archived snapshots.
@@ -1044,8 +1047,30 @@ def auto_archive_old_snapshots(days: int = 3) -> int:
     conn = get_connection()
     cursor = conn.cursor()
     
-    # Calculate cutoff timestamp in local time
-    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+    # Calculate cutoff based on nightly cycles
+    # A cycle starts at active_hours_start (e.g., 8pm) and ends at active_hours_end (e.g., 6am next day)
+    now = datetime.now()
+    
+    # Determine current cycle position
+    if now.hour < active_hours_end:
+        # Early morning (before 6am) - we're in last night's cycle
+        # Current cycle started yesterday at active_hours_start
+        current_cycle_start = now.replace(hour=active_hours_start, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    elif now.hour >= active_hours_start:
+        # Evening (8pm or later) - we're in tonight's cycle
+        current_cycle_start = now.replace(hour=active_hours_start, minute=0, second=0, microsecond=0)
+    else:
+        # Daytime (6am-8pm) - we're between cycles
+        # Last night's cycle started yesterday at active_hours_start
+        current_cycle_start = now.replace(hour=active_hours_start, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    
+    # Go back 'cycles' complete cycles to find the cutoff
+    # The cutoff is the START of the oldest cycle we want to keep
+    cutoff_datetime = current_cycle_start - timedelta(days=cycles)
+    cutoff = cutoff_datetime.isoformat()
+    
+    logger.info(f"Auto-archive: now={now.isoformat()}, current_cycle_start={current_cycle_start.isoformat()}, "
+                f"retaining {cycles} cycles, cutoff={cutoff}")
     
     # Find snapshots to archive that have files on disk
     # Include deer_detected = 0 OR NULL (not detected = no deer)
@@ -1116,7 +1141,7 @@ def auto_archive_old_snapshots(days: int = 3) -> int:
     conn.commit()
     conn.close()
     
-    logger.info(f"Auto-archived {count} snapshots older than {days} days (cutoff: {cutoff})")
+    logger.info(f"Auto-archived {count} snapshots older than {cycles} cycles (cutoff: {cutoff})")
     return count
 
 

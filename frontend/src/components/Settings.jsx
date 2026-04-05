@@ -15,7 +15,7 @@ function Settings({ settings, setSettings }) {
     zone_cooldown: 300,
     dry_run: true,
     default_sampling_rate: 1.0,  // frames per second
-    snapshot_archive_days: 3,  // days before auto-archiving
+    snapshot_retention_cycles: 3,  // nightly cycles (8pm-6am) to retain
     enabled_cameras: ['10cea9e4511f', 'c4dbad08f862'],  // Default: Woods + Side cameras
     camera_zones: {}  // Camera ID → Rainbird zone number
   }
@@ -447,16 +447,17 @@ function Settings({ settings, setSettings }) {
                 </select>
               </div>
               <div className="inline-field">
-                <label htmlFor="archive-days">Auto-archive (d)</label>
+                <label htmlFor="retention-cycles">Retain (nights)</label>
                 <input
-                  id="archive-days"
+                  id="retention-cycles"
                   type="number"
                   min="1"
-                  max="30"
+                  max="14"
                   step="1"
-                  value={localSettings.snapshot_archive_days || 3}
-                  onChange={(e) => handleChange('snapshot_archive_days', parseInt(e.target.value))}
+                  value={localSettings.snapshot_retention_cycles || 3}
+                  onChange={(e) => handleChange('snapshot_retention_cycles', parseInt(e.target.value))}
                   className="value-input"
+                  title="Number of nightly capture cycles (8pm-6am) to retain"
                 />
               </div>
             </div>

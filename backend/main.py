@@ -267,7 +267,7 @@ class SystemSettings(BaseModel):
     irrigation_duration: int = 30
     zone_cooldown: int = 300
     dry_run: bool = True
-    snapshot_archive_days: int = 3
+    snapshot_retention_cycles: int = 3  # Number of nightly capture cycles (8pm-6am) to retain
     snapshot_frequency: int = 60  # Ring camera snapshot capture frequency in seconds (15, 30, 60, 180)
     default_sampling_rate: float = 1.0  # Video frame extraction rate (frames/sec)
     enabled_cameras: List[str] = ["10cea9e4511f", "c4dbad08f862"]  # Default: Woods + Side cameras
@@ -313,6 +313,9 @@ db.init_database()
 _saved = db.load_settings()
 if _saved:
     try:
+        # Migrate old setting name to new name
+        if 'snapshot_archive_days' in _saved and 'snapshot_retention_cycles' not in _saved:
+            _saved['snapshot_retention_cycles'] = _saved.pop('snapshot_archive_days')
         settings = SystemSettings(**_saved)
         print(f"✓ Loaded settings from database")
     except Exception as e:
@@ -337,11 +340,15 @@ async def auto_archive_task():
             # Wait 1 hour before first run, then every hour
             await asyncio.sleep(3600)
             
-            # Archive snapshots older than configured days
-            count = db.auto_archive_old_snapshots(days=settings.snapshot_archive_days)
+            # Archive snapshots outside the retention window (cycles = nightly capture sessions)
+            count = db.auto_archive_old_snapshots(
+                cycles=settings.snapshot_retention_cycles,
+                active_hours_start=settings.active_hours_start,
+                active_hours_end=settings.active_hours_end
+            )
             
             if count > 0:
-                logger.info(f"Auto-archived {count} snapshots older than {settings.snapshot_archive_days} days")
+                logger.info(f"Auto-archived {count} snapshots outside retention window ({settings.snapshot_retention_cycles} cycles)")
         except Exception as e:
             logger.error(f"Error in auto-archive task: {e}")
 
@@ -862,14 +869,23 @@ async def unarchive_snapshot(event_id: int):
 
 
 @app.post("/api/ring-snapshots/auto-archive")
-async def auto_archive_snapshots(days: int = 3):
-    """Auto-archive snapshots older than specified days."""
-    count = db.auto_archive_old_snapshots(days=days)
+async def auto_archive_snapshots(cycles: int = 3):
+    """Auto-archive snapshots outside the retention window.
+    
+    A 'cycle' is one nightly capture session (8pm-6am by default).
+    With cycles=3, we retain the last 3 complete nightly sessions.
+    """
+    count = db.auto_archive_old_snapshots(
+        cycles=cycles,
+        active_hours_start=settings.active_hours_start,
+        active_hours_end=settings.active_hours_end
+    )
     
     return {
         "success": True,
         "archived_count": count,
-        "days_threshold": days
+        "cycles_retained": cycles,
+        "active_hours": f"{settings.active_hours_start}:00-{settings.active_hours_end}:00"
     }
 
 
