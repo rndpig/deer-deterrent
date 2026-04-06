@@ -240,6 +240,9 @@ function Dashboard({ stats, settings }) {
   const displayedDeerSnapshots = snapshots.filter(s => s.deer_detected)
   const deerCount = displayedDeerSnapshots.length
 
+  // Total number of deer (sum of all bboxes across filtered snapshots)
+  const totalDeerCount = displayedDeerSnapshots.reduce((sum, s) => sum + (s.detection_bboxes?.length || 0), 0)
+
   // For other stats, use displayed deer snapshots (time-filtered by server)
   const timeFilteredDeer = displayedDeerSnapshots
 
@@ -291,10 +294,25 @@ function Dashboard({ stats, settings }) {
     <div className="dashboard">
       {/* Compact stats bar */}
       <div className="flex items-center gap-6 px-6 py-3 border-b border-white/10">
-        {/* Primary stat */}
-        <div className="flex items-baseline gap-2">
+        {/* Primary stat: snapshots with deer */}
+        <div className="flex items-center gap-2">
           <span className="text-3xl font-bold text-green-400">{deerCount}</span>
-          <span className="text-xs uppercase tracking-wide text-white/50">deer detected</span>
+          <div className="flex flex-col text-xs uppercase tracking-wide text-white/50 leading-tight">
+            <span>snapshots with</span>
+            <span>deer detected</span>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="w-px h-8 bg-white/15 shrink-0" />
+
+        {/* Total deer count (bbox count) */}
+        <div className="flex items-center gap-2">
+          <span className="text-3xl font-bold text-green-400">{totalDeerCount}</span>
+          <div className="flex flex-col text-xs uppercase tracking-wide text-white/50 leading-tight">
+            <span>number of</span>
+            <span>deer detected</span>
+          </div>
         </div>
 
         {/* Divider */}
