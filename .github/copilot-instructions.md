@@ -1,5 +1,5 @@
 # Deer Deterrent System — Chat Instructions for AI Agents
-# Last Updated: 2026-03-25
+# Last Updated: 2026-04-06
 
 ## Project Overview
 
@@ -345,6 +345,11 @@ The project root contains many one-off Python scripts (check_*.py, fix_*.py, cle
 ---
 
 ## Development Patterns
+
+### Testing Preference
+**IMPORTANT**: The owner does NOT test locally. All frontend changes must be deployed to Firebase for live testing. All backend changes must be deployed to the Dell server. Never suggest running `npm run dev` or local test commands — always deploy to production:
+- **Frontend**: `cd frontend && npm run build && firebase deploy --only hosting`
+- **Backend/Coordinator/ML-detector**: SSH to server, git pull, rebuild containers
 
 ### Making Code Changes
 1. Edit files locally (backend/main.py, Dockerfile.coordinator, Dockerfile.ml-detector)
