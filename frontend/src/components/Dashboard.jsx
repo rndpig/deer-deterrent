@@ -235,15 +235,13 @@ function Dashboard({ stats, settings }) {
   }
 
   // Stats computed from ALL deer snapshots (separate fetch, not limited by display window)
-  // Apply time filter for time-dependent stats, but "This Month" always uses all-time
-  const timeFilteredDeer = (() => {
-    if (timeFilter === 'all') return allDeerSnapshots
-    const hours = timeFilter === 'last24h' ? 24 : 168
-    const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
-    return allDeerSnapshots.filter(s => new Date(s.timestamp) > cutoff)
-  })()
+  // Stats computed from displayed snapshots (server-side filtered)
+  // This ensures the count matches what's actually shown on screen
+  const displayedDeerSnapshots = snapshots.filter(s => s.deer_detected)
+  const deerCount = displayedDeerSnapshots.length
 
-  const deerCount = timeFilteredDeer.length
+  // For other stats, use displayed deer snapshots (time-filtered by server)
+  const timeFilteredDeer = displayedDeerSnapshots
 
   // Detections this month (from all deer data, not affected by time filter)
   const now = new Date()
