@@ -292,34 +292,37 @@ function Dashboard({ stats, settings }) {
 
   return (
     <div className="dashboard">
-      {/* Compact stats bar */}
-      <div className="flex items-center gap-6 px-6 py-3 border-b border-white/10">
-        {/* Primary stat: snapshots with deer */}
-        <div className="flex items-center gap-2">
-          <span className="text-3xl font-bold text-green-400">{deerCount}</span>
-          <div className="flex flex-col text-xs uppercase tracking-wide text-white/50 leading-tight">
-            <span>snapshots with</span>
-            <span>deer detected</span>
+      {/* Compact stats bar - stacked on mobile, horizontal on desktop */}
+      <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 px-4 md:px-6 py-3 border-b border-white/10">
+        {/* Row 1: Primary stats (green numbers) */}
+        <div className="flex items-center gap-4 md:gap-6">
+          {/* Snapshots with deer */}
+          <div className="flex items-center gap-2">
+            <span className="text-3xl font-bold text-green-400">{deerCount}</span>
+            <div className="flex flex-col text-xs uppercase tracking-wide text-white/50 leading-tight">
+              <span>snapshots with</span>
+              <span>deer detected</span>
+            </div>
           </div>
+
+          {/* Divider */}
+          <div className="w-px h-8 bg-white/15 shrink-0" />
+
+          {/* Total deer count (bbox count) */}
+          <div className="flex items-center gap-2">
+            <span className="text-3xl font-bold text-green-400">{totalDeerCount}</span>
+            <div className="flex flex-col text-xs uppercase tracking-wide text-white/50 leading-tight">
+              <span>number of</span>
+              <span>deer detected</span>
+            </div>
+          </div>
+
+          {/* Divider - desktop only */}
+          <div className="hidden md:block w-px h-8 bg-white/15 shrink-0" />
         </div>
 
-        {/* Divider */}
-        <div className="w-px h-8 bg-white/15 shrink-0" />
-
-        {/* Total deer count (bbox count) */}
-        <div className="flex items-center gap-2">
-          <span className="text-3xl font-bold text-green-400">{totalDeerCount}</span>
-          <div className="flex flex-col text-xs uppercase tracking-wide text-white/50 leading-tight">
-            <span>number of</span>
-            <span>deer detected</span>
-          </div>
-        </div>
-
-        {/* Divider */}
-        <div className="w-px h-8 bg-white/15 shrink-0" />
-
-        {/* Secondary stats */}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+        {/* Row 2 (mobile) / continues inline (desktop): This Month + Avg Time */}
+        <div className="flex items-center gap-4 text-sm">
           <div className="flex items-center gap-1.5">
             <span className="text-white/40 text-xs">This Month</span>
             <span className="font-semibold text-green-400">🦌 {thisMonthCount}</span>
@@ -331,6 +334,10 @@ function Dashboard({ stats, settings }) {
               <span className="font-semibold text-white/90">{meanSightingTime}</span>
             </div>
           )}
+        </div>
+
+        {/* Row 3 (mobile) / continues inline (desktop): Avg Conf + Latest */}
+        <div className="flex items-center gap-4 text-sm">
           {avgConfidence && (
             <div className="flex items-center gap-1.5">
               <span className="text-white/40 text-xs">Avg Conf</span>
