@@ -119,27 +119,26 @@ The server has its own `.env` at `/home/rndpig/deer-deterrent/.env` with product
 
 | Zone | Name | Location | Camera Coverage |
 |------|------|----------|-----------------|
-| 1 | Driveway North | East side near street (front yard) | Driveway, Front Door |
-| 2 | Garage North | North side near garage | Side |
-| 5 | Woods North | West/back area, north side | Woods, Side, Back |
-| 6 | Woods South | West/back area, south side | Woods, Back |
-| 10 | Driveway South | East side near street (south) | Driveway |
+| 1 | Driveway North | East side near street (front yard) | Driveway |
+| 2 | Garage North | North side near garage, adjacent to Zone 5 | Side |
+| 5 | Woods North | NW corner of property | Woods, Side |
 
-*Additional zones (3, 4, 7, 8, 9, 11, 12, 13, 14) exist but are not currently mapped to deer detection.*
+*Additional zones (3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14) exist but are not currently mapped to deer detection.*
 
 ### Deer Travel Patterns
 - **Primary corridor**: West → East from wooded area toward house/street
 - **Side cam**: Deer consistently travel left-to-right (West→East) — entering from woods, heading toward street
 - **Entry points**: Woods (western 2/3 of property) serves as deer habitat and travel corridor
 - **Neighbor concern**: Side cam is ~20' from lot 203 — relevant for ultrasonic deterrent considerations
+- **Zone handoff**: Zone 5 (NW) → Zone 2 (Side) → Zone 1 (Driveway) follows deer travel direction
 
 ### Camera-to-Zone Mapping
 Configured via Settings page (`camera_zones` in `/api/settings`):
-- **Side** → Zones 5, 6 (Woods North/South)
-- **Woods** → Zones 5, 6 (Woods North/South)
-- **Driveway** → Zones 1, 10 (Driveway North/South)
-- **Front Door** → Zones 8, 9 (Front Beds, Front Sidewalk)
-- **Back** → Zones 5, 6 (Woods North/South)
+- **Side** → Zone 2 (Garage North)
+- **Woods** → Zone 5 (Woods North)
+- **Driveway** → Zone 1 (Driveway North)
+- **Front Door** → (not currently mapped)
+- **Back** → (not currently mapped)
 
 ---
 
