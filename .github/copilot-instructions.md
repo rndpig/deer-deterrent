@@ -94,6 +94,55 @@ The server has its own `.env` at `/home/rndpig/deer-deterrent/.env` with product
 
 ---
 
+## Property Layout & Irrigation Zones
+
+**Address**: 1409 Briarwood Lane, Mahomet, IL 61853 (Lot 202)
+
+### Property Dimensions
+- **East-West depth**: ~311-313' (varies slightly N to S)
+- **North-South width**: 120' frontage on Briarwood Lane
+- **Total area**: ~0.86 acres
+- **Terrain**: House on east side, large wooded area extending west
+- **Neighbors**: Lot 203 (1503) to the north, Lot 201 to the south
+
+### Camera Positions & Orientations
+
+| Camera | Mount Location | Height | Direction | Coverage |
+|--------|---------------|--------|-----------|----------|
+| Side | Above small garage door, below soffit | ~8' | North | Side yard toward lot 203 (1503), ~20' from property line |
+| Driveway | Under soffit, north side of house | ~10' | East-NE | Driveway toward Briarwood Lane |
+| Front Door | Doorbell mount | ~3' | East-SE | Front entry, partial street view |
+| Back | Gable end of sunroom | ~15' | West-SW | Backyard into wooded area |
+| Woods | Above rollup door on yard barn | ~8' | East | Deep in woods, looking back toward house |
+
+### Irrigation Zones (Rainbird ESP-Me Controller)
+
+| Zone | Name | Location | Camera Coverage |
+|------|------|----------|-----------------|
+| 1 | Driveway North | East side near street (front yard) | Driveway, Front Door |
+| 2 | Garage North | North side near garage | Side |
+| 5 | Woods North | West/back area, north side | Woods, Side, Back |
+| 6 | Woods South | West/back area, south side | Woods, Back |
+| 10 | Driveway South | East side near street (south) | Driveway |
+
+*Additional zones (3, 4, 7, 8, 9, 11, 12, 13, 14) exist but are not currently mapped to deer detection.*
+
+### Deer Travel Patterns
+- **Primary corridor**: West → East from wooded area toward house/street
+- **Side cam**: Deer consistently travel left-to-right (West→East) — entering from woods, heading toward street
+- **Entry points**: Woods (western 2/3 of property) serves as deer habitat and travel corridor
+- **Neighbor concern**: Side cam is ~20' from lot 203 — relevant for ultrasonic deterrent considerations
+
+### Camera-to-Zone Mapping
+Configured via Settings page (`camera_zones` in `/api/settings`):
+- **Side** → Zones 5, 6 (Woods North/South)
+- **Woods** → Zones 5, 6 (Woods North/South)
+- **Driveway** → Zones 1, 10 (Driveway North/South)
+- **Front Door** → Zones 8, 9 (Front Beds, Front Sidewalk)
+- **Back** → Zones 5, 6 (Woods North/South)
+
+---
+
 ## Detection Pipeline Flow
 
 ```
