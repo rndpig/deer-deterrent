@@ -198,10 +198,11 @@ function HeatmapCard() {
           <select
             value={selectedCamera || ''}
             onChange={(e) => setSelectedCamera(e.target.value)}
-            className="bg-white/10 border border-white/20 rounded px-2 py-1 text-sm text-white/90 focus:outline-none focus:border-blue-500"
+            className="bg-[#1e1e1e] border border-white/20 rounded px-2 py-1 text-sm text-white/90 focus:outline-none focus:border-blue-500"
+            style={{ colorScheme: 'dark' }}
           >
             {heatmapData.cameras.map(cam => (
-              <option key={cam.camera_id} value={cam.camera_id}>
+              <option key={cam.camera_id} value={cam.camera_id} className="bg-[#1e1e1e] text-white">
                 {cam.camera_name} ({cam.deer_count} detections)
               </option>
             ))}
@@ -214,14 +215,18 @@ function HeatmapCard() {
         ref={containerRef}
         className="relative w-full aspect-video rounded overflow-hidden bg-black/50"
       >
-        {imageUrl && (
+        {imageUrl ? (
           <img
             src={imageUrl}
             alt={`${cameraData?.camera_name} camera view`}
             className="absolute inset-0 w-full h-full object-cover"
             onLoad={handleImageLoad}
-            crossOrigin="anonymous"
+            onError={() => setImageLoaded(true)} // Still show heatmap even if image fails
           />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-white/30">
+            No reference image available
+          </div>
         )}
         <canvas
           ref={canvasRef}

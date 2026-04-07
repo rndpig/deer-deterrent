@@ -4858,9 +4858,20 @@ async def get_heatmap_data(camera_id: str = None):
             })
             camera_data[cam_id]["deer_count"] += 1
     
+    # Also get most recent snapshot per camera (for reference images)
+    cursor2 = conn.cursor()
+    cursor2.execute("""
+        SELECT camera_id, id
+        FROM ring_events
+        WHERE snapshot_path IS NOT NULL AND snapshot_path != ''
+        GROUP BY camera_id
+        HAVING id = MAX(id)
+    """)
+    latest_snapshots = {row[0]: row[1] for row in cursor2.fetchall()}
+    
     conn.close()
     
-    # Convert to list sorted by camera name
+    # All 5 cameras with their names
     camera_names = {
         '587a624d3fae': 'Driveway',
         '4439c4de7a79': 'Front Door',
@@ -4869,10 +4880,26 @@ async def get_heatmap_data(camera_id: str = None):
         'c4dbad08f862': 'Side',
     }
     
+    # Build result with ALL cameras, even those with no detections
     result = []
-    for cam_id, data in camera_data.items():
-        data["camera_name"] = camera_names.get(cam_id, cam_id)
-        result.append(data)
+    for cam_id, cam_name in camera_names.items():
+        if cam_id in camera_data:
+            data = camera_data[cam_id]
+            data["camera_name"] = cam_name
+            # Use latest snapshot if reference_snapshot_id doesn't have image
+            if cam_id in latest_snapshots and not data.get("reference_snapshot_id"):
+                data["reference_snapshot_id"] = latest_snapshots[cam_id]
+            result.append(data)
+        else:
+            # Camera with no detections - still include it
+            result.append({
+                "camera_id": cam_id,
+                "camera_name": cam_name,
+                "reference_snapshot_id": latest_snapshots.get(cam_id),
+                "points": [],
+                "snapshot_count": 0,
+                "deer_count": 0
+            })
     
     # Sort by deer count descending (most active cameras first)
     result.sort(key=lambda x: x["deer_count"], reverse=True)
