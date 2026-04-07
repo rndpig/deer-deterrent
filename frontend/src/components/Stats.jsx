@@ -4,6 +4,7 @@ import {
   Legend, CartesianGrid, Cell
 } from 'recharts'
 import { apiFetch, API_URL } from '../api'
+import HeatmapCard from './HeatmapCard'
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const YEAR_COLORS = ['#4ade80','#60a5fa','#f59e0b','#f472b6','#a78bfa','#fb923c']
@@ -339,6 +340,9 @@ function Stats() {
               </ResponsiveContainer>
             </div>
           </div>
+
+          {/* ── Detection Heatmap ── */}
+          <HeatmapCard />
 
           {/* ── AI Synopsis ── */}
           <div className="bg-white/5 border border-white/10 rounded-lg p-4">

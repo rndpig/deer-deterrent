@@ -4786,6 +4786,103 @@ async def generate_stats_synopsis(request: Request):
         raise HTTPException(status_code=500, detail=f"Synopsis generation failed: {e}")
 
 
+@app.get("/api/stats/heatmap")
+async def get_heatmap_data(camera_id: str = None):
+    """
+    Get aggregated bbox center points for heatmap visualization.
+    Returns all deer detections with their bbox centers, grouped by camera.
+    """
+    # Get all deer snapshots with bboxes
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    
+    query = """
+        SELECT id, camera_id, detection_bboxes, timestamp
+        FROM ring_events
+        WHERE deer_detected = 1
+          AND detection_bboxes IS NOT NULL
+          AND detection_bboxes != '[]'
+    """
+    params = []
+    if camera_id:
+        query += " AND camera_id = ?"
+        params.append(camera_id)
+    
+    query += " ORDER BY timestamp DESC"
+    
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    
+    # Aggregate bbox centers by camera
+    camera_data = {}
+    for row in rows:
+        event_id, cam_id, bboxes_json, timestamp = row
+        if not cam_id or not bboxes_json:
+            continue
+        
+        try:
+            bboxes = json.loads(bboxes_json)
+        except:
+            continue
+        
+        if cam_id not in camera_data:
+            camera_data[cam_id] = {
+                "camera_id": cam_id,
+                "reference_snapshot_id": event_id,  # Most recent as reference
+                "points": [],
+                "snapshot_count": 0,
+                "deer_count": 0
+            }
+        
+        camera_data[cam_id]["snapshot_count"] += 1
+        
+        # Extract center points from each bbox
+        for bbox_entry in bboxes:
+            bbox = bbox_entry.get("bbox", {})
+            x1 = bbox.get("x1", 0)
+            y1 = bbox.get("y1", 0)
+            x2 = bbox.get("x2", 0)
+            y2 = bbox.get("y2", 0)
+            
+            # Calculate center (images are 640x360)
+            center_x = (x1 + x2) / 2
+            center_y = (y1 + y2) / 2
+            
+            # Normalize to 0-1 range for flexible rendering
+            norm_x = center_x / 640
+            norm_y = center_y / 360
+            
+            camera_data[cam_id]["points"].append({
+                "x": round(norm_x, 4),
+                "y": round(norm_y, 4)
+            })
+            camera_data[cam_id]["deer_count"] += 1
+    
+    conn.close()
+    
+    # Convert to list sorted by camera name
+    camera_names = {
+        '587a624d3fae': 'Driveway',
+        '4439c4de7a79': 'Front Door',
+        'f045dae9383a': 'Back',
+        '10cea9e4511f': 'Woods',
+        'c4dbad08f862': 'Side',
+    }
+    
+    result = []
+    for cam_id, data in camera_data.items():
+        data["camera_name"] = camera_names.get(cam_id, cam_id)
+        result.append(data)
+    
+    # Sort by deer count descending (most active cameras first)
+    result.sort(key=lambda x: x["deer_count"], reverse=True)
+    
+    return {
+        "cameras": result,
+        "total_points": sum(c["deer_count"] for c in result)
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     print("Starting Deer Deterrent API server on http://localhost:8000")
