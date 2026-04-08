@@ -743,7 +743,7 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
             try:
                 # Extract single frame at specific timestamp using ffmpeg
                 frame_filename = f"video_{ts}_{camera_id}_f{frame_time:.0f}.jpg"
-                frame_path = Path(f"/app/data/snapshots/{frame_filename}")
+                frame_path = Path(f"/app/snapshots/{frame_filename}")
                 frame_path.parent.mkdir(parents=True, exist_ok=True)
                 
                 extract_result = subprocess.run([
@@ -767,7 +767,7 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
                 frame_timestamp = event_time + timedelta(seconds=frame_time)
                 
                 # Log ring event for this frame (use computed timestamp from motion event)
-                snapshot_rel_path = f"data/snapshots/{frame_filename}"
+                snapshot_rel_path = f"snapshots/{frame_filename}"
                 ring_event_id = log_ring_event(
                     camera_id=camera_id,
                     event_type="video_frame",
@@ -1149,10 +1149,10 @@ async def periodic_snapshot_poller():
                 # Save snapshot to disk
                 timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
                 snapshot_filename = f"periodic_{timestamp_str}_{camera_id}.jpg"
-                snapshot_path_obj = Path(f"/app/data/snapshots/{snapshot_filename}")
+                snapshot_path_obj = Path(f"/app/snapshots/{snapshot_filename}")
                 snapshot_path_obj.parent.mkdir(parents=True, exist_ok=True)
                 snapshot_path_obj.write_bytes(snapshot_bytes)
-                snapshot_path = f"data/snapshots/{snapshot_filename}"
+                snapshot_path = f"snapshots/{snapshot_filename}"
                 
                 logger.info(f"✓ Saved periodic snapshot to {snapshot_path} ({snapshot_size} bytes)")
                 

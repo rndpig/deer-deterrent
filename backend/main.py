@@ -1037,8 +1037,8 @@ async def test_detection(
         
         # Save to database if requested
         if save_to_database:
-            # Save image to data/snapshots directory (writable location)
-            snapshot_dir = Path("/app/data/snapshots")
+            # Save image to snapshots directory (unified location)
+            snapshot_dir = Path("/app/snapshots")
             snapshot_dir.mkdir(parents=True, exist_ok=True)
             
             # Use provided timestamp or current time
@@ -1076,7 +1076,7 @@ async def test_detection(
                 'timestamp': timestamp.isoformat(),
                 'snapshot_available': 1,
                 'snapshot_size': len(contents),
-                'snapshot_path': f"data/snapshots/{filename}",
+                'snapshot_path': f"snapshots/{filename}",
                 'processed': 1,
                 'deer_detected': 1 if deer_detected else 0,
                 'detection_confidence': max_confidence,

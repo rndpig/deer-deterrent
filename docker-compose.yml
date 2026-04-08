@@ -116,7 +116,7 @@ services:
       - ./backend:/app
       - ./src:/app/src
       - ./dell-deployment/logs/backend:/app/logs
-      - ./dell-deployment/data/snapshots:/app/snapshots:ro
+      - ./dell-deployment/data/snapshots:/app/snapshots
       - ./dell-deployment/models:/app/models
       - ./backend/data:/app/data
       - ./data:/app/project_data
