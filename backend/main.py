@@ -144,6 +144,7 @@ import auth as auth_module
 # Paths that require NO authentication
 OPEN_PATHS = {
     "/", "/health", "/api/health", "/docs", "/openapi.json", "/redoc",
+    "/api/reference-images",  # list cameras with reference images
 }
 # GET-only prefixes open without auth — image/file serving for <img> tags
 OPEN_GET_PREFIXES = [
