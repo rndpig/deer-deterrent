@@ -152,6 +152,7 @@ OPEN_GET_PREFIXES = [
     "/api/frames/",         # .../annotated endpoint
     "/api/images/",
     "/api/videos/",         # .../stream, .../thumbnail endpoints
+    "/api/reference-images/",  # heatmap background images
 ]
 
 @app.middleware("http")
