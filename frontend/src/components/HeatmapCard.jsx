@@ -24,45 +24,49 @@ function drawHeatmap(canvas, points, options = {}) {
   
   if (!points || points.length === 0) return
 
-  // Create offscreen canvas for intensity accumulation (grayscale)
-  const intensityCanvas = document.createElement('canvas')
-  intensityCanvas.width = width
-  intensityCanvas.height = height
-  const intensityCtx = intensityCanvas.getContext('2d')
-  
-  // Use 'lighter' blend mode to accumulate intensity where circles overlap
-  intensityCtx.globalCompositeOperation = 'lighter'
+  // Calculate intensity contribution per point based on total points
+  // Fewer points = higher contribution, more points = lower to prevent saturation
+  const pointCount = points.length
+  const alphaPerPoint = Math.min(0.15, Math.max(0.02, 3 / pointCount))
 
-  // Draw each point as a radial gradient (white/grayscale for intensity)
+  // Create offscreen canvas for intensity accumulation
+  // Use a Float32 array for better precision
+  const intensityMap = new Float32Array(width * height)
+
+  // Accumulate intensity for each point with gaussian falloff
   for (const point of points) {
-    const x = point.x * width
-    const y = point.y * height
+    const cx = point.x * width
+    const cy = point.y * height
 
-    const gradient = intensityCtx.createRadialGradient(x, y, 0, x, y, radius)
-    // Use low alpha so overlapping points accumulate
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.15)')
-    gradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.08)')
-    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+    // Only process pixels within radius
+    const minX = Math.max(0, Math.floor(cx - radius))
+    const maxX = Math.min(width - 1, Math.ceil(cx + radius))
+    const minY = Math.max(0, Math.floor(cy - radius))
+    const maxY = Math.min(height - 1, Math.ceil(cy + radius))
 
-    intensityCtx.fillStyle = gradient
-    intensityCtx.beginPath()
-    intensityCtx.arc(x, y, radius, 0, Math.PI * 2)
-    intensityCtx.fill()
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const dx = x - cx
+        const dy = y - cy
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        
+        if (dist <= radius) {
+          // Gaussian falloff
+          const falloff = Math.exp(-dist * dist / (radius * radius * 0.5))
+          intensityMap[y * width + x] += alphaPerPoint * falloff
+        }
+      }
+    }
   }
-
-  // Get intensity data
-  const imageData = intensityCtx.getImageData(0, 0, width, height)
-  const data = imageData.data
 
   // Find max intensity for normalization
   let maxIntensity = 0
-  for (let i = 0; i < data.length; i += 4) {
-    const intensity = data[i] // Red channel (same as G and B since grayscale)
-    if (intensity > maxIntensity) maxIntensity = intensity
+  for (let i = 0; i < intensityMap.length; i++) {
+    if (intensityMap[i] > maxIntensity) maxIntensity = intensityMap[i]
   }
 
-  // Prevent division by zero and boost low-data heatmaps
-  maxIntensity = Math.max(maxIntensity, 30)
+  // Ensure we have a reasonable range
+  maxIntensity = Math.max(maxIntensity, 0.1)
 
   // Create output canvas with color mapping
   const colorCanvas = document.createElement('canvas')
@@ -72,64 +76,67 @@ function drawHeatmap(canvas, points, options = {}) {
   const colorData = colorCtx.createImageData(width, height)
 
   // Apply color gradient based on intensity
-  // Color scale: transparent -> blue -> cyan -> green -> yellow -> orange -> red
-  for (let i = 0; i < data.length; i += 4) {
-    const rawIntensity = data[i]
-    const intensity = Math.min(rawIntensity / maxIntensity, 1)
+  // Use square root scaling to spread out the values better
+  for (let i = 0; i < intensityMap.length; i++) {
+    const rawIntensity = intensityMap[i]
+    // Apply square root for better distribution of mid-range values
+    const intensity = Math.sqrt(rawIntensity / maxIntensity)
     
-    if (intensity > 0.02) {
+    const pixelIdx = i * 4
+    
+    if (intensity > 0.05) {
       let r, g, b, a
       
-      if (intensity < 0.15) {
-        // Transparent blue (very low)
-        const t = intensity / 0.15
-        r = 100
-        g = 130
-        b = 230
-        a = t * 0.4
-      } else if (intensity < 0.3) {
+      if (intensity < 0.2) {
+        // Light blue (low activity)
+        const t = intensity / 0.2
+        r = Math.round(50 + 50 * (1 - t))
+        g = Math.round(100 + 80 * t)
+        b = 255
+        a = 0.3 + t * 0.15
+      } else if (intensity < 0.35) {
         // Blue to cyan
-        const t = (intensity - 0.15) / 0.15
-        r = Math.round(100 * (1 - t))
-        g = Math.round(130 + 125 * t)
-        b = 230
-        a = 0.4 + t * 0.15
-      } else if (intensity < 0.45) {
+        const t = (intensity - 0.2) / 0.15
+        r = Math.round(50 * (1 - t))
+        g = Math.round(180 + 75 * t)
+        b = 255
+        a = 0.45 + t * 0.1
+      } else if (intensity < 0.5) {
         // Cyan to green
-        const t = (intensity - 0.3) / 0.15
+        const t = (intensity - 0.35) / 0.15
         r = 0
         g = 255
-        b = Math.round(230 * (1 - t))
+        b = Math.round(255 * (1 - t))
         a = 0.55 + t * 0.1
-      } else if (intensity < 0.6) {
+      } else if (intensity < 0.65) {
         // Green to yellow
-        const t = (intensity - 0.45) / 0.15
+        const t = (intensity - 0.5) / 0.15
         r = Math.round(255 * t)
         g = 255
         b = 0
         a = 0.65 + t * 0.1
       } else if (intensity < 0.8) {
         // Yellow to orange
-        const t = (intensity - 0.6) / 0.2
+        const t = (intensity - 0.65) / 0.15
         r = 255
-        g = Math.round(255 - 100 * t)
+        g = Math.round(255 - 80 * t)
         b = 0
         a = 0.75 + t * 0.1
       } else {
         // Orange to red (hottest)
-        const t = (intensity - 0.8) / 0.2
+        const t = Math.min((intensity - 0.8) / 0.2, 1)
         r = 255
-        g = Math.round(155 - 155 * t)
+        g = Math.round(175 - 175 * t)
         b = 0
         a = 0.85 + t * 0.1
       }
 
-      colorData.data[i] = r
-      colorData.data[i + 1] = g
-      colorData.data[i + 2] = b
-      colorData.data[i + 3] = Math.round(a * maxOpacity * 255)
+      colorData.data[pixelIdx] = r
+      colorData.data[pixelIdx + 1] = g
+      colorData.data[pixelIdx + 2] = b
+      colorData.data[pixelIdx + 3] = Math.round(a * maxOpacity * 255)
     } else {
-      colorData.data[i + 3] = 0
+      colorData.data[pixelIdx + 3] = 0
     }
   }
 
@@ -140,8 +147,8 @@ function drawHeatmap(canvas, points, options = {}) {
   ctx.drawImage(colorCanvas, 0, 0)
   ctx.filter = 'none'
   
-  // Draw again without blur for sharper hotspots
-  ctx.globalAlpha = 0.5
+  // Draw again without blur for sharper hotspots  
+  ctx.globalAlpha = 0.4
   ctx.drawImage(colorCanvas, 0, 0)
   ctx.globalAlpha = 1.0
 }
