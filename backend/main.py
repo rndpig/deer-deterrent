@@ -4786,6 +4786,130 @@ async def generate_stats_synopsis(request: Request):
         raise HTTPException(status_code=500, detail=f"Synopsis generation failed: {e}")
 
 
+# ============================================================================
+# Reference Images for Heatmap Backgrounds
+# ============================================================================
+
+REFERENCE_IMAGES_DIR = Path("/app/data/reference_images")
+REFERENCE_SELECTION_FILE = Path("/app/data/reference_images/selected.json")
+
+CAMERA_NAME_MAP = {
+    "Side": "c4dbad08f862",
+    "Driveway": "587a624d3fae",
+    "FrontDoor": "4439c4de7a79",
+    "Back": "f045dae9383a",
+    "Woods": "10cea9e4511f",
+}
+
+CAMERA_ID_TO_NAME = {v: k for k, v in CAMERA_NAME_MAP.items()}
+
+
+def get_selected_reference_images() -> dict:
+    """Load selected reference images from JSON file."""
+    if REFERENCE_SELECTION_FILE.exists():
+        try:
+            return json.loads(REFERENCE_SELECTION_FILE.read_text())
+        except:
+            pass
+    return {}
+
+
+def save_selected_reference_images(selections: dict):
+    """Save selected reference images to JSON file."""
+    REFERENCE_SELECTION_FILE.parent.mkdir(parents=True, exist_ok=True)
+    REFERENCE_SELECTION_FILE.write_text(json.dumps(selections, indent=2))
+
+
+@app.get("/api/reference-images")
+async def list_cameras_with_reference_images():
+    """List all cameras that have reference images."""
+    if not REFERENCE_IMAGES_DIR.exists():
+        return {"cameras": []}
+    
+    cameras = []
+    selections = get_selected_reference_images()
+    
+    for cam_dir in REFERENCE_IMAGES_DIR.iterdir():
+        if cam_dir.is_dir() and cam_dir.name in CAMERA_NAME_MAP:
+            images = list(cam_dir.glob("*.jpg"))
+            if images:
+                cameras.append({
+                    "name": cam_dir.name,
+                    "camera_id": CAMERA_NAME_MAP.get(cam_dir.name),
+                    "image_count": len(images),
+                    "selected": selections.get(cam_dir.name)
+                })
+    
+    return {"cameras": cameras}
+
+
+@app.get("/api/reference-images/{camera_name}")
+async def list_reference_images(camera_name: str):
+    """List all reference images for a specific camera."""
+    cam_dir = REFERENCE_IMAGES_DIR / camera_name
+    if not cam_dir.exists():
+        raise HTTPException(status_code=404, detail=f"No reference images for camera: {camera_name}")
+    
+    images = []
+    for img_path in sorted(cam_dir.glob("*.jpg"), reverse=True):
+        # Parse timestamp from filename: 20260407_120241.jpg
+        try:
+            ts_str = img_path.stem
+            dt = datetime.strptime(ts_str, "%Y%m%d_%H%M%S")
+            formatted = dt.strftime("%Y-%m-%d %I:%M %p")
+        except:
+            formatted = img_path.stem
+        
+        images.append({
+            "filename": img_path.name,
+            "timestamp": formatted,
+            "size": img_path.stat().st_size,
+            "url": f"/api/reference-images/{camera_name}/{img_path.name}"
+        })
+    
+    selections = get_selected_reference_images()
+    
+    return {
+        "camera_name": camera_name,
+        "camera_id": CAMERA_NAME_MAP.get(camera_name),
+        "images": images,
+        "selected": selections.get(camera_name)
+    }
+
+
+@app.get("/api/reference-images/{camera_name}/{filename}")
+async def get_reference_image(camera_name: str, filename: str):
+    """Serve a specific reference image."""
+    img_path = REFERENCE_IMAGES_DIR / camera_name / filename
+    if not img_path.exists():
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    return FileResponse(img_path, media_type="image/jpeg")
+
+
+@app.put("/api/reference-images/{camera_name}/selected")
+async def set_selected_reference_image(camera_name: str, request: Request):
+    """Set the selected reference image for a camera."""
+    body = await request.json()
+    filename = body.get("filename")
+    
+    if filename:
+        # Verify image exists
+        img_path = REFERENCE_IMAGES_DIR / camera_name / filename
+        if not img_path.exists():
+            raise HTTPException(status_code=404, detail="Image not found")
+    
+    selections = get_selected_reference_images()
+    if filename:
+        selections[camera_name] = filename
+    else:
+        selections.pop(camera_name, None)
+    
+    save_selected_reference_images(selections)
+    
+    return {"camera_name": camera_name, "selected": filename}
+
+
 @app.get("/api/stats/heatmap")
 async def get_heatmap_data(camera_id: str = None):
     """
@@ -4880,12 +5004,32 @@ async def get_heatmap_data(camera_id: str = None):
         'c4dbad08f862': 'Side',
     }
     
+    # Camera name mapping for reference images (internal names)
+    camera_dir_names = {
+        '587a624d3fae': 'Driveway',
+        '4439c4de7a79': 'FrontDoor',
+        'f045dae9383a': 'Back',
+        '10cea9e4511f': 'Woods',
+        'c4dbad08f862': 'Side',
+    }
+    
+    # Get selected reference images
+    selected_refs = get_selected_reference_images()
+    
     # Build result with ALL cameras, even those with no detections
     result = []
     for cam_id, cam_name in camera_names.items():
+        cam_dir_name = camera_dir_names.get(cam_id)
+        
+        # Check for selected reference image
+        reference_image_url = None
+        if cam_dir_name and selected_refs.get(cam_dir_name):
+            reference_image_url = f"/api/reference-images/{cam_dir_name}/{selected_refs[cam_dir_name]}"
+        
         if cam_id in camera_data:
             data = camera_data[cam_id]
             data["camera_name"] = cam_name
+            data["reference_image_url"] = reference_image_url
             # Use latest snapshot if reference_snapshot_id doesn't have image
             if cam_id in latest_snapshots and not data.get("reference_snapshot_id"):
                 data["reference_snapshot_id"] = latest_snapshots[cam_id]
@@ -4896,6 +5040,7 @@ async def get_heatmap_data(camera_id: str = None):
                 "camera_id": cam_id,
                 "camera_name": cam_name,
                 "reference_snapshot_id": latest_snapshots.get(cam_id),
+                "reference_image_url": reference_image_url,
                 "points": [],
                 "snapshot_count": 0,
                 "deer_count": 0
