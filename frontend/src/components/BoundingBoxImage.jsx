@@ -36,6 +36,13 @@ function BoundingBoxImage({ src, alt, detections, className, onClick }) {
     // Calculate how object-fit: contain renders the image within the container.
     // The image content may be smaller than the container, centered with letterbox
     // padding. We need to know the rendered image area to map bbox pixel coords.
+    //
+    // IMPORTANT: Bboxes are ALWAYS stored relative to 640x360 coordinate system
+    // (the Ring snapshot standard), regardless of the actual image resolution.
+    // We use the image's aspect ratio for layout, but scale bboxes from 640x360.
+    const BBOX_REF_WIDTH = 640
+    const BBOX_REF_HEIGHT = 360
+    
     const imgNatW = image.naturalWidth
     const imgNatH = image.naturalHeight
     const imgAspect = imgNatW / imgNatH
@@ -57,8 +64,9 @@ function BoundingBoxImage({ src, alt, detections, className, onClick }) {
       offsetY = 0
     }
 
-    // Uniform scale from image natural pixels to rendered area
-    const scale = renderedW / imgNatW
+    // Scale factor from bbox reference (640x360) to rendered image area
+    const scaleX = renderedW / BBOX_REF_WIDTH
+    const scaleY = renderedH / BBOX_REF_HEIGHT
 
     // Clear and draw
     ctx.clearRect(0, 0, canvasW, canvasH)
@@ -71,20 +79,21 @@ function BoundingBoxImage({ src, alt, detections, className, onClick }) {
 
       if (Array.isArray(bbox)) {
         // YOLO normalized format: [x_center, y_center, width, height] (0-1)
-        const cx = bbox[0] * imgNatW
-        const cy = bbox[1] * imgNatH
-        const bw = bbox[2] * imgNatW
-        const bh = bbox[3] * imgNatH
-        x = offsetX + (cx - bw / 2) * scale
-        y = offsetY + (cy - bh / 2) * scale
-        w = bw * scale
-        h = bh * scale
+        // These are normalized relative to 640x360
+        const cx = bbox[0] * BBOX_REF_WIDTH
+        const cy = bbox[1] * BBOX_REF_HEIGHT
+        const bw = bbox[2] * BBOX_REF_WIDTH
+        const bh = bbox[3] * BBOX_REF_HEIGHT
+        x = offsetX + (cx - bw / 2) * scaleX
+        y = offsetY + (cy - bh / 2) * scaleY
+        w = bw * scaleX
+        h = bh * scaleY
       } else if (bbox.x1 !== undefined) {
-        // Pixel coordinate format: {x1, y1, x2, y2}
-        x = offsetX + bbox.x1 * scale
-        y = offsetY + bbox.y1 * scale
-        w = (bbox.x2 - bbox.x1) * scale
-        h = (bbox.y2 - bbox.y1) * scale
+        // Pixel coordinate format: {x1, y1, x2, y2} relative to 640x360
+        x = offsetX + bbox.x1 * scaleX
+        y = offsetY + bbox.y1 * scaleY
+        w = (bbox.x2 - bbox.x1) * scaleX
+        h = (bbox.y2 - bbox.y1) * scaleY
       } else {
         return
       }
