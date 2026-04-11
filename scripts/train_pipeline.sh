@@ -77,7 +77,7 @@ DATASET_DIR=""
 
 if [ "$SKIP_EXPORT" = true ]; then
     # Find the latest existing dataset
-    DATASET_DIR=$(ls -dt "${DATASETS_DIR}"/v2.0_* 2>/dev/null | head -1 || true)
+    DATASET_DIR=$(ls -dt "${DATASETS_DIR}"/v3.0_* 2>/dev/null | head -1 || true)
     if [ -z "$DATASET_DIR" ] || [ ! -f "${DATASET_DIR}/data.yaml" ]; then
         echo "ERROR: No existing dataset found in ${DATASETS_DIR}"
         echo "Run without --skip-export to create one."
@@ -91,10 +91,10 @@ else
     echo ""
     
     cd "${PROJECT_ROOT}"
-    python3 "${SCRIPTS_DIR}/export_dataset_v2.py"
+    python3 "${SCRIPTS_DIR}/export_dataset_v3.py"
     
     # Find the dataset that was just created (most recent)
-    DATASET_DIR=$(ls -dt "${DATASETS_DIR}"/v2.0_* 2>/dev/null | head -1)
+    DATASET_DIR=$(ls -dt "${DATASETS_DIR}"/v3.0_* 2>/dev/null | head -1)
     
     if [ -z "$DATASET_DIR" ] || [ ! -f "${DATASET_DIR}/data.yaml" ]; then
         echo "ERROR: Export failed — no data.yaml found"
