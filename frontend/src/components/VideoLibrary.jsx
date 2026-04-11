@@ -26,6 +26,17 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
   const thumbnailRefs = useRef([])
   
+  // Annotation state
+  const [annotationMode, setAnnotationMode] = useState(false)
+  const [boxes, setBoxes] = useState([])
+  const [drawing, setDrawing] = useState(false)
+  const [currentBox, setCurrentBox] = useState(null)
+  const [savingAnnotations, setSavingAnnotations] = useState(false)
+  const [frameAnnotations, setFrameAnnotations] = useState({})
+  const canvasRef = useRef(null)
+  const imageRef = useRef(null)
+  const [imageLoaded, setImageLoaded] = useState(false)
+  
   // Hamburger menu state
   const [openMenuId, setOpenMenuId] = useState(null)
 
@@ -149,9 +160,6 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
     switch(action) {
       case 'frames':
         handleViewFrames(video)
-        break
-      case 'annotate':
-        onStartReview(video.id)
         break
       case 'edit':
         handleEditVideo(video)
@@ -374,8 +382,9 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
     setPlayingVideo(video)
     setShowVideoPlayer(true)
   }
-    const handleViewFrames = async (video) => {    try {
-         const response = await apiFetch(`/api/videos/${video.id}`)
+    const handleViewFrames = async (video) => {
+    try {
+      const response = await apiFetch(`/api/videos/${video.id}`)
       if (!response.ok) throw new Error('Failed to load video details')
       
       const data = await response.json()
@@ -383,20 +392,227 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       setVideoFrames(data.frames || [])
       setCurrentFrameIndex(0)
       setShowFrameAnalysis(true)
+      // Reset annotation state
+      setAnnotationMode(false)
+      setBoxes([])
+      setFrameAnnotations({})
+      setImageLoaded(false)
     } catch (error) {
       console.error('Error loading frames:', error)
       alert('Failed to load video frames')
     }
   }
-    const handleNextFrame = () => {
-    if (currentFrameIndex < videoFrames.length - 1) {
-      setCurrentFrameIndex(currentFrameIndex + 1)
+
+  // Load frame annotations when frame changes
+  const loadFrameAnnotations = async (frameId) => {
+    // Check cache first
+    if (frameAnnotations[frameId]) {
+      setBoxes(frameAnnotations[frameId])
+      return
+    }
+    
+    try {
+      const response = await apiFetch(`/api/frames/${frameId}`)
+      if (response.ok) {
+        const data = await response.json()
+        const annotations = (data.annotations || []).map(a => ({
+          x: a.bbox_x,
+          y: a.bbox_y,
+          width: a.bbox_width,
+          height: a.bbox_height
+        }))
+        setBoxes(annotations)
+        setFrameAnnotations(prev => ({ ...prev, [frameId]: annotations }))
+      }
+    } catch (error) {
+      console.error('Error loading annotations:', error)
     }
   }
-    const handlePrevFrame = () => {
+
+  // Load annotations when frame changes in annotation mode
+  useEffect(() => {
+    if (showFrameAnalysis && annotationMode && videoFrames.length > 0) {
+      const currentFrame = videoFrames[currentFrameIndex]
+      if (currentFrame) {
+        loadFrameAnnotations(currentFrame.id)
+      }
+    }
+  }, [currentFrameIndex, annotationMode, showFrameAnalysis])
+
+  const handleNextFrame = () => {
+    if (currentFrameIndex < videoFrames.length - 1) {
+      setCurrentFrameIndex(currentFrameIndex + 1)
+      setImageLoaded(false)
+    }
+  }
+
+  const handlePrevFrame = () => {
     if (currentFrameIndex > 0) {
       setCurrentFrameIndex(currentFrameIndex - 1)
+      setImageLoaded(false)
     }
+  }
+
+  // Canvas drawing handlers
+  const redrawCanvas = () => {
+    const canvas = canvasRef.current
+    const img = imageRef.current
+    if (!canvas || !img || !imageLoaded) return
+
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+
+    // Draw existing boxes (normalized 0-1 coordinates)
+    ctx.strokeStyle = '#10b981'
+    ctx.lineWidth = 3
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.1)'
+    
+    boxes.forEach((box, index) => {
+      const x = box.x * canvas.width
+      const y = box.y * canvas.height
+      const w = box.width * canvas.width
+      const h = box.height * canvas.height
+      
+      ctx.fillRect(x, y, w, h)
+      ctx.strokeRect(x, y, w, h)
+      
+      ctx.fillStyle = '#10b981'
+      ctx.font = 'bold 14px sans-serif'
+      ctx.fillText(`${index + 1}`, x + 5, y + 18)
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.1)'
+    })
+    
+    // Draw current box being drawn
+    if (currentBox) {
+      ctx.strokeStyle = '#f59e0b'
+      ctx.lineWidth = 3
+      ctx.setLineDash([5, 5])
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.15)'
+      ctx.fillRect(currentBox.x, currentBox.y, currentBox.width, currentBox.height)
+      ctx.strokeRect(currentBox.x, currentBox.y, currentBox.width, currentBox.height)
+      ctx.setLineDash([])
+    }
+  }
+
+  useEffect(() => {
+    if (annotationMode && imageLoaded) {
+      redrawCanvas()
+    }
+  }, [boxes, currentBox, imageLoaded, annotationMode])
+
+  const handleCanvasPointerDown = (e) => {
+    if (!annotationMode) return
+    const canvas = canvasRef.current
+    canvas.setPointerCapture(e.pointerId)
+    const rect = canvas.getBoundingClientRect()
+    
+    const pointerX = e.clientX - rect.left
+    const pointerY = e.clientY - rect.top
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    
+    const x = pointerX * scaleX
+    const y = pointerY * scaleY
+    
+    setDrawing(true)
+    setCurrentBox({ x, y, width: 0, height: 0 })
+  }
+
+  const handleCanvasPointerMove = (e) => {
+    if (!drawing || !currentBox) return
+    const canvas = canvasRef.current
+    const rect = canvas.getBoundingClientRect()
+    
+    const pointerX = e.clientX - rect.left
+    const pointerY = e.clientY - rect.top
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    
+    const x = pointerX * scaleX
+    const y = pointerY * scaleY
+    
+    setCurrentBox({ ...currentBox, width: x - currentBox.x, height: y - currentBox.y })
+  }
+
+  const handleCanvasPointerUp = (e) => {
+    if (!drawing || !currentBox) return
+    const canvas = canvasRef.current
+    canvas.releasePointerCapture(e.pointerId)
+    
+    // Only add box if it has meaningful size
+    if (Math.abs(currentBox.width) > 10 && Math.abs(currentBox.height) > 10) {
+      let { x, y, width, height } = currentBox
+      if (width < 0) { x += width; width = Math.abs(width) }
+      if (height < 0) { y += height; height = Math.abs(height) }
+      
+      const normalizedBox = {
+        x: x / canvas.width,
+        y: y / canvas.height,
+        width: width / canvas.width,
+        height: height / canvas.height
+      }
+      setBoxes([...boxes, normalizedBox])
+    }
+    
+    setDrawing(false)
+    setCurrentBox(null)
+  }
+
+  const handleRemoveBox = (index) => {
+    setBoxes(boxes.filter((_, i) => i !== index))
+  }
+
+  const handleClearBoxes = () => {
+    setBoxes([])
+  }
+
+  const handleSaveAnnotations = async () => {
+    const currentFrame = videoFrames[currentFrameIndex]
+    if (!currentFrame) return
+    
+    setSavingAnnotations(true)
+    try {
+      const response = await apiFetch(`/api/frames/${currentFrame.id}/annotate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ annotations: boxes })
+      })
+      
+      if (!response.ok) throw new Error('Failed to save annotations')
+      
+      // Update cache
+      setFrameAnnotations(prev => ({ ...prev, [currentFrame.id]: boxes }))
+      
+      // Update frame detection count in the list
+      setVideoFrames(prev => prev.map((f, i) => 
+        i === currentFrameIndex 
+          ? { ...f, annotation_count: boxes.length, detection_count: boxes.length }
+          : f
+      ))
+      
+    } catch (error) {
+      console.error('Error saving annotations:', error)
+      alert('Failed to save annotations')
+    } finally {
+      setSavingAnnotations(false)
+    }
+  }
+
+  const toggleAnnotationMode = () => {
+    const newMode = !annotationMode
+    setAnnotationMode(newMode)
+    if (newMode && videoFrames.length > 0) {
+      const currentFrame = videoFrames[currentFrameIndex]
+      if (currentFrame) {
+        loadFrameAnnotations(currentFrame.id)
+      }
+    }
+  }
+
+  const handleImageLoad = (e) => {
+    imageRef.current = e.target
+    setImageLoaded(true)
   }
 
   // Keyboard navigation for frame analysis
@@ -588,14 +804,7 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
                       onClick={(e) => handleMenuAction('frames', video, e)}
                     >
                       <span className="menu-icon">📊</span>
-                      <span>Frames</span>
-                    </button>
-                    <button 
-                      className="menu-item"
-                      onClick={(e) => handleMenuAction('annotate', video, e)}
-                    >
-                      <span className="menu-icon">✏️</span>
-                      <span>Annotate</span>
+                      <span>Frames & Annotate</span>
                     </button>
                     <button 
                       className="menu-item"
@@ -752,10 +961,10 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
         </div>
       )}
 
-      {/* Frame Analysis Modal */}
+      {/* Frame Analysis Modal with Annotation */}
       {showFrameAnalysis && analysisVideo && (
-        <div className="dialog-overlay" onClick={() => setShowFrameAnalysis(false)}>
-          <div className="frame-analysis-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="dialog-overlay" onClick={() => { setShowFrameAnalysis(false); setAnnotationMode(false); }}>
+          <div className={`frame-analysis-modal ${annotationMode ? 'annotation-active' : ''}`} onClick={(e) => e.stopPropagation()}>
             <div className="frame-analysis-header">
               <div className="header-content">
                 <h2>🔍 {analysisVideo.filename}</h2>
@@ -767,16 +976,25 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
                     <span>•</span>
                     <span>{videoFrames[currentFrameIndex].timestamp_in_video?.toFixed(2)}s</span>
                     <span>•</span>
-                    <span>{videoFrames[currentFrameIndex].detection_count || 0} detections</span>
+                    <span>{videoFrames[currentFrameIndex].annotation_count || videoFrames[currentFrameIndex].detection_count || 0} boxes</span>
                   </div>
                 )}
               </div>
-              <button 
-                className="btn-close-modal"
-                onClick={() => setShowFrameAnalysis(false)}
-              >
-                ✕
-              </button>
+              <div className="header-actions">
+                <button 
+                  className={`btn-annotate-toggle ${annotationMode ? 'active' : ''}`}
+                  onClick={toggleAnnotationMode}
+                  title={annotationMode ? 'Exit annotation mode' : 'Enter annotation mode to draw bounding boxes'}
+                >
+                  {annotationMode ? '✏️ Drawing' : '✏️ Annotate'}
+                </button>
+                <button 
+                  className="btn-close-modal"
+                  onClick={() => { setShowFrameAnalysis(false); setAnnotationMode(false); }}
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             
             {videoFrames.length === 0 ? (
@@ -795,15 +1013,37 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
                   </button>
                   
                   <div className="frame-display">
-                    <img 
-                      src={
-                        videoFrames[currentFrameIndex]?.detection_count > 0
-                          ? `${API_URL}/api/frames/${videoFrames[currentFrameIndex]?.id}/annotated`
-                          : `${API_URL}/api/training-frames/${videoFrames[currentFrameIndex]?.image_path?.split('/').pop()}`
-                      }
-                      alt={`Frame ${videoFrames[currentFrameIndex]?.frame_number}`}
-                      className="frame-image"
-                    />
+                    {annotationMode ? (
+                      <>
+                        <img 
+                          src={`${API_URL}/api/training-frames/${videoFrames[currentFrameIndex]?.image_path?.split('/').pop()}`}
+                          alt={`Frame ${videoFrames[currentFrameIndex]?.frame_number}`}
+                          className="frame-image-hidden"
+                          onLoad={handleImageLoad}
+                          crossOrigin="anonymous"
+                        />
+                        <canvas
+                          ref={canvasRef}
+                          width={1280}
+                          height={720}
+                          className="annotation-canvas"
+                          onPointerDown={handleCanvasPointerDown}
+                          onPointerMove={handleCanvasPointerMove}
+                          onPointerUp={handleCanvasPointerUp}
+                          style={{ cursor: drawing ? 'crosshair' : 'crosshair' }}
+                        />
+                      </>
+                    ) : (
+                      <img 
+                        src={
+                          (videoFrames[currentFrameIndex]?.annotation_count || videoFrames[currentFrameIndex]?.detection_count) > 0
+                            ? `${API_URL}/api/frames/${videoFrames[currentFrameIndex]?.id}/annotated`
+                            : `${API_URL}/api/training-frames/${videoFrames[currentFrameIndex]?.image_path?.split('/').pop()}`
+                        }
+                        alt={`Frame ${videoFrames[currentFrameIndex]?.frame_number}`}
+                        className="frame-image"
+                      />
+                    )}
                   </div>
                   
                   <button 
@@ -815,22 +1055,62 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
                   </button>
                 </div>
                 
+                {/* Annotation Controls */}
+                {annotationMode && (
+                  <div className="annotation-controls">
+                    <div className="annotation-info">
+                      <span className="box-count">{boxes.length} box{boxes.length !== 1 ? 'es' : ''}</span>
+                      {boxes.length > 0 && (
+                        <div className="box-list">
+                          {boxes.map((_, idx) => (
+                            <button 
+                              key={idx}
+                              className="box-remove-btn"
+                              onClick={() => handleRemoveBox(idx)}
+                              title={`Remove box ${idx + 1}`}
+                            >
+                              🗑️ {idx + 1}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="annotation-actions">
+                      <span className="annotation-hint">Click and drag to draw boxes around deer</span>
+                      <button 
+                        className="btn-clear-boxes"
+                        onClick={handleClearBoxes}
+                        disabled={boxes.length === 0}
+                      >
+                        Clear All
+                      </button>
+                      <button 
+                        className="btn-save-annotations"
+                        onClick={handleSaveAnnotations}
+                        disabled={savingAnnotations}
+                      >
+                        {savingAnnotations ? '⏳ Saving...' : `💾 Save (${boxes.length})`}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="frame-navigation">
                   <div className="frame-thumbnails">
                     {videoFrames.map((frame, idx) => (
                       <div
                         key={frame.id}
                         ref={el => thumbnailRefs.current[idx] = el}
-                        className={`frame-thumb ${idx === currentFrameIndex ? 'active' : ''} ${frame.detection_count > 0 ? 'has-detection' : ''}`}
-                        onClick={() => setCurrentFrameIndex(idx)}
-                        title={`Frame ${frame.frame_number} - ${frame.detection_count} detections`}
+                        className={`frame-thumb ${idx === currentFrameIndex ? 'active' : ''} ${(frame.annotation_count || frame.detection_count) > 0 ? 'has-detection' : ''}`}
+                        onClick={() => { setCurrentFrameIndex(idx); setImageLoaded(false); }}
+                        title={`Frame ${frame.frame_number} - ${frame.annotation_count || frame.detection_count || 0} boxes`}
                       >
                         <img 
                           src={`${API_URL}/api/training-frames/${frame.image_path.split('/').pop()}`}
                           alt={`Thumb ${idx}`}
                         />
-                        {frame.detection_count > 0 && (
-                          <div className="detection-badge">{frame.detection_count}</div>
+                        {(frame.annotation_count || frame.detection_count) > 0 && (
+                          <div className="detection-badge">{frame.annotation_count || frame.detection_count}</div>
                         )}
                       </div>
                     ))}

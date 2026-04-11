@@ -1991,6 +1991,15 @@ async def get_annotated_frame(frame_id: int):
     return FileResponse(annotated_path, media_type="image/jpeg")
 
 
+@app.get("/api/frames/{frame_id}")
+async def get_frame_details(frame_id: int):
+    """Get frame details including annotations."""
+    frame = db.get_frame(frame_id)
+    if not frame:
+        raise HTTPException(status_code=404, detail="Frame not found")
+    return frame
+
+
 @app.post("/api/frames/{frame_id}/review")
 async def review_frame(frame_id: int, request: dict):
     """Mark a frame as reviewed."""
