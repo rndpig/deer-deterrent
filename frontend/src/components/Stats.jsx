@@ -42,6 +42,59 @@ function formatCameraName(cameraId) {
   return CAMERA_NAMES[cameraId] || cameraId
 }
 
+/**
+ * Compute spatial summary from heatmap points for a camera.
+ * Points are normalized 0-1 (x=0 is left/west, x=1 is right/east).
+ * Returns centroid, quadrant distribution, and spread metrics.
+ */
+function computeSpatialSummary(points) {
+  if (!points || points.length === 0) {
+    return null
+  }
+
+  // Compute centroid
+  const sumX = points.reduce((acc, p) => acc + p.x, 0)
+  const sumY = points.reduce((acc, p) => acc + p.y, 0)
+  const centroidX = sumX / points.length
+  const centroidY = sumY / points.length
+
+  // Quadrant distribution (left/right relative to center, top/bottom)
+  const leftCount = points.filter(p => p.x < 0.5).length
+  const rightCount = points.length - leftCount
+  const topCount = points.filter(p => p.y < 0.5).length
+  const bottomCount = points.length - topCount
+
+  const leftPct = Math.round((leftCount / points.length) * 100)
+  const rightPct = 100 - leftPct
+  const topPct = Math.round((topCount / points.length) * 100)
+  const bottomPct = 100 - topPct
+
+  // Spread: standard deviation of distances from centroid
+  const distances = points.map(p => 
+    Math.sqrt((p.x - centroidX) ** 2 + (p.y - centroidY) ** 2)
+  )
+  const meanDist = distances.reduce((a, b) => a + b, 0) / distances.length
+  const variance = distances.reduce((acc, d) => acc + (d - meanDist) ** 2, 0) / distances.length
+  const stdDev = Math.sqrt(variance)
+
+  // Classify spread: tight (<0.1), moderate (0.1-0.2), wide (>0.2)
+  let spreadLabel = 'moderate'
+  if (stdDev < 0.1) spreadLabel = 'tight (clustered)'
+  else if (stdDev > 0.2) spreadLabel = 'wide (scattered)'
+
+  return {
+    centroid: { x: centroidX.toFixed(2), y: centroidY.toFixed(2) },
+    distribution: {
+      left: leftPct,
+      right: rightPct,
+      top: topPct,
+      bottom: bottomPct
+    },
+    spread: spreadLabel,
+    point_count: points.length
+  }
+}
+
 function Stats() {
   const [allSnapshots, setAllSnapshots] = useState([])
   const [loading, setLoading] = useState(true)
@@ -200,7 +253,27 @@ function Stats() {
     if (!metrics || filtered.length === 0) return
     setAiLoading(true)
     setAiSynopsis(null)
-     try {
+    try {
+      // Fetch heatmap data for spatial analysis
+      let spatialSummary = {}
+      try {
+        const heatmapRes = await apiFetch('/api/stats/heatmap')
+        if (heatmapRes.ok) {
+          const heatmapData = await heatmapRes.json()
+          // Compute spatial summary for each camera with detections
+          for (const cam of (heatmapData.cameras || [])) {
+            if (cam.points && cam.points.length > 0) {
+              const summary = computeSpatialSummary(cam.points)
+              if (summary) {
+                spatialSummary[cam.camera_name || cam.camera_id] = summary
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Could not fetch heatmap data for synopsis:', e)
+      }
+
       // Build a data summary to send to the backend
       const payload = {
         total_sightings: metrics.total,
@@ -220,8 +293,9 @@ function Stats() {
           return entry
         }),
         hourly_distribution: metrics.hourCounts,
+        spatial_summary: spatialSummary,
       }
-       const res = await apiFetch(`/api/stats/synopsis`, {
+      const res = await apiFetch(`/api/stats/synopsis`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

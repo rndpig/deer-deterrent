@@ -4756,7 +4756,7 @@ async def generate_stats_synopsis(request: Request):
 
     # Build a concise prompt from the stats payload
     prompt_parts = [
-        "You are an analyst for a residential deer detection system. Provide a concise, insightful synopsis (3-5 paragraphs) of the following deer activity data. Focus on patterns, anomalies, and actionable observations. Be specific with numbers.\n",
+        "You are an analyst for a residential deer detection system. Provide a concise, insightful synopsis (3-5 paragraphs) of the following deer activity data. Focus on temporal patterns, spatial patterns from heatmaps, anomalies, and actionable observations. Be specific with numbers.\n",
         f"Selected years: {payload.get('selected_years', [])}",
         f"Total sightings: {payload.get('total_sightings', 0)}",
         f"Mean sighting time: {payload.get('mean_time', 'N/A')}",
@@ -4769,6 +4769,22 @@ async def generate_stats_synopsis(request: Request):
         f"Monthly data: {json.dumps(payload.get('monthly_data', []))}",
         f"Hourly distribution (0-23h): {json.dumps(payload.get('hourly_distribution', []))}",
     ]
+    
+    # Add spatial heatmap data if available
+    spatial_summary = payload.get('spatial_summary', {})
+    if spatial_summary:
+        prompt_parts.append("\n--- SPATIAL HEATMAP DATA (per camera) ---")
+        prompt_parts.append("Note: x=0 is left (west side of frame), x=1 is right (east). y=0 is top, y=1 is bottom.")
+        prompt_parts.append("Distribution shows what % of detections appear in each half of the frame.")
+        for camera_name, data in spatial_summary.items():
+            centroid = data.get('centroid', {})
+            dist = data.get('distribution', {})
+            prompt_parts.append(
+                f"{camera_name}: centroid=({centroid.get('x', '?')}, {centroid.get('y', '?')}), "
+                f"left/right={dist.get('left', '?')}%/{dist.get('right', '?')}%, "
+                f"top/bottom={dist.get('top', '?')}%/{dist.get('bottom', '?')}%, "
+                f"spread={data.get('spread', '?')}, detections={data.get('point_count', '?')}"
+            )
 
     try:
         import openai
@@ -4776,10 +4792,10 @@ async def generate_stats_synopsis(request: Request):
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a wildlife activity analyst. Write in a direct, data-driven style. No markdown formatting."},
+                {"role": "system", "content": "You are a wildlife activity analyst. Write in a direct, data-driven style. No markdown formatting. When spatial heatmap data is provided, interpret where in each camera's view deer tend to appear and what this suggests about their travel patterns (e.g., entering from woods on the left, crossing through center, etc.)."},
                 {"role": "user", "content": "\n".join(prompt_parts)}
             ],
-            max_tokens=600,
+            max_tokens=700,
             temperature=0.7,
         )
         synopsis = response.choices[0].message.content
