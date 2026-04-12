@@ -1482,6 +1482,9 @@ async def run_video_detection(video: UploadFile = File(...)):
                 results["frames_processed"] += 1
                 results["diagnostic_info"]["frames_sampled"] += 1
                 
+                # Resize to match training data resolution (640x360)
+                frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
+                
                 # Run detection
                 detections, annotated = det.detect(frame, return_annotated=True)
                 
@@ -1804,6 +1807,9 @@ async def upload_video_for_training(video: UploadFile = File(...), sample_rate: 
             
             # Only process every Nth frame based on sample_rate
             if frame_num % sample_rate == 0:
+                # Resize to match training data resolution (640x360)
+                frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
+                
                 # Save frame to disk
                 frame_filename = f"{timestamp}_frame_{frame_num:06d}.jpg"
                 frame_path = frames_dir / frame_filename
@@ -3636,6 +3642,9 @@ async def recover_all_video_frames():
             # Only process every Nth frame based on sample_rate
             if frame_num % frame_interval == 0:
                 timestamp_in_video = frame_num / fps if fps > 0 else 0
+                
+                # Resize to match training data resolution (640x360)
+                frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
                 
                 # Save frame to disk
                 frame_filename = f"video_{video_id}_frame_{frame_num}.jpg"
