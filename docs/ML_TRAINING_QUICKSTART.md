@@ -97,26 +97,95 @@ Returns:
 }
 ```
 
-## Phase 4: Train Model (In Progress)
+## Phase 4: Train Model
 
-### Current Workflow:
-1. Open Google Colab: `notebooks/train_deer_detector_colab.ipynb`
-2. Run all cells
-3. Download trained model
-4. Deploy to server
+### Using train_pipeline.sh (Recommended)
 
-### Automated Workflow (Coming Soon):
-```bash
-# Will trigger Colab training automatically
-curl -X POST http://localhost:8000/api/training/trigger
-```
-
-## Phase 5: Deploy Model (Coming Soon)
+SSH to the Dell server and run:
 
 ```bash
-# Will auto-download and deploy latest model
-curl -X POST http://localhost:8000/api/training/deploy-latest
+cd /home/rndpig/deer-deterrent
+
+# Start training in tmux (so it survives disconnection)
+tmux new -s train
+
+# Run the full pipeline: export → phase1 → phase2 → deploy
+./scripts/train_pipeline.sh
+
+# Detach from tmux: Ctrl+B, then D
+# Reattach later: tmux attach -t train
 ```
+
+The pipeline automatically:
+1. Exports dataset from SQLite annotations
+2. Runs Phase 1 (frozen backbone, 20 epochs)
+3. Runs Phase 2 (full fine-tune, up to 130 epochs with early stopping)
+4. Deploys best model to production
+5. Restarts ml-detector container
+
+### Monitor Training
+
+```bash
+# View live progress
+tmux attach -t train
+
+# Or check the log file
+tail -f /home/rndpig/deer-deterrent/logs/train_pipeline_*.log | grep -E "Epoch|mAP"
+```
+
+### Manual Training (Alternative)
+
+```bash
+# Export dataset
+python3 scripts/export_dataset_v3.py
+
+# Train (manual)
+python3 scripts/train_yolo26s_v2.py --data data/training_datasets/v3.0_*/data.yaml
+```
+
+## Phase 5: Deploy Model
+
+### Automated (via train_pipeline.sh)
+The pipeline handles deployment automatically. After training completes, verify:
+
+```bash
+# Check ml-detector is healthy with correct version
+curl -s http://localhost:8001/health | python3 -m json.tool
+```
+
+Expected output:
+```json
+{
+    "status": "healthy",
+    "model_loaded": true,
+    "model_path": "/app/models/production/best.pt",
+    "model_version": "YOLO26s v4.0",
+    "device": "cpu",
+    "confidence_threshold": 0.55
+}
+```
+
+### Manual Deployment
+
+```bash
+# 1. Copy trained model to production folder
+cp runs/train/deer_v2_*_phase2/weights/best.pt \
+   dell-deployment/models/production/best.pt
+
+# 2. Update VERSION file (ml-detector reads this at startup)
+echo "YOLO26s v5.0" > dell-deployment/models/production/VERSION
+
+# 3. Update models/registry.json with model metadata
+# (See registry.json for format)
+
+# 4. Restart ml-detector to load new model
+docker compose restart ml-detector
+
+# 5. Verify deployment
+curl -s http://localhost:8001/health
+```
+
+**Note**: No code changes required for model updates. The VERSION file approach eliminates hardcoded version strings.
 
 ## API Endpoints Summary
 
@@ -126,8 +195,9 @@ curl -X POST http://localhost:8000/api/training/deploy-latest
 | `/api/detections/{id}/review` | GET | Get review status |
 | `/api/training/export` | GET | Export to COCO format |
 | `/api/training/sync-to-drive` | POST | Sync to Google Drive |
-| `/api/training/trigger` | POST | Trigger Colab training (soon) |
-| `/api/training/deploy-latest` | POST | Deploy latest model (soon) |
+| `/api/ring-events` | GET | Get Ring camera events with detections |
+| `/api/snapshots/{id}/bboxes` | PUT | Save manual bounding box annotations |
+| `/health` (ml-detector:8001) | GET | Check model status and version |
 
 ## Review Types
 

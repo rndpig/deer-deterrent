@@ -1,11 +1,54 @@
 # Training Pipeline Improvements
 
 **Created**: 2026-04-11  
-**Status**: Pending (implement after v4.0 training completes)
+**Updated**: 2026-04-11  
+**Status**: v4.0 deployed, some improvements implemented
 
 ## Overview
 
-These improvements were identified during the v4.0 training cycle. Implement after the current training run finishes and the model is deployed.
+These improvements were identified during the v4.0 training cycle.
+
+---
+
+## ✅ Implemented: VERSION File for Model Versioning
+
+**Problem**: Model version was hardcoded in multiple files (ml-detector, coordinator, backend). Each deployment required updating version strings in 4+ places.
+
+**Solution Implemented** (2026-04-11):
+
+1. **VERSION file**: `dell-deployment/models/production/VERSION` contains the model version string (e.g., "YOLO26s v4.0")
+
+2. **ml-detector reads VERSION at startup**:
+   - `load_model_version()` reads VERSION file when model loads
+   - `/health` endpoint returns `model_version` field
+   - `/detect` responses include dynamic `model_version`
+
+3. **Coordinator uses ml-detector's version**: Falls back to "unknown" if not provided (but ml-detector always provides it now)
+
+4. **Backend re-detection labels itself**: Shows as "YOLO26s v4.0 PyTorch (backend)" to distinguish from ml-detector
+
+**New Model Deployment Process**:
+```bash
+# 1. Copy model file
+cp best.pt /home/rndpig/deer-deterrent/dell-deployment/models/production/
+
+# 2. Update VERSION file
+echo "YOLO26s v5.0" > /home/rndpig/deer-deterrent/dell-deployment/models/production/VERSION
+
+# 3. Update registry.json with model metadata
+# (manual for now, see Improvement #1 below)
+
+# 4. Restart ml-detector
+docker compose restart ml-detector
+
+# No code changes required!
+```
+
+**Files Changed**:
+- `ml-detector/ml_detector_service.py` — reads VERSION, returns model_version in responses
+- `coordinator/coordinator_service.py` — uses ml-detector's version (no hardcoded fallback)
+- `backend/main.py` — `get_model_version()` helper for re-detection labeling
+- `.github/copilot-instructions.md` — documented new deployment process
 
 ---
 
@@ -150,8 +193,9 @@ Script should:
 ## Post-v4.0 Checklist
 
 After current training completes:
-- [ ] Verify test metrics (mAP50 should exceed 0.855)
-- [ ] Confirm model deployed and ml-detector healthy
-- [ ] Manually update `models/registry.json` with v4.0 entry
+- [x] Verify test metrics (mAP50=0.883 > 0.855 ✓)
+- [x] Confirm model deployed and ml-detector healthy
+- [x] Update `models/registry.json` with v4.0 entry
+- [x] Implement VERSION file approach (no more hardcoded versions)
 - [ ] Implement improvements 1-2 from this list
-- [ ] Commit and push updates
+- [x] Commit and push updates
