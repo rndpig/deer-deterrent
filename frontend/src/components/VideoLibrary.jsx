@@ -439,17 +439,38 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
     }
   }, [currentFrameIndex, annotationMode, showFrameAnalysis])
 
+  // Load image for annotation canvas when frame changes or annotation mode activates
+  useEffect(() => {
+    if (!annotationMode || !showFrameAnalysis || videoFrames.length === 0) return
+    
+    const currentFrame = videoFrames[currentFrameIndex]
+    if (!currentFrame) return
+    
+    const imagePath = currentFrame.image_path?.split('/').pop()
+    if (!imagePath) return
+    
+    setImageLoaded(false)
+    
+    const img = new Image()
+    img.onload = () => {
+      imageRef.current = img
+      setImageLoaded(true)
+    }
+    img.onerror = (err) => {
+      console.error('Failed to load image for annotation:', err)
+    }
+    img.src = `${API_URL}/api/training-frames/${imagePath}`
+  }, [currentFrameIndex, annotationMode, showFrameAnalysis, videoFrames])
+
   const handleNextFrame = () => {
     if (currentFrameIndex < videoFrames.length - 1) {
       setCurrentFrameIndex(currentFrameIndex + 1)
-      setImageLoaded(false)
     }
   }
 
   const handlePrevFrame = () => {
     if (currentFrameIndex > 0) {
       setCurrentFrameIndex(currentFrameIndex - 1)
-      setImageLoaded(false)
     }
   }
 
@@ -608,11 +629,6 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
         loadFrameAnnotations(currentFrame.id)
       }
     }
-  }
-
-  const handleImageLoad = (e) => {
-    imageRef.current = e.target
-    setImageLoaded(true)
   }
 
   // Keyboard navigation for frame analysis
@@ -1015,13 +1031,9 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
                   <div className="frame-display">
                     {annotationMode ? (
                       <>
-                        <img 
-                          src={`${API_URL}/api/training-frames/${videoFrames[currentFrameIndex]?.image_path?.split('/').pop()}`}
-                          alt={`Frame ${videoFrames[currentFrameIndex]?.frame_number}`}
-                          className="frame-image-hidden"
-                          onLoad={handleImageLoad}
-                          crossOrigin="anonymous"
-                        />
+                        {!imageLoaded && (
+                          <div className="canvas-loading">Loading image...</div>
+                        )}
                         <canvas
                           ref={canvasRef}
                           width={1280}
@@ -1030,7 +1042,10 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
                           onPointerDown={handleCanvasPointerDown}
                           onPointerMove={handleCanvasPointerMove}
                           onPointerUp={handleCanvasPointerUp}
-                          style={{ cursor: drawing ? 'crosshair' : 'crosshair' }}
+                          style={{ 
+                            cursor: 'crosshair',
+                            display: imageLoaded ? 'block' : 'none'
+                          }}
                         />
                       </>
                     ) : (

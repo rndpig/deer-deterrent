@@ -41,6 +41,7 @@ app = FastAPI(
 # Global model variable
 model = None
 MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "/app/models/production/best.pt")
+MODEL_VERSION = "unknown"  # Loaded dynamically from VERSION file
 CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.75"))
 IOU_THRESHOLD = float(os.getenv("IOU_THRESHOLD", "0.65"))
 DEVICE = os.getenv("DEVICE", "cpu")
@@ -98,6 +99,22 @@ async def settings_refresh_loop():
         await fetch_settings_from_backend()
 
 
+def load_model_version():
+    """Load model version from VERSION file alongside the model"""
+    global MODEL_VERSION
+    version_path = Path(MODEL_PATH).parent / "VERSION"
+    try:
+        if version_path.exists():
+            MODEL_VERSION = version_path.read_text().strip()
+            logger.info(f"Loaded model version: {MODEL_VERSION}")
+        else:
+            MODEL_VERSION = "unknown"
+            logger.warning(f"VERSION file not found at {version_path}, using 'unknown'")
+    except Exception as e:
+        MODEL_VERSION = "unknown"
+        logger.warning(f"Could not read VERSION file: {e}")
+
+
 def load_model():
     """Load YOLO model at startup"""
     global model
@@ -106,6 +123,9 @@ def load_model():
         model = YOLO(MODEL_PATH)
         model.to(DEVICE)
         logger.info(f"Model loaded successfully on device: {DEVICE}")
+        
+        # Load model version from VERSION file
+        load_model_version()
         
         # Warm up the model with a dummy inference
         dummy_image = np.zeros((640, 640, 3), dtype=np.uint8)
@@ -154,6 +174,7 @@ async def health_check():
         "status": "healthy",
         "model_loaded": model is not None,
         "model_path": MODEL_PATH,
+        "model_version": MODEL_VERSION,
         "device": DEVICE,
         "confidence_threshold": CONFIDENCE_THRESHOLD
     }
@@ -249,7 +270,7 @@ async def detect_deer(file: UploadFile = File(...)) -> Dict[str, Any]:
                 "height": image.height
             },
             "confidence_threshold": CONFIDENCE_THRESHOLD,
-            "model_version": "YOLO26s v3.0"
+            "model_version": MODEL_VERSION
         }
         
         logger.info(f"Detection complete: {len(detections)} objects found, deer={deer_detected}")

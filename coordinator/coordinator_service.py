@@ -618,7 +618,7 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
                     "deer_detected": deer_detected,
                     "confidence": confidence,
                     "detection_bboxes": detection_result.get("detections", []) if deer_detected else [],
-                    "model_version": detection_result.get("model_version", "YOLO26s v3.0"),
+                    "model_version": detection_result.get("model_version", "unknown"),
                     "irrigation_activated": event_data["irrigation_activated"]
                 }
                 async with httpx.AsyncClient(timeout=5.0) as client:
@@ -802,7 +802,7 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
                         "deer_detected": deer_detected,
                         "confidence": confidence,
                         "detection_bboxes": detection_result.get("detections", []) if deer_detected else [],
-                        "model_version": detection_result.get("model_version", "YOLO26s v3.0")
+                        "model_version": detection_result.get("model_version", "unknown")
                     }
                     async with httpx.AsyncClient(timeout=5.0) as client:
                         await client.patch(

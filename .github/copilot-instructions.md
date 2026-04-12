@@ -1,5 +1,5 @@
 # Deer Deterrent System — Chat Instructions for AI Agents
-# Last Updated: 2026-04-06
+# Last Updated: 2026-04-11
 
 ## Project Overview
 
@@ -174,15 +174,25 @@ Configured via Settings page (`camera_zones` in `/api/settings`):
 
 ## ML Model
 
-### Current Production Model: YOLO26s v3.0
+### Current Production Model: YOLO26s v4.0
 - **Architecture**: YOLO26s (from ultralytics >= 8.4.0)
 - **File**: `dell-deployment/models/production/best.pt`
+- **Version file**: `dell-deployment/models/production/VERSION` — contains "YOLO26s v4.0", read by ml-detector at startup
 - **CLAHE preprocessing**: clip_limit=2.0, tile_grid_size=(8,8) — applied at inference time in ml-detector
+- **Test metrics**: mAP50=0.883, mAP50-95=0.498, Precision=0.902, Recall=0.804
+
+### Model Deployment
+When deploying a new model:
+1. Copy `best.pt` to `dell-deployment/models/production/`
+2. Update `dell-deployment/models/production/VERSION` with version string (e.g., "YOLO26s v4.0")
+3. Update `models/registry.json` with model metadata
+4. Restart ml-detector: `docker compose restart ml-detector`
 
 ### Model Registry
 See `models/registry.json` for full model history, dataset versions, and deployment history.
 
 ### Previous Models
+- YOLO26s v3.0 — retired 2026-04-11, mAP50=0.855
 - YOLO26s v2.0 (19.35 MB) — retired, see registry.json for details
 - YOLOv8n baseline (5.94 MB) — retired 2026-02-07, backed up as `best.pt.backup_yolov8n_20260207`
 
@@ -216,7 +226,7 @@ The backend is a large FastAPI application (~4400 lines) serving multiple purpos
 | `deer_detected` | BOOLEAN | 1 if deer present (model or user) |
 | `detection_confidence` | REAL | Max confidence from detection (0-1) |
 | `detection_bboxes` | TEXT (JSON) | `[{"confidence": float|null, "bbox": {"x1","y1","x2","y2"}}]` — pixel coords for 640x360 images |
-| `model_version` | TEXT | e.g. "YOLO26s v3.0", "YOLO26s v3.0 OpenVINO" |
+| `model_version` | TEXT | e.g. "YOLO26s v4.0", "YOLO26s v4.0 PyTorch (backend)" |
 | `false_positive` | BOOLEAN | User marked as false positive |
 | `user_confirmed` | BOOLEAN | User reviewed and confirmed/annotated this snapshot (added 2026-03-25) |
 | `archived` | BOOLEAN | Moved to archive |
@@ -263,9 +273,9 @@ Single-file Python app embedded in the Dockerfile (~900 lines). Key responsibili
 Single-file Python app embedded in the Dockerfile (~360 lines). Provides:
 
 - `POST /detect` — Accept image, apply CLAHE, run YOLO, return results
-- `GET /health` — Model status and current confidence_threshold
+- `GET /health` — Model status, model_version, and current confidence_threshold
 - Background settings sync from backend every 30 seconds
-- Returns `model_version: "YOLO26s v3.0"` in detection responses
+- Model version read from `VERSION` file at startup (no hardcoded versions)
 
 ---
 

@@ -37,6 +37,23 @@ import database as db
 detector = None
 r2_storage = None
 
+# Model version cache - read from VERSION file
+_model_version_cache = None
+
+def get_model_version() -> str:
+    """Get model version from VERSION file, cached for performance."""
+    global _model_version_cache
+    if _model_version_cache is None:
+        version_path = Path(__file__).parent / "models" / "production" / "VERSION"
+        try:
+            if version_path.exists():
+                _model_version_cache = version_path.read_text().strip()
+            else:
+                _model_version_cache = "unknown"
+        except Exception:
+            _model_version_cache = "unknown"
+    return _model_version_cache
+
 def load_detector():
     """Lazy load detector to avoid import errors if dependencies not installed."""
     global detector
@@ -505,12 +522,13 @@ async def update_ring_event(event_id: int, update: dict):
                                 if len(detections) > 0:
                                     update["confidence"] = max_confidence
                                     update["detection_bboxes"] = detections
-                                    # Include model version
+                                    # Include model version - note this is backend re-detection (no CLAHE)
+                                    version = get_model_version()
                                     model_name = type(detector_obj).__name__
                                     if 'OpenVINO' in model_name:
-                                        update["model_version"] = "YOLO26s v3.0 OpenVINO"
+                                        update["model_version"] = f"{version} OpenVINO (backend)"
                                     else:
-                                        update["model_version"] = "YOLO26s v3.0 PyTorch"
+                                        update["model_version"] = f"{version} PyTorch (backend)"
                                     logger.info(f"Snapshot {event_id} re-detected with {len(detections)} boxes, confidence: {max_confidence:.2f}, model: {update['model_version']}")
                                 else:
                                     # User says deer but detector didn't find any

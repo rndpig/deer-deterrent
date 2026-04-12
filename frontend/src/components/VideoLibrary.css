@@ -967,6 +967,15 @@
   touch-action: none;
 }
 
+.canvas-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: #9ca3af;
+  font-size: 1.1rem;
+}
+
 .annotation-controls {
   display: flex;
   justify-content: space-between;
