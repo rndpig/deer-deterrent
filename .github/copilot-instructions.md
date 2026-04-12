@@ -83,9 +83,9 @@ The server has its own `.env` at `/home/rndpig/deer-deterrent/.env` with product
 |---|---|---|---|
 | Woods | 10cea9e4511f | Floodlight Cam | YES (moved to barn, formerly Side) |
 | Side | c4dbad08f862 | Floodlight Cam Pro (2nd Gen) | YES (new, 4K, 3D radar motion) |
-| Driveway | 587a624d3fae | Floodlight Cam | No |
+| Driveway | 587a624d3fae | Floodlight Cam | YES |
 | Front Door | 4439c4de7a79 | Wired Doorbell Plus / Video Doorbell Pro | No |
-| Back | f045dae9383a | Floodlight Cam | No |
+| Back | f045dae9383a | Floodlight Cam | YES (zone 5 — Woods North) |
 
 - Ring-MQTT publishes snapshots to `ring/dp1hu9-2i94c-0/camera/{camera_id}/snapshot/image`
 - Motion events come via `ring/+/camera/+/motion` topics
@@ -138,7 +138,7 @@ Configured via Settings page (`camera_zones` in `/api/settings`):
 - **Woods** → Zone 5 (Woods North)
 - **Driveway** → Zone 1 (Driveway North)
 - **Front Door** → (not currently mapped)
-- **Back** → (not currently mapped)
+- **Back** → Zone 5 (Woods North)
 
 ---
 
@@ -263,7 +263,7 @@ Single-file Python app embedded in the Dockerfile (~900 lines). Key responsibili
 - Uses cached MQTT snapshots (not pop-wait-check pattern)
 - Requests snapshot via MQTT `command_topic/snapshot/image`
 - Waits for fresh image in `latest_snapshots` cache
-- Only runs detection on enabled cameras (currently just Side)
+- Only runs detection on enabled cameras (currently Woods, Side, Driveway, Back)
 - Saves snapshots for all polled cameras regardless
 
 ---
