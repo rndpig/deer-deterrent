@@ -8,7 +8,7 @@ function Dashboard({ stats, settings }) {
   const [snapshots, setSnapshots] = useState([])
   const [allDeerSnapshots, setAllDeerSnapshots] = useState([]) // all deer detections (all-time) for accurate stats
   const [loading, setLoading] = useState(true)
-  const [timeFilter, setTimeFilter] = useState('last24h') // last24h, last7d, all
+  const [timeFilter, setTimeFilter] = useState('lastCycle') // lastCycle, last7d, all
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(99) // 99 = 33 rows × 3 cards (no orphans)
   const [feedbackFilter, setFeedbackFilter] = useState('with_deer') // all, with_deer, without_deer
@@ -74,8 +74,17 @@ function Dashboard({ stats, settings }) {
         deerParams.set('camera_id', cameraFilter)
       }
         if (timeFilter !== 'all') {
-        const hours = timeFilter === 'last24h' ? '24' : '168'
-        displayParams.set('time_hours', hours)
+        let hours = 168
+        if (timeFilter === 'lastCycle') {
+          // Compute hours since last cycle start using active_hours_start from settings
+          const cycleStart = settings?.active_hours_start ?? 20
+          const now = new Date()
+          const nowHour = now.getHours() + now.getMinutes() / 60
+          let hoursSinceCycleStart = nowHour - cycleStart
+          if (hoursSinceCycleStart < 0) hoursSinceCycleStart += 24
+          hours = Math.ceil(hoursSinceCycleStart) || 1
+        }
+        displayParams.set('time_hours', String(hours))
       }
         const [displayRes, deerRes] = await Promise.all([
         apiFetch(`/api/snapshots?${displayParams}`),
@@ -359,10 +368,10 @@ function Dashboard({ stats, settings }) {
           <label className="filter-label">Time:</label>
           <div className="filter-buttons">
             <button
-              className={timeFilter === 'last24h' ? 'active' : ''}
-              onClick={() => setTimeFilter('last24h')}
+              className={timeFilter === 'lastCycle' ? 'active' : ''}
+              onClick={() => setTimeFilter('lastCycle')}
             >
-              Last 24h
+              Last Cycle
             </button>
             <button
               className={timeFilter === 'last7d' ? 'active' : ''}
