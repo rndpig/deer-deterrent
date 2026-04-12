@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Deer Detector Training Pipeline v2.0
+# Deer Detector Training Pipeline v3.0
 # =============================================================================
-# One-command end-to-end pipeline: export → train → deploy
+# One-command end-to-end pipeline: export → train → compare → deploy → register
 #
 # Run in tmux so it survives SSH disconnection:
 #   tmux new -s train
@@ -17,6 +17,9 @@
 #   --skip-deploy    Train only, don't deploy to production
 #   --epochs N       Override epoch count (default 150)
 #   --batch N        Override batch size (default 8)
+#   --resume PATH    Resume Phase 2 from a checkpoint (skips export + Phase 1)
+#   --strict         Abort deployment if new model is worse than current
+#   --notify TOPIC   Send ntfy.sh notification on completion (e.g. --notify deer-training)
 # =============================================================================
 
 set -euo pipefail
@@ -36,6 +39,9 @@ SKIP_DEPLOY=false
 EPOCHS=150
 BATCH=8
 DEVICE="cpu"
+RESUME=""
+STRICT=false
+NOTIFY_TOPIC=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -46,6 +52,9 @@ while [[ $# -gt 0 ]]; do
         --epochs) EPOCHS="$2"; shift 2 ;;
         --batch) BATCH="$2"; shift 2 ;;
         --device) DEVICE="$2"; shift 2 ;;
+        --resume) RESUME="$2"; SKIP_EXPORT=true; shift 2 ;;
+        --strict) STRICT=true; shift ;;
+        --notify) NOTIFY_TOPIC="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
@@ -57,7 +66,7 @@ mkdir -p "$(dirname "$LOG_FILE")" "$RUNS_DIR" "$DATASETS_DIR"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "============================================================================="
-echo "  DEER DETECTOR TRAINING PIPELINE v2.0"
+echo "  DEER DETECTOR TRAINING PIPELINE v3.0"
 echo "============================================================================="
 echo "  Started:      $(date)"
 echo "  Project:      ${PROJECT_ROOT}"
@@ -66,6 +75,15 @@ echo "  Skip deploy:  ${SKIP_DEPLOY}"
 echo "  Epochs:       ${EPOCHS}"
 echo "  Batch:        ${BATCH}"
 echo "  Device:       ${DEVICE}"
+if [ -n "$RESUME" ]; then
+    echo "  Resume from:  ${RESUME}"
+fi
+if [ "$STRICT" = true ]; then
+    echo "  Strict mode:  YES (abort on regression)"
+fi
+if [ -n "$NOTIFY_TOPIC" ]; then
+    echo "  Notify:       ntfy.sh/${NOTIFY_TOPIC}"
+fi
 echo "  Log:          ${LOG_FILE}"
 echo "============================================================================="
 echo ""
@@ -129,19 +147,36 @@ echo ""
 # =============================================================================
 # STEP 2: Train YOLO26s
 # =============================================================================
-echo "============================================================================="
-echo "  STEP 2: Training YOLO26s (${EPOCHS} epochs, batch=${BATCH}, device=${DEVICE})"
-echo "  This will take a long time on CPU (~30-50 hours). Go do something else."
-echo "============================================================================="
-echo ""
+if [ -n "$RESUME" ]; then
+    echo "============================================================================="
+    echo "  STEP 2: Resuming YOLO26s training from checkpoint"
+    echo "  Checkpoint: ${RESUME}"
+    echo "============================================================================="
+    echo ""
 
-cd "${PROJECT_ROOT}"
-python3 "${SCRIPTS_DIR}/train_yolo26s_v2.py" \
-    --data "${DATA_YAML}" \
-    --output "${RUNS_DIR}" \
-    --epochs "${EPOCHS}" \
-    --batch "${BATCH}" \
-    --device "${DEVICE}"
+    cd "${PROJECT_ROOT}"
+    python3 "${SCRIPTS_DIR}/train_yolo26s_v2.py" \
+        --data "${DATA_YAML}" \
+        --output "${RUNS_DIR}" \
+        --epochs "${EPOCHS}" \
+        --batch "${BATCH}" \
+        --device "${DEVICE}" \
+        --resume "${RESUME}"
+else
+    echo "============================================================================="
+    echo "  STEP 2: Training YOLO26s (${EPOCHS} epochs, batch=${BATCH}, device=${DEVICE})"
+    echo "  This will take a long time on CPU (~30-50 hours). Go do something else."
+    echo "============================================================================="
+    echo ""
+
+    cd "${PROJECT_ROOT}"
+    python3 "${SCRIPTS_DIR}/train_yolo26s_v2.py" \
+        --data "${DATA_YAML}" \
+        --output "${RUNS_DIR}" \
+        --epochs "${EPOCHS}" \
+        --batch "${BATCH}" \
+        --device "${DEVICE}"
+fi
 
 # Find the best model from the latest run
 LATEST_RUN=$(ls -dt "${RUNS_DIR}"/deer_v2_*_phase2 2>/dev/null | head -1 || true)
@@ -166,7 +201,37 @@ echo "  Model size: ${MODEL_SIZE}"
 echo ""
 
 # =============================================================================
-# STEP 3: Deploy to production
+# STEP 3: Compare new model vs current production
+# =============================================================================
+if [ "$SKIP_DEPLOY" = false ] && [ -f "$PRODUCTION_MODEL" ]; then
+    echo "============================================================================="
+    echo "  STEP 3: Comparing new model vs current production"
+    echo "============================================================================="
+    echo ""
+
+    STRICT_FLAG=""
+    if [ "$STRICT" = true ]; then
+        STRICT_FLAG="--strict"
+    fi
+
+    cd "${PROJECT_ROOT}"
+    python3 "${SCRIPTS_DIR}/compare_before_deploy.py" \
+        --new-model "${BEST_MODEL}" \
+        --current-model "${PRODUCTION_MODEL}" \
+        --data "${DATA_YAML}" \
+        --device "${DEVICE}" \
+        --batch "${BATCH}" \
+        ${STRICT_FLAG}
+
+    echo ""
+else
+    if [ "$SKIP_DEPLOY" = false ]; then
+        echo "  No current production model — skipping comparison."
+    fi
+fi
+
+# =============================================================================
+# STEP 4: Deploy to production
 # =============================================================================
 if [ "$SKIP_DEPLOY" = true ]; then
     echo "  Skipping deployment (--skip-deploy)"
@@ -177,7 +242,7 @@ if [ "$SKIP_DEPLOY" = true ]; then
     echo ""
 else
     echo "============================================================================="
-    echo "  STEP 3: Deploying to production"
+    echo "  STEP 4: Deploying to production"
     echo "============================================================================="
     echo ""
     
@@ -216,6 +281,20 @@ else
         fi
         sleep 2
     done
+
+    # ---- Update model registry ----
+    echo ""
+    echo "  Updating model registry..."
+    SUMMARY=$(ls -t "${RUNS_DIR}"/deer_v2_*_summary.json 2>/dev/null | head -1 || true)
+    if [ -n "$SUMMARY" ] && [ -f "$SUMMARY" ]; then
+        python3 "${SCRIPTS_DIR}/update_registry.py" \
+            --summary "${SUMMARY}" \
+            --model "${PRODUCTION_MODEL}" \
+            --dataset-dir "${DATASET_DIR}"
+    else
+        echo "  WARNING: No training summary found — registry not updated."
+        echo "  Run manually: python3 scripts/update_registry.py --summary <path> --model ${PRODUCTION_MODEL} --dataset-dir ${DATASET_DIR}"
+    fi
 fi
 
 # =============================================================================
@@ -236,10 +315,11 @@ echo ""
 
 # Print the training summary JSON if available
 SUMMARY=$(ls -t "${RUNS_DIR}"/deer_v2_*_summary.json 2>/dev/null | head -1 || true)
+MAP50="N/A"
 if [ -n "$SUMMARY" ] && [ -f "$SUMMARY" ]; then
     echo "  Training Summary:"
     python3 -c "
-import json
+import json, sys
 with open('${SUMMARY}') as f:
     s = json.load(f)
 m = s.get('test_metrics', {})
@@ -251,6 +331,30 @@ print(f\"    Precision:    {m.get('precision', 'N/A')}\")
 print(f\"    Recall:       {m.get('recall', 'N/A')}\")
 print(f\"    Model size:   {s.get('model_size_mb', 'N/A')} MB\")
 "
+    # Extract mAP50 for notification
+    MAP50=$(python3 -c "
+import json
+with open('${SUMMARY}') as f:
+    s = json.load(f)
+print(s.get('test_metrics', {}).get('map50', 'N/A'))
+" 2>/dev/null || echo "N/A")
+fi
+
+# =============================================================================
+# Notification (optional)
+# =============================================================================
+if [ -n "$NOTIFY_TOPIC" ]; then
+    DEPLOY_STATUS="trained"
+    if [ "$SKIP_DEPLOY" = false ]; then
+        DEPLOY_STATUS="deployed"
+    fi
+    curl -sf \
+        -H "Title: Deer Training Complete" \
+        -H "Priority: default" \
+        -H "Tags: deer,white_check_mark" \
+        -d "Model ${DEPLOY_STATUS}. mAP50=${MAP50}. Log: ${LOG_FILE}" \
+        "https://ntfy.sh/${NOTIFY_TOPIC}" > /dev/null 2>&1 || \
+        echo "  WARNING: ntfy notification failed (not critical)"
 fi
 
 echo "============================================================================="

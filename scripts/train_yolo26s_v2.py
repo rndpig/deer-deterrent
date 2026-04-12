@@ -16,6 +16,7 @@ Or use the pipeline script:
 
 import argparse
 import os
+import re
 import sys
 import json
 import shutil
@@ -67,12 +68,16 @@ def check_environment():
 
 
 def train(data_yaml: str, output_dir: str = "runs/train",
-          epochs: int = 150, batch_size: int = 8, device: str = "cpu"):
+          epochs: int = 150, batch_size: int = 8, device: str = "cpu",
+          resume: str = None):
     """
     Two-phase YOLO training optimized for CPU.
     
     Phase 1 (20 epochs): Frozen backbone — head adapts to deer features
     Phase 2 (remaining):  Full fine-tune — entire network optimized
+    
+    If resume is provided (path to a checkpoint .pt), Phase 1 is skipped
+    and Phase 2 resumes from that checkpoint.
     """
     from ultralytics import YOLO
     
@@ -86,87 +91,111 @@ def train(data_yaml: str, output_dir: str = "runs/train",
     print("=" * 70)
     print(f"  Data:       {data_yaml}")
     print(f"  Output:     {output_dir}/{run_name}_*")
-    print(f"  Epochs:     {epochs} ({min(20, epochs)} frozen + {max(0, epochs-20)} full)")
+    if resume:
+        print(f"  RESUMING:   {resume} (skipping Phase 1)")
+        print(f"  Epochs:     {epochs - 20} (Phase 2 only)")
+    else:
+        print(f"  Epochs:     {epochs} ({min(20, epochs)} frozen + {max(0, epochs-20)} full)")
     print(f"  Batch:      {batch_size}")
     print(f"  Device:     {device}")
     print(f"  Started:    {datetime.now().isoformat()}")
     print()
     
-    # ---- Load model ----
-    # Try YOLO26s first (real YOLO26), fallback to YOLOv8s
-    arch = None
-    model = None
-    for model_name, arch_name in [("yolo26s.pt", "YOLO26s"), ("yolov8s.pt", "YOLOv8s")]:
+    # ---- Resume from checkpoint? ----
+    if resume:
+        resume_path = Path(resume)
+        if not resume_path.exists():
+            print(f"ERROR: Resume checkpoint not found: {resume_path}")
+            sys.exit(1)
+        # Detect architecture from the checkpoint
         try:
-            print(f"Trying {model_name}...")
-            model = YOLO(model_name)
-            arch = arch_name
-            print(f"  Loaded {arch}")
-            break
+            test_model = YOLO(str(resume_path))
+            arch = "YOLO26s"  # Assume YOLO26s for deer project
+            del test_model
         except Exception as e:
-            print(f"  {model_name} not available: {e}")
-    
-    if model is None:
-        print("ERROR: No model could be loaded")
-        sys.exit(1)
-
-    # ---- Phase 1: Frozen backbone ----
-    phase1_epochs = min(20, epochs)
-    
-    print(f"\n{'='*70}")
-    print(f"PHASE 1: Frozen backbone ({phase1_epochs} epochs)")
-    print(f"{'='*70}")
-    
-    results1 = model.train(
-        data=data_yaml,
-        epochs=phase1_epochs,
-        imgsz=640,
-        batch=batch_size,
-        device=device,
-        project=output_dir,
-        name=f"{run_name}_phase1",
-        
-        freeze=10,                # Freeze backbone layers
-        
-        optimizer="AdamW",
-        lr0=0.01,
-        lrf=0.01,
-        weight_decay=0.0005,
-        warmup_epochs=3,
-        
-        # Augmentation
-        hsv_h=0.02,
-        hsv_s=0.7,
-        hsv_v=0.5,
-        translate=0.15,
-        scale=0.5,
-        fliplr=0.5,
-        mosaic=1.0,
-        mixup=0.1,
-        
-        patience=0,              # No early stopping in phase 1
-        workers=2,               # CPU: fewer workers to avoid overload
-        verbose=True,
-        plots=True,
-        save=True,
-    )
-    
-    # Find the actual phase1 output dir (YOLO may append a number if dir exists)
-    phase1_candidates = sorted(
-        Path(output_dir).glob(f"{run_name}_phase1*/weights/best.pt"),
-        key=lambda p: p.stat().st_mtime, reverse=True
-    )
-    if phase1_candidates:
-        phase1_best = phase1_candidates[0]
+            print(f"ERROR: Could not load checkpoint: {e}")
+            sys.exit(1)
+        phase1_best = resume_path
+        phase1_epochs = 0
+        print(f"  Resuming from: {resume_path}")
+        print(f"  Skipping Phase 1 (frozen backbone)")
+        print()
     else:
-        # Fallback to last.pt
-        last_candidates = sorted(
-            Path(output_dir).glob(f"{run_name}_phase1*/weights/last.pt"),
+        # ---- Load model ----
+        # Try YOLO26s first (real YOLO26), fallback to YOLOv8s
+        arch = None
+        model = None
+        for model_name, arch_name in [("yolo26s.pt", "YOLO26s"), ("yolov8s.pt", "YOLOv8s")]:
+            try:
+                print(f"Trying {model_name}...")
+                model = YOLO(model_name)
+                arch = arch_name
+                print(f"  Loaded {arch}")
+                break
+            except Exception as e:
+                print(f"  {model_name} not available: {e}")
+        
+        if model is None:
+            print("ERROR: No model could be loaded")
+            sys.exit(1)
+
+        # ---- Phase 1: Frozen backbone ----
+        phase1_epochs = min(20, epochs)
+        
+        print(f"\n{'='*70}")
+        print(f"PHASE 1: Frozen backbone ({phase1_epochs} epochs)")
+        print(f"{'='*70}")
+        
+        results1 = model.train(
+            data=data_yaml,
+            epochs=phase1_epochs,
+            imgsz=640,
+            batch=batch_size,
+            device=device,
+            project=output_dir,
+            name=f"{run_name}_phase1",
+            
+            freeze=10,                # Freeze backbone layers
+            
+            optimizer="AdamW",
+            lr0=0.01,
+            lrf=0.01,
+            weight_decay=0.0005,
+            warmup_epochs=3,
+            
+            # Augmentation
+            hsv_h=0.02,
+            hsv_s=0.7,
+            hsv_v=0.5,
+            translate=0.15,
+            scale=0.5,
+            fliplr=0.5,
+            mosaic=1.0,
+            mixup=0.1,
+            
+            patience=0,              # No early stopping in phase 1
+            workers=2,               # CPU: fewer workers to avoid overload
+            verbose=True,
+            plots=True,
+            save=True,
+        )
+        
+        # Find the actual phase1 output dir (YOLO may append a number if dir exists)
+        phase1_candidates = sorted(
+            Path(output_dir).glob(f"{run_name}_phase1*/weights/best.pt"),
             key=lambda p: p.stat().st_mtime, reverse=True
         )
-        phase1_best = last_candidates[0] if last_candidates else Path(output_dir) / f"{run_name}_phase1" / "weights" / "best.pt"
+        if phase1_candidates:
+            phase1_best = phase1_candidates[0]
+        else:
+            # Fallback to last.pt
+            last_candidates = sorted(
+                Path(output_dir).glob(f"{run_name}_phase1*/weights/last.pt"),
+                key=lambda p: p.stat().st_mtime, reverse=True
+            )
+            phase1_best = last_candidates[0] if last_candidates else Path(output_dir) / f"{run_name}_phase1" / "weights" / "best.pt"
     
-    print(f"\nPhase 1 complete. Best: {phase1_best}")
+        print(f"\nPhase 1 complete. Best: {phase1_best}")
     
     # ---- Phase 2: Full fine-tune ----
     phase2_epochs = epochs - phase1_epochs
@@ -259,9 +288,13 @@ def train(data_yaml: str, output_dir: str = "runs/train",
         print(f"    Recall:    {test_metrics['recall']:.4f}")
     
     # ---- Save summary ----
+    # Parse dataset version from data.yaml path (e.g., /data/training_datasets/v3.0_20260411/data.yaml → "3.0")
+    ds_match = re.search(r'/v(\d+\.\d+)_', data_yaml)
+    dataset_version = ds_match.group(1) if ds_match else 'unknown'
+    
     summary = {
         'architecture': arch,
-        'dataset_version': '2.0',
+        'dataset_version': dataset_version,
         'data_yaml': data_yaml,
         'device': device,
         'epochs_total': epochs,
@@ -297,6 +330,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=150, help="Total epochs")
     parser.add_argument("--batch", type=int, default=8, help="Batch size (8 for CPU)")
     parser.add_argument("--device", default="cpu", help="Device (cpu or cuda)")
+    parser.add_argument("--resume", default=None, help="Path to checkpoint .pt to resume from (skips Phase 1)")
     
     args = parser.parse_args()
     
@@ -309,4 +343,5 @@ if __name__ == "__main__":
         epochs=args.epochs,
         batch_size=args.batch,
         device=args.device,
+        resume=args.resume,
     )
