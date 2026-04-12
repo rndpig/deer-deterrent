@@ -1,7 +1,7 @@
 {
   "registry_version": "3.0",
   "created_at": "2026-01-31T19:56:00Z",
-  "updated_at": "2026-03-15T00:00:00Z",
+  "updated_at": "2026-04-11T20:06:00Z",
   "description": "Model registry for deer detection models. Tracks all trained models, their performance, and deployment status.",
   "models": [
     {
@@ -158,15 +158,78 @@
         "clahe_tile_grid_size": [8, 8]
       },
       "deployment": {
-        "status": "deployed",
+        "status": "retired",
         "environment": "production",
         "service": "ml-detector",
         "deployed_at": "2026-03-15",
+        "retired_at": "2026-04-11",
         "ultralytics_version": "8.4.9",
-        "notes": "Deployed via docker compose. Improved precision (+10.6%) and mAP50-95 (+6.4%) over v2.0."
+        "notes": "Replaced by YOLO26s v4.0. Backup at best.pt.backup_yolo26s_v3.0_20260411"
       },
       "git_commit": null,
       "notes": "Trained on Dell server (i7-4790 CPU). Dataset v3.0 adds 31 Ring deer snapshots with bboxes and 155 confirmed non-deer negatives. Major precision improvement reduces false positives."
+    },
+    {
+      "model_id": "yolo26s_v4.0",
+      "name": "YOLO26s v4.0 - Production",
+      "version": "4.0.0",
+      "framework": "ultralytics",
+      "architecture": "yolo26s",
+      "model_path": "models/production/best.pt",
+      "dataset_version": "3.0 (expanded)",
+      "dataset_notes": "566 images: 289 video frames (from 26 videos, including Driveway) + 79 Ring deer snapshots + 198 negatives. CLAHE preprocessed.",
+      "training_date": "2026-04-11",
+      "training_config": {
+        "phase1_epochs": 20,
+        "phase2_epochs": 110,
+        "phase2_best_epoch": 80,
+        "phase2_early_stopping_patience": 30,
+        "batch_size": 8,
+        "image_size": 640,
+        "augmentation": "mosaic + mixup + copy_paste + CLAHE preprocessing",
+        "optimizer": "AdamW",
+        "lr0_phase1": 0.01,
+        "lr0_phase2": 0.001,
+        "lrf": 0.01,
+        "freeze_layers": "10 (phase1 only)"
+      },
+      "metrics": {
+        "validation": {
+          "mAP50": 0.878,
+          "mAP50_95": 0.468,
+          "precision": 0.950,
+          "recall": 0.782
+        },
+        "test": {
+          "mAP50": 0.883,
+          "mAP50_95": 0.498,
+          "precision": 0.902,
+          "recall": 0.804
+        },
+        "confidence_threshold": 0.55
+      },
+      "performance": {
+        "inference_format": "pytorch",
+        "device": "cpu (i7-4790)",
+        "avg_inference_time_ms": 93,
+        "model_size_mb": 20.3,
+        "parameters": 9465567
+      },
+      "preprocessing": {
+        "clahe_enabled": true,
+        "clahe_clip_limit": 2.0,
+        "clahe_tile_grid_size": [8, 8]
+      },
+      "deployment": {
+        "status": "deployed",
+        "environment": "production",
+        "service": "ml-detector",
+        "deployed_at": "2026-04-11",
+        "ultralytics_version": "8.4.9",
+        "notes": "First model trained with Driveway camera data. Triggered first successful deer deterrence at 3:56am 2026-04-11."
+      },
+      "git_commit": null,
+      "notes": "Trained on Dell server in 9.5 hours. Dataset adds 45 newly annotated Driveway frames from first successful deer event. mAP50-95 improved +9.7% over v3.0."
     }
   ],
   "deployment_history": [
@@ -203,6 +266,20 @@
       "action": "deployed",
       "environment": "production",
       "notes": "Dataset v3.0 (444 images). mAP50=0.855, P=0.942, R=0.770"
+    },
+    {
+      "date": "2026-04-11",
+      "model_id": "yolo26s_v3.0",
+      "action": "retired",
+      "environment": "production",
+      "notes": "Backed up as best.pt.backup_yolo26s_v3.0_20260411"
+    },
+    {
+      "date": "2026-04-11",
+      "model_id": "yolo26s_v4.0",
+      "action": "deployed",
+      "environment": "production",
+      "notes": "Dataset v3.0 expanded (566 images). Test: mAP50=0.883, P=0.902, R=0.804. First model with Driveway camera data."
     }
   ],
   "dataset_versions": [
@@ -281,6 +358,36 @@
         "ring_snapshots_deer": 31,
         "ring_snapshots_negative": 155,
         "videos_processed": 25
+      },
+      "preprocessing": {
+        "clahe_applied": true,
+        "clahe_clip_limit": 3.0,
+        "clahe_tile_grid_size": [8, 8]
+      }
+    },
+    {
+      "version": "3.0 (expanded)",
+      "name": "v3.0_20260411_092249",
+      "path": "data/training_datasets/v3.0_20260411_092249",
+      "created_at": "2026-04-11T09:22:49Z",
+      "description": "Expanded dataset v3.0 with Driveway camera frames from first successful deer detection event",
+      "statistics": {
+        "total_images": 566,
+        "train_images": 415,
+        "val_images": 87,
+        "test_images": 64,
+        "positives": 368,
+        "negatives": 198,
+        "classes": ["deer"],
+        "cameras": ["Side", "Driveway", "Front Door", "Back"],
+        "temporal_coverage": "2025-11-15 to 2026-04-11",
+        "seasons": ["fall", "winter", "spring"]
+      },
+      "source": {
+        "video_frames": 289,
+        "ring_snapshots_deer": 79,
+        "ring_snapshots_negative": 198,
+        "videos_processed": 26
       },
       "preprocessing": {
         "clahe_applied": true,
