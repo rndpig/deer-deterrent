@@ -215,6 +215,9 @@ async def detect_deer(file: UploadFile = File(...)) -> Dict[str, Any]:
             except Exception as e:
                 logger.warning(f"CLAHE preprocessing failed, using original: {e}")
         
+        # Convert RGB→BGR: ultralytics assumes numpy arrays are BGR (OpenCV convention)
+        image_np = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+        
         logger.info(f"Processing image: {image.size}, mode: {image.mode}, clahe={ENABLE_CLAHE}")
         
         # Run inference
