@@ -179,16 +179,11 @@ def main():
         try:
             result = detect_image(image_path)
             deer_detected = result.get("deer_detected", False)
-            new_confidence = result.get("confidence", 0)
-            new_bboxes_raw = result.get("detections", result.get("bboxes", []))
+            new_detections = result.get("detections", [])
+            new_confidence = max((d["confidence"] for d in new_detections), default=0)
 
-            # Normalize new bboxes to {x1,y1,x2,y2} format
-            new_bboxes = []
-            for det in new_bboxes_raw:
-                if "bbox" in det:
-                    new_bboxes.append(det["bbox"])
-                elif "x1" in det:
-                    new_bboxes.append(det)
+            # Extract bboxes from detections
+            new_bboxes = [d["bbox"] for d in new_detections if "bbox" in d]
 
             # Parse original manual bboxes
             orig_bboxes = []
@@ -219,7 +214,7 @@ def main():
                 "v4_detected": deer_detected,
                 "v4_confidence": round(new_confidence, 4) if new_confidence else 0,
                 "v4_bbox_count": len(new_bboxes),
-                "v4_bboxes_json": json.dumps(new_bboxes_raw),
+                "v4_bboxes_json": json.dumps(new_detections),
                 "avg_iou": round(avg_iou, 4) if avg_iou is not None else "",
             })
 
