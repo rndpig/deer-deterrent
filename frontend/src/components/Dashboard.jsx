@@ -288,9 +288,9 @@ function Dashboard({ stats, settings }) {
       ).timestamp)
     : null
 
-  // Average confidence
+  // Average confidence (exclude manual-only detections with 0% confidence)
   const avgConfidence = (() => {
-    const withConf = timeFilteredDeer.filter(s => s.detection_confidence != null)
+    const withConf = timeFilteredDeer.filter(s => s.detection_confidence > 0)
     if (withConf.length === 0) return null
     const avg = withConf.reduce((sum, s) => sum + s.detection_confidence, 0) / withConf.length
     return `${(avg * 100).toFixed(0)}%`
