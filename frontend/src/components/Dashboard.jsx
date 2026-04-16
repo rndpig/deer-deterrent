@@ -160,7 +160,7 @@ function Dashboard({ stats, settings }) {
          const response = await apiFetch(`/api/ring-events/${snapshotId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deer_detected: hasDeer ? 1 : 0 })
+        body: JSON.stringify({ deer_detected: hasDeer ? 1 : 0, false_positive: hasDeer ? 0 : 1 })
       })
 
       if (response.ok) {

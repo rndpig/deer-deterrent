@@ -871,7 +871,7 @@ def update_ring_event_result(event_id: int, processed: bool = True,
                              deer_detected: bool = None, confidence: float = None,
                              error_message: str = None, detection_bboxes: list = None,
                              model_version: str = None, user_confirmed: bool = None,
-                             irrigation_activated: bool = None):
+                             irrigation_activated: bool = None, false_positive: bool = None):
     """Update Ring event with detection results."""
     conn = get_connection()
     cursor = conn.cursor()
@@ -906,6 +906,10 @@ def update_ring_event_result(event_id: int, processed: bool = True,
     if irrigation_activated is not None:
         updates.append("irrigation_activated = ?")
         params.append(irrigation_activated)
+    
+    if false_positive is not None:
+        updates.append("false_positive = ?")
+        params.append(false_positive)
     
     params.append(event_id)
     

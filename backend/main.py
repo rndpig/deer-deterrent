@@ -548,7 +548,8 @@ async def update_ring_event(event_id: int, update: dict):
         detection_bboxes=update.get("detection_bboxes"),
         model_version=update.get("model_version"),
         user_confirmed=True if is_user_feedback else None,
-        irrigation_activated=update.get("irrigation_activated")
+        irrigation_activated=update.get("irrigation_activated"),
+        false_positive=update.get("false_positive")
     )
     return {"status": "success"}
 
