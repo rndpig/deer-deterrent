@@ -8,6 +8,7 @@ function VideoLibrary() {
   const [trainingStatus, setTrainingStatus] = useState(null)
   const [deleting, setDeleting] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const [reprocessing, setReprocessing] = useState(false)
   const [uploadedVideo, setUploadedVideo] = useState(null)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [selectedCamera, setSelectedCamera] = useState('front')
@@ -625,6 +626,27 @@ function VideoLibrary() {
         </div>
         
         <div className="header-right">
+          <button 
+            className="btn-reprocess"
+            disabled={reprocessing || videos.length === 0}
+            onClick={async () => {
+              if (!confirm('🔄 Reprocess all videos?\n\nThis will re-run deer detection on all frames using the current model and update detection counts.\nContinue?')) return
+              setReprocessing(true)
+              try {
+                const res = await apiFetch('/api/videos/reanalyze-all', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                if (!res.ok) throw new Error((await res.json()).detail || 'Reprocess failed')
+                const result = await res.json()
+                alert(`✅ Done!\n\nVideos processed: ${result.processed}\nDetections found: ${result.total_detections}`)
+                loadVideos()
+              } catch (e) {
+                alert(`❌ Reprocess failed: ${e.message}`)
+              } finally {
+                setReprocessing(false)
+              }
+            }}
+          >
+            {reprocessing ? '⏳ Reprocessing...' : '🔄 Redetect All'}
+          </button>
           <button 
             className="btn-upload-video"
             onClick={handleUploadClick}

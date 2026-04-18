@@ -445,10 +445,11 @@ async def get_disk_usage():
 
 @app.delete("/api/videos/cleanup-old")
 async def cleanup_old_videos(days: int = 30):
-    """Delete video files older than N days but keep their extracted frames.
+    """Delete old videos and their DB entries (frames/annotations cascade-delete).
     
-    Sets video_path to NULL so the video card still shows in the library
-    with its frames/annotations intact, but the MP4 file is removed from disk.
+    Removes the MP4 file from disk AND deletes the video entry from the database.
+    Frames, detections, and annotations are cascade-deleted by the FK constraint.
+    Frame image files on disk are also cleaned up.
     """
     from datetime import datetime, timedelta
     cutoff = (datetime.now() - timedelta(days=days)).isoformat()
@@ -456,23 +457,36 @@ async def cleanup_old_videos(days: int = 30):
     conn = db.get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, video_path, filename FROM videos 
-        WHERE video_path IS NOT NULL 
-        AND upload_date < ?
+        SELECT v.id, v.video_path, v.filename FROM videos v
+        WHERE v.upload_date < ?
     """, (cutoff,))
     
     deleted = 0
     freed_bytes = 0
     for row in cursor.fetchall():
-        video_path = Path(row["video_path"])
-        if not video_path.is_absolute():
-            video_path = Path("/app") / video_path
-        if video_path.exists():
-            freed_bytes += video_path.stat().st_size
-            video_path.unlink()
-            deleted += 1
-        # Clear video_path so we know the file is gone
-        cursor.execute("UPDATE videos SET video_path = NULL WHERE id = ?", (row["id"],))
+        # Delete MP4 file if it exists
+        if row["video_path"]:
+            video_path = Path(row["video_path"])
+            if not video_path.is_absolute():
+                video_path = Path("/app") / video_path
+            if video_path.exists():
+                freed_bytes += video_path.stat().st_size
+                video_path.unlink()
+        
+        # Delete frame image files
+        cursor.execute("SELECT image_path FROM frames WHERE video_id = ?", (row["id"],))
+        for frame_row in cursor.fetchall():
+            if frame_row["image_path"]:
+                frame_path = Path(frame_row["image_path"])
+                if not frame_path.is_absolute():
+                    frame_path = Path("/app") / frame_path
+                if frame_path.exists():
+                    freed_bytes += frame_path.stat().st_size
+                    frame_path.unlink()
+        
+        # Delete the video entry (cascades to frames/detections/annotations)
+        cursor.execute("DELETE FROM videos WHERE id = ?", (row["id"],))
+        deleted += 1
     
     conn.commit()
     conn.close()

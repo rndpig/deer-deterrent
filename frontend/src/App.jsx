@@ -16,7 +16,6 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [ws, setWs] = useState(null)
   const [showMenu, setShowMenu] = useState(false)
-  const [reanalyzing, setReanalyzing] = useState(false)
   const [diskUsage, setDiskUsage] = useState(null)
 
   // Connect to WebSocket
@@ -152,27 +151,6 @@ function App() {
                   }}
                 >
                   🎬 Videos
-                </button>
-                <button 
-                  className="dropdown-item"
-                  disabled={reanalyzing}
-                  onClick={async () => {
-                    setShowMenu(false)
-                    if (!confirm('🔄 Re-analyze all videos with the updated model?\n\nThis will re-run detection on all videos and update counts.\nContinue?')) return
-                    setReanalyzing(true)
-                    try {
-                      const res = await apiFetch('/api/videos/reanalyze-all', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-                      if (!res.ok) throw new Error((await res.json()).detail || 'Re-analysis failed')
-                      const result = await res.json()
-                      alert(`✅ Re-analysis complete!\n\nVideos processed: ${result.processed}\nTotal detections: ${result.total_detections}`)
-                    } catch (e) {
-                      alert(`❌ Re-analysis failed: ${e.message}`)
-                    } finally {
-                      setReanalyzing(false)
-                    }
-                  }}
-                >
-                  {reanalyzing ? '⏳ Re-analyzing...' : '🔄 Re-analyze All'}
                 </button>
                 <button 
                   className="dropdown-item"
