@@ -31,6 +31,22 @@
   position: relative;
   display: flex;
   align-items: center;
+  gap: 0.5rem;
+}
+
+.disk-indicator {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+.disk-indicator.disk-caution {
+  color: #f59e0b;
+}
+
+.disk-indicator.disk-warning {
+  color: #ef4444;
+  font-weight: 600;
 }
 
 .btn-hamburger {

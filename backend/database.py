@@ -269,16 +269,16 @@ def db_connection():
 
 # Video operations
 def add_video(filename: str, camera_name: str, duration: float, fps: float, 
-              total_frames: int, video_path: str) -> int:
+              total_frames: int, video_path: str, auto_ingested: bool = False) -> int:
     """Add a new video to the database."""
     with db_connection() as conn:
         cursor = conn.cursor()
         
         cursor.execute("""
             INSERT INTO videos (filename, upload_date, camera_name, duration_seconds, 
-                              fps, total_frames, video_path)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (filename, datetime.now().isoformat(), camera_name, duration, fps, total_frames, video_path))
+                              fps, total_frames, video_path, auto_ingested)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (filename, datetime.now().isoformat(), camera_name, duration, fps, total_frames, video_path, auto_ingested))
         
         video_id = cursor.lastrowid
         conn.commit()
@@ -871,7 +871,8 @@ def update_ring_event_result(event_id: int, processed: bool = True,
                              deer_detected: bool = None, confidence: float = None,
                              error_message: str = None, detection_bboxes: list = None,
                              model_version: str = None, user_confirmed: bool = None,
-                             irrigation_activated: bool = None, false_positive: bool = None):
+                             irrigation_activated: bool = None, false_positive: bool = None,
+                             recording_url: str = None):
     """Update Ring event with detection results."""
     conn = get_connection()
     cursor = conn.cursor()
@@ -910,6 +911,10 @@ def update_ring_event_result(event_id: int, processed: bool = True,
     if false_positive is not None:
         updates.append("false_positive = ?")
         params.append(false_positive)
+    
+    if recording_url is not None:
+        updates.append("recording_url = ?")
+        params.append(recording_url)
     
     params.append(event_id)
     

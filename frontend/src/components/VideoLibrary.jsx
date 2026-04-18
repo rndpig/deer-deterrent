@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import './VideoLibrary.css'
 import { apiFetch, API_URL } from '../api'
 
-function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnapshots, onViewArchive, hideSnapshotsButton = false }) {
+function VideoLibrary() {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
   const [trainingStatus, setTrainingStatus] = useState(null)
@@ -12,8 +12,6 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [selectedCamera, setSelectedCamera] = useState('front')
   const [captureDateTime, setCaptureDateTime] = useState('')
-  const [reanalyzing, setReanalyzing] = useState(false)
-  const [reanalysisProgress, setReanalysisProgress] = useState(null)
   
   // Video player state
   const [showVideoPlayer, setShowVideoPlayer] = useState(false)
@@ -125,30 +123,6 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
       alert('Failed to archive video')
     }
   }
-    const fillMissingFrames = async (videoId, videoFilename) => {
-    if (!confirm(`Fill in missing frames for "${videoFilename}"? This will preserve all existing annotations.`)) {
-      return
-    }
-    try {
-         const response = await apiFetch(`/api/videos/${videoId}/fill-missing-frames`, {
-        method: 'POST'
-      })
-      
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.detail || 'Failed to fill missing frames')
-      }
-              const result = await response.json()
-      alert(`✅ Success! Added ${result.frames_added} missing frames. All annotations preserved.`)
-      
-      // Reload videos to update frame count
-      await loadVideos()
-      await loadTrainingStatus()
-    } catch (error) {
-      console.error('Error filling missing frames:', error)
-      alert(`Failed to fill missing frames: ${error.message}`)
-    }
-  }
     const toggleMenu = (videoId, event) => {
     event.stopPropagation()
     setOpenMenuId(openMenuId === videoId ? null : videoId)
@@ -172,66 +146,8 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
         break
     }
   }
-    const handleStartReview = async () => {    try {
-      // Trigger frame selection algorithm
-      const response = await apiFetch(`/api/training/select-frames`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_count: 120 })
-      })
-      
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.detail || 'Failed to select frames')
-      }
-
-      // Navigate to review
-      if (onStartReview) {
-        onStartReview()
-      }
-    } catch (error) {
-      console.error('Error starting review:', error)
-      alert('❌ Failed to start review: ' + error.message)
-    }
-  }
       const handleUploadClick = () => {
     document.getElementById('video-upload-input').click()
-  }
-    const handleReanalyzeAll = async () => {    if (!confirm('🔄 Re-analyze all videos with the new model?\n\nThis will:\n1. Run the updated model on all videos\n2. Update detection counts\n3. Take a few minutes to complete\n\nContinue?')) {
-      return
-    }
-    
-    setReanalyzing(true)
-    setReanalysisProgress({ current: 0, total: videos.length, results: [] })
-          try {
-         const response = await apiFetch(`/api/videos/reanalyze-all`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      })
-      
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.detail || 'Re-analysis failed')
-      }
-              const result = await response.json()
-      
-      alert(
-        `✅ Re-analysis complete!\n\n` +
-        `Videos processed: ${result.processed}\n` +
-        `Total detections: ${result.total_detections}\n` +
-        `Average detections per video: ${(result.total_detections / result.processed).toFixed(1)}`
-      )
-      
-      // Reload videos to show updated counts
-      await loadVideos()
-      
-    } catch (error) {
-      console.error('Re-analysis error:', error)
-      alert(`❌ Re-analysis failed:\n\n${error.message}`)
-    } finally {
-      setReanalyzing(false)
-      setReanalysisProgress(null)
-    }
   }
     const handleVideoUpload = async (event) => {
     const file = event.target.files[0]
@@ -709,52 +625,12 @@ function VideoLibrary({ onStartReview, onTrainModel, syncing = false, onViewSnap
         </div>
         
         <div className="header-right">
-          {!hideSnapshotsButton && (
-            <>
-              <button 
-                className="btn-view-snapshots"
-                onClick={onViewSnapshots}
-                title="View Ring snapshot collection"
-              >
-                📸 Snapshots
-              </button>
-            </>
-          )}
-          
           <button 
             className="btn-upload-video"
             onClick={handleUploadClick}
             disabled={uploading}
           >
             {uploading ? '⏳ Uploading...' : '📤 Upload Video'}
-          </button>
-          
-          {!hideSnapshotsButton && (
-            <button 
-              className="btn-view-archive"
-              onClick={onViewArchive}
-              title="View archived videos"
-            >
-              📦 Archive
-            </button>
-          )}
-          
-          <button 
-            className="btn-reanalyze"
-            onClick={handleReanalyzeAll}
-            title="Re-analyze all videos with updated model"
-            disabled={uploading || syncing || reanalyzing || videos.length === 0}
-          >
-            {reanalyzing ? '⏳ Re-analyzing...' : '🔄 Re-analyze All'}
-          </button>
-          
-          <button 
-            className="btn-train-model"
-            onClick={onTrainModel}
-            title="Train model with collected annotations"
-            disabled={uploading || syncing || reanalyzing}
-          >
-            {syncing ? '⏳ Exporting & syncing to Drive...' : '🚀 Train Model'}
           </button>
         </div>
       </div>

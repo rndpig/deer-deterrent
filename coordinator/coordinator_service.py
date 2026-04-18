@@ -85,9 +85,11 @@ event_counter = itertools.count()  # Monotonic counter for PriorityQueue tiebrea
 camera_snapshots: Dict[str, bytes] = {}  # Store latest snapshot for each camera
 last_periodic_snapshot_time: Dict[str, datetime] = {}  # Track last periodic snapshot per camera
 last_snapshot_hash: Dict[str, str] = {}  # Track snapshot hashes to prevent duplicate processing
+last_motion_ring_event: Dict[str, int] = {}  # Track most recent ring_event_id per camera (for linking recordings)
 
 # Video queue: accumulate recording URLs during active hours, process after
 PENDING_VIDEOS_FILE = Path("/app/data/pending_videos.json")
+RECORDINGS_DIR = Path("/app/snapshots/recordings")
 
 
 def load_pending_videos() -> list:
@@ -141,16 +143,79 @@ def extract_recording_time_from_url(url: str) -> Optional[str]:
     return None
 
 
-def queue_video_for_processing(camera_id: str, recording_url: str, motion_time: str = None):
-    """Append a video URL to the pending queue (persisted to disk)."""
+def queue_video_for_processing(camera_id: str, recording_url: str, motion_time: str = None, ring_event_id: int = None):
+    """Download video immediately and add to pending queue for batch processing.
+    
+    Downloads the MP4 before the Ring URL expires (~15 min TTL), then stores
+    the local file path in pending_videos.json for deferred frame extraction.
+    """
     pending = load_pending_videos()
     # Deduplicate by URL
     if any(v.get("url") == recording_url for v in pending):
         logger.debug(f"Video URL already queued for camera {camera_id}, skipping")
         return
+    
+    # Download the MP4 immediately before the URL expires
+    local_path = None
+    try:
+        RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"recording_{ts}_{camera_id}.mp4"
+        dest = RECORDINGS_DIR / filename
+        
+        response = requests.get(recording_url, timeout=60, allow_redirects=True)
+        response.raise_for_status()
+        
+        if len(response.content) < 1000:
+            logger.warning(f"Downloaded video too small ({len(response.content)} bytes), skipping")
+            return
+        
+        dest.write_bytes(response.content)
+        local_path = str(dest)
+        logger.info(f"📹 Downloaded recording for camera {camera_id}: {len(response.content)} bytes → {filename}")
+    except Exception as e:
+        logger.error(f"Failed to download recording for camera {camera_id}: {e}")
+        return
+    
+    # Register video in the Video Library (auto_ingested=True)
+    video_id = None
+    try:
+        reg_response = requests.post(
+            f"{CONFIG['BACKEND_API_URL']}/api/videos/register",
+            json={
+                "video_path": f"snapshots/recordings/{filename}",
+                "camera_id": camera_id,
+                "filename": filename
+            },
+            headers=get_api_headers(),
+            timeout=10.0
+        )
+        if reg_response.status_code == 200:
+            video_id = reg_response.json().get("video_id")
+            logger.info(f"📹 Registered video in Video Library (id={video_id})")
+        else:
+            logger.warning(f"Failed to register video in library: HTTP {reg_response.status_code}")
+    except Exception as e:
+        logger.warning(f"Failed to register video in library: {e}")
+    
+    # Update the ring_event with the recording_url
+    if ring_event_id:
+        try:
+            requests.patch(
+                f"{CONFIG['BACKEND_API_URL']}/api/ring-events/{ring_event_id}",
+                json={"recording_url": recording_url, "confidence": 0},  # include confidence to skip re-detection
+                headers=get_api_headers(),
+                timeout=5.0
+            )
+            logger.debug(f"Updated ring event #{ring_event_id} with recording_url")
+        except Exception as e:
+            logger.warning(f"Failed to update ring event #{ring_event_id} with recording_url: {e}")
+    
     pending.append({
         "camera_id": camera_id,
         "url": recording_url,
+        "local_path": local_path,
+        "ring_event_id": ring_event_id,
         "queued_at": datetime.now().isoformat(),
         "motion_time": motion_time or datetime.now().isoformat()
     })
@@ -637,16 +702,21 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
         logger.error(f"Error processing camera event: {e}", exc_info=True)
 
 
-async def process_video_frames(camera_id: str, recording_url: str, motion_time: str = None):
-    """Download Ring motion video and extract frames for training data collection.
+async def process_video_frames(camera_id: str, recording_url: str, motion_time: str = None, local_path: str = None):
+    """Extract frames from a Ring motion video and run ML detection on each.
+    
+    If local_path is provided, uses the already-downloaded file.
+    Otherwise downloads from recording_url (may fail if URL has expired).
     
     Extracts frames at the configured snapshot_frequency cadence, runs ML detection
     on each, and logs results as ring_events with event_type='video_frame'.
     No irrigation is triggered from video frames — this is purely for model improvement.
-    Called from the batch processor after active hours end.
     
     Args:
-        motion_time: ISO timestamp of the original motion event (used for frame timestamps).
+        camera_id: Ring camera ID
+        recording_url: Original Ring recording URL (stored in DB for reference)
+        motion_time: ISO timestamp of the original motion event (used for frame timestamps)
+        local_path: Path to already-downloaded MP4 file (preferred over downloading)
     """
     import subprocess
     
@@ -664,21 +734,26 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
             event_time = datetime.now()
         now = datetime.now()
         
-        logger.info(f"📹 Downloading motion video for camera {camera_id}: {recording_url[:80]}...")
-        
-        # Download the MP4 file
-        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-            response = await client.get(recording_url)
-            response.raise_for_status()
-            video_bytes = response.content
-        
-        if len(video_bytes) < 1000:
-            logger.warning(f"Video too small ({len(video_bytes)} bytes), likely invalid — skipping")
-            return
-        
-        logger.info(f"Downloaded video: {len(video_bytes)} bytes")
-        
-        # Save video to temp file (use event_time for naming)
+        # Use local file if already downloaded, otherwise download from URL
+        if local_path and Path(local_path).exists():
+            temp_video = Path(local_path)
+            logger.info(f"📹 Using pre-downloaded video for camera {camera_id}: {temp_video.name} ({temp_video.stat().st_size} bytes)")
+        else:
+            logger.info(f"📹 Downloading motion video for camera {camera_id}: {recording_url[:80]}...")
+            
+            # Download the MP4 file
+            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+                response = await client.get(recording_url)
+                response.raise_for_status()
+                video_bytes = response.content
+            
+            if len(video_bytes) < 1000:
+                logger.warning(f"Video too small ({len(video_bytes)} bytes), likely invalid — skipping")
+                return
+            
+            logger.info(f"Downloaded video: {len(video_bytes)} bytes")
+            
+            # Save video to temp file (use event_time for naming)
         ts = event_time.strftime("%Y%m%d_%H%M%S")
         temp_video = Path(f"/app/snapshots/video_{ts}_{camera_id}.mp4")
         temp_video.parent.mkdir(parents=True, exist_ok=True)
@@ -937,6 +1012,7 @@ def on_mqtt_message(client, userdata, msg):
                     )
                     if ring_event_id:
                         logger.info(f"Logged Ring event #{ring_event_id}")
+                        last_motion_ring_event[camera_id] = ring_event_id
                     
                     # Use instant snapshot for real-time detection (low-res but fast)
                     if camera_id in camera_snapshots:
@@ -992,7 +1068,8 @@ def on_mqtt_message(client, userdata, msg):
                     recording_time = extract_recording_time_from_url(recording_url)
                     if recording_time:
                         logger.info(f"📹 Extracted recording time from URL for camera {camera_id}: {recording_time}")
-                    queue_video_for_processing(camera_id, recording_url, motion_time=recording_time or datetime.now().isoformat())
+                    event_id = last_motion_ring_event.get(camera_id)
+                    queue_video_for_processing(camera_id, recording_url, motion_time=recording_time or datetime.now().isoformat(), ring_event_id=event_id)
                 elif recording_url:
                     logger.info(f"event_select URL is not MP4 for camera {camera_id}: {recording_url[:120]}")
                 else:
@@ -1001,7 +1078,8 @@ def on_mqtt_message(client, userdata, msg):
                 # Payload might be a direct URL string
                 if payload and '.mp4' in payload.lower() and payload.startswith('http'):
                     recording_time = extract_recording_time_from_url(payload)
-                    queue_video_for_processing(camera_id, payload, motion_time=recording_time or datetime.now().isoformat())
+                    event_id = last_motion_ring_event.get(camera_id)
+                    queue_video_for_processing(camera_id, payload, motion_time=recording_time or datetime.now().isoformat(), ring_event_id=event_id)
                 else:
                     logger.warning(f"Could not parse event_select payload: {e} — raw: {payload[:200]}")
             return
@@ -1214,6 +1292,36 @@ async def cleanup_no_deer_snapshots():
                         logger.info(f"Cleaned up {deleted_count} old no-deer periodic snapshots")
                 else:
                     logger.warning(f"Cleanup request failed: HTTP {response.status_code}")
+            
+            # Clean up old downloaded recordings (>30 days) — delete MP4 files
+            # but keep video entries in DB so frames/annotations are preserved
+            try:
+                if RECORDINGS_DIR.exists():
+                    recording_cutoff = datetime.now() - timedelta(days=30)
+                    deleted_recordings = 0
+                    for f in RECORDINGS_DIR.glob("*.mp4"):
+                        if datetime.fromtimestamp(f.stat().st_mtime) < recording_cutoff:
+                            f.unlink()
+                            deleted_recordings += 1
+                    if deleted_recordings:
+                        logger.info(f"Cleaned up {deleted_recordings} old recording files (>30 days)")
+            except Exception as e:
+                logger.warning(f"Error cleaning up old recordings: {e}")
+            
+            # Clean up old video files via backend (both manual + auto-ingested, >30 days)
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.delete(
+                        f"{CONFIG['BACKEND_API_URL']}/api/videos/cleanup-old",
+                        params={"days": 30},
+                        headers=get_api_headers()
+                    )
+                    if resp.status_code == 200:
+                        result = resp.json()
+                        if result.get("deleted", 0) > 0:
+                            logger.info(f"Cleaned up {result['deleted']} old video files, freed {result['freed_mb']} MB")
+            except Exception as e:
+                logger.warning(f"Error calling video cleanup API: {e}")
         
         except Exception as e:
             logger.error(f"Error in snapshot cleanup task: {e}", exc_info=True)
@@ -1264,13 +1372,39 @@ async def video_batch_processor():
                         logger.info(f"🎬 Filtered {skipped}/{len(pending)} videos outside active hours")
                     logger.info(f"🎬 Active hours ended — processing {len(valid)} queued videos")
                     processed = 0
+                    fp_skipped = 0
                     for entry in valid:
                         cam = entry.get("camera_id", "unknown")
                         url = entry.get("url", "")
                         mt = entry.get("motion_time")
-                        if url:
-                            await process_video_frames(cam, url, motion_time=mt)
+                        lp = entry.get("local_path")
+                        eid = entry.get("ring_event_id")
+                        
+                        # Check if the associated snapshot was marked as false positive
+                        if eid:
+                            try:
+                                async with httpx.AsyncClient(timeout=5.0) as client:
+                                    resp = await client.get(
+                                        f"{CONFIG['BACKEND_API_URL']}/api/ring-events/{eid}",
+                                        headers=get_api_headers()
+                                    )
+                                    if resp.status_code == 200:
+                                        event_data = resp.json()
+                                        if event_data.get("false_positive"):
+                                            logger.info(f"🗑️ Skipping video for camera {cam} — ring event #{eid} marked as false positive")
+                                            # Delete the downloaded recording
+                                            if lp:
+                                                Path(lp).unlink(missing_ok=True)
+                                            fp_skipped += 1
+                                            continue
+                            except Exception as e:
+                                logger.warning(f"Could not check false_positive status for event #{eid}: {e}")
+                        
+                        if url or lp:
+                            await process_video_frames(cam, url, motion_time=mt, local_path=lp)
                             processed += 1
+                    if fp_skipped:
+                        logger.info(f"🎬 Skipped {fp_skipped} videos from false-positive events")
                     logger.info(f"🎬 Batch video processing complete: {processed}/{len(valid)} videos processed")
                     # Clear the queue
                     save_pending_videos([])

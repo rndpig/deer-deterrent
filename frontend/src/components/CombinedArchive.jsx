@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import './CombinedArchive.css'
 import { apiFetch, API_URL } from '../api'
 
-function CombinedArchive({ onBack, onAnnotate }) {
+function CombinedArchive({ onBack }) {
   const [activeTab, setActiveTab] = useState('snapshots') // 'snapshots' or 'videos'
   const [snapshots, setSnapshots] = useState([])
   const [videos, setVideos] = useState([])
@@ -238,13 +238,6 @@ function CombinedArchive({ onBack, onAnnotate }) {
                           title="Play video"
                         >
                           👁️ View
-                        </button>
-                        <button 
-                          className="btn-table-action btn-annotate"
-                          onClick={() => onAnnotate(video.id)}
-                          title="View/annotate frames"
-                        >
-                          ✏️ Annotate
                         </button>
                         <button 
                           className="btn-table-action btn-restore"

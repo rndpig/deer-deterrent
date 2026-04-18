@@ -16,9 +16,10 @@ function App() {
   const [settings, setSettings] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
   const [showArchive, setShowArchive] = useState(false)
-  const [selectedVideoFromArchive, setSelectedVideoFromArchive] = useState(null)
   const [ws, setWs] = useState(null)
   const [showMenu, setShowMenu] = useState(false)
+  const [reanalyzing, setReanalyzing] = useState(false)
+  const [diskUsage, setDiskUsage] = useState(null)
 
   // Connect to WebSocket
   useEffect(() => {
@@ -86,6 +87,11 @@ function App() {
       .then(res => res.json())
       .then(data => setSettings(data))
       .catch(err => console.error('Error fetching settings:', err))
+    
+    apiFetch('/api/disk-usage')
+      .then(res => res.json())
+      .then(data => setDiskUsage(data))
+      .catch(err => console.error('Error fetching disk usage:', err))
   }, [user])
 
   // Show loading state
@@ -119,6 +125,13 @@ function App() {
         <div className="header-content">
           <h1>🦌 Deer Deterrent System</h1>
           <div className="header-actions">
+            {diskUsage && (
+              <span className={`disk-indicator ${diskUsage.percent_used > 85 ? 'disk-warning' : diskUsage.percent_used > 70 ? 'disk-caution' : ''}`}
+                title={`${diskUsage.free_gb} GB free of ${diskUsage.total_gb} GB`}
+              >
+                💾 {diskUsage.free_gb}GB
+              </span>
+            )}
             <button 
               className="btn-hamburger"
               onClick={() => setShowMenu(!showMenu)}
@@ -147,6 +160,27 @@ function App() {
                   }}
                 >
                   📦 Archive
+                </button>
+                <button 
+                  className="dropdown-item"
+                  disabled={reanalyzing}
+                  onClick={async () => {
+                    setShowMenu(false)
+                    if (!confirm('🔄 Re-analyze all videos with the updated model?\n\nThis will re-run detection on all videos and update counts.\nContinue?')) return
+                    setReanalyzing(true)
+                    try {
+                      const res = await apiFetch('/api/videos/reanalyze-all', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                      if (!res.ok) throw new Error((await res.json()).detail || 'Re-analysis failed')
+                      const result = await res.json()
+                      alert(`✅ Re-analysis complete!\n\nVideos processed: ${result.processed}\nTotal detections: ${result.total_detections}`)
+                    } catch (e) {
+                      alert(`❌ Re-analysis failed: ${e.message}`)
+                    } finally {
+                      setReanalyzing(false)
+                    }
+                  }}
+                >
+                  {reanalyzing ? '⏳ Re-analyzing...' : '🔄 Re-analyze All'}
                 </button>
                 <button 
                   className="dropdown-item"
@@ -193,20 +227,10 @@ function App() {
         {activeTab === 'dashboard' && showArchive && (
           <CombinedArchive 
             onBack={() => setShowArchive(false)} 
-            onAnnotate={(videoId) => {
-              setSelectedVideoFromArchive(videoId)
-              setShowArchive(false)
-            }}
           />
         )}
         {activeTab === 'videos' && (
-          <VideoLibrary 
-            onStartReview={() => setActiveTab('dashboard')}
-            onTrainModel={() => {}}
-            onViewSnapshots={() => setActiveTab('dashboard')}
-            onViewArchive={() => { setActiveTab('dashboard'); setShowArchive(true); }}
-            hideSnapshotsButton={false}
-          />
+          <VideoLibrary />
         )}
         {activeTab === 'stats' && (
           <Stats />

@@ -430,6 +430,122 @@ async def get_stats():
     }
 
 
+@app.get("/api/disk-usage")
+async def get_disk_usage():
+    """Get disk usage statistics for the server."""
+    import shutil
+    usage = shutil.disk_usage("/")
+    return {
+        "total_gb": round(usage.total / (1024**3), 1),
+        "used_gb": round(usage.used / (1024**3), 1),
+        "free_gb": round(usage.free / (1024**3), 1),
+        "percent_used": round(usage.used / usage.total * 100, 1)
+    }
+
+
+@app.delete("/api/videos/cleanup-old")
+async def cleanup_old_videos(days: int = 30):
+    """Delete video files older than N days but keep their extracted frames.
+    
+    Sets video_path to NULL so the video card still shows in the library
+    with its frames/annotations intact, but the MP4 file is removed from disk.
+    """
+    from datetime import datetime, timedelta
+    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+    
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, video_path, filename FROM videos 
+        WHERE video_path IS NOT NULL 
+        AND upload_date < ?
+    """, (cutoff,))
+    
+    deleted = 0
+    freed_bytes = 0
+    for row in cursor.fetchall():
+        video_path = Path(row["video_path"])
+        if not video_path.is_absolute():
+            video_path = Path("/app") / video_path
+        if video_path.exists():
+            freed_bytes += video_path.stat().st_size
+            video_path.unlink()
+            deleted += 1
+        # Clear video_path so we know the file is gone
+        cursor.execute("UPDATE videos SET video_path = NULL WHERE id = ?", (row["id"],))
+    
+    conn.commit()
+    conn.close()
+    
+    return {
+        "deleted": deleted,
+        "freed_mb": round(freed_bytes / (1024**2), 1)
+    }
+
+
+@app.post("/api/videos/register")
+async def register_video(data: dict):
+    """Register an auto-ingested video (downloaded by coordinator from Ring).
+    
+    Accepts a video that's already on disk and registers it in the Video Library
+    with auto_ingested=True. Does NOT extract frames or run detection — that
+    happens via the coordinator's batch processor.
+    """
+    video_path = data.get("video_path", "")
+    camera_id = data.get("camera_id", "")
+    filename = data.get("filename", "")
+    
+    if not video_path or not filename:
+        raise HTTPException(status_code=400, detail="video_path and filename are required")
+    
+    # Resolve camera name from Ring camera ID
+    camera_name = RING_CAMERA_ID_MAP.get(camera_id, camera_id or "Unknown")
+    
+    # Get video metadata via ffprobe if available
+    duration = 0.0
+    fps = 15.0
+    total_frames = 0
+    full_path = Path(video_path)
+    if not full_path.is_absolute():
+        full_path = Path("/app") / video_path
+    
+    if full_path.exists():
+        try:
+            import subprocess, json as jmod
+            probe = subprocess.run([
+                'ffprobe', '-v', 'quiet', '-print_format', 'json',
+                '-show_format', '-show_streams', str(full_path)
+            ], capture_output=True, text=True, timeout=10)
+            if probe.returncode == 0:
+                probe_data = jmod.loads(probe.stdout)
+                duration = float(probe_data.get('format', {}).get('duration', 0))
+                for stream in probe_data.get('streams', []):
+                    if stream.get('codec_type') == 'video':
+                        r_fps = stream.get('r_frame_rate', '15/1')
+                        if '/' in r_fps:
+                            num, den = r_fps.split('/')
+                            fps = float(num) / float(den) if float(den) > 0 else 15.0
+                        else:
+                            fps = float(r_fps)
+                        total_frames = int(stream.get('nb_frames', 0)) or int(duration * fps)
+                        break
+        except Exception as e:
+            logger.warning(f"Could not probe video {filename}: {e}")
+    
+    video_id = db.add_video(
+        filename=filename,
+        camera_name=camera_name,
+        duration=duration,
+        fps=fps,
+        total_frames=total_frames,
+        video_path=video_path,
+        auto_ingested=True
+    )
+    
+    logger.info(f"Registered auto-ingested video #{video_id}: {filename} ({camera_name})")
+    return {"status": "success", "video_id": video_id}
+
+
 @app.get("/api/ring-events")
 async def get_ring_events(hours: int = 24, camera_id: str = None):
     """Get Ring MQTT events from the last N hours for diagnostics."""
@@ -455,6 +571,15 @@ async def create_ring_event(event: dict):
         recording_url=event.get("recording_url")
     )
     return {"status": "success", "event_id": event_id}
+
+
+@app.get("/api/ring-events/{event_id}")
+async def get_ring_event(event_id: int):
+    """Get a single Ring event by ID."""
+    event = db.get_ring_event_by_id(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event
 
 
 @app.patch("/api/ring-events/{event_id}")
@@ -549,7 +674,8 @@ async def update_ring_event(event_id: int, update: dict):
         model_version=update.get("model_version"),
         user_confirmed=True if is_user_feedback else None,
         irrigation_activated=update.get("irrigation_activated"),
-        false_positive=update.get("false_positive")
+        false_positive=update.get("false_positive"),
+        recording_url=update.get("recording_url")
     )
     return {"status": "success"}
 
