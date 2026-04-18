@@ -5,7 +5,6 @@ import Dashboard from './components/Dashboard'
 import Stats from './components/Stats'
 import Settings from './components/Settings'
 import AuthButton from './components/AuthButton'
-import CombinedArchive from './components/CombinedArchive'
 import VideoLibrary from './components/VideoLibrary'
 import { useAuth } from './hooks/useAuth'
 import { apiFetch, API_URL } from './api'
@@ -15,7 +14,6 @@ function App() {
   const [stats, setStats] = useState(null)
   const [settings, setSettings] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
-  const [showArchive, setShowArchive] = useState(false)
   const [ws, setWs] = useState(null)
   const [showMenu, setShowMenu] = useState(false)
   const [reanalyzing, setReanalyzing] = useState(false)
@@ -126,11 +124,15 @@ function App() {
           <h1>🦌 Deer Deterrent System</h1>
           <div className="header-actions">
             {diskUsage && (
-              <span className={`disk-indicator ${diskUsage.percent_used > 85 ? 'disk-warning' : diskUsage.percent_used > 70 ? 'disk-caution' : ''}`}
-                title={`${diskUsage.free_gb} GB free of ${diskUsage.total_gb} GB`}
-              >
-                💾 {diskUsage.free_gb}GB
-              </span>
+              <div className="disk-bar-wrapper" title={`${diskUsage.free_gb} GB free of ${diskUsage.total_gb} GB (${diskUsage.percent_used}% used)`}>
+                <div className="disk-bar-track">
+                  <div
+                    className={`disk-bar-fill ${diskUsage.percent_used > 85 ? 'disk-critical' : diskUsage.percent_used > 70 ? 'disk-warn' : 'disk-ok'}`}
+                    style={{ width: `${Math.min(diskUsage.percent_used, 100)}%` }}
+                  />
+                </div>
+                <span className="disk-bar-label">{diskUsage.free_gb}GB free</span>
+              </div>
             )}
             <button 
               className="btn-hamburger"
@@ -150,16 +152,6 @@ function App() {
                   }}
                 >
                   🎬 Videos
-                </button>
-                <button 
-                  className="dropdown-item"
-                  onClick={() => {
-                    setActiveTab('dashboard')
-                    setShowArchive(true)
-                    setShowMenu(false)
-                  }}
-                >
-                  📦 Archive
                 </button>
                 <button 
                   className="dropdown-item"
@@ -198,7 +190,7 @@ function App() {
         <nav className="tabs">
           <button 
             className={activeTab === 'dashboard' ? 'active' : ''}
-            onClick={() => { setActiveTab('dashboard'); setShowArchive(false); }}
+            onClick={() => setActiveTab('dashboard')}
           >
             Dashboard
           </button>
@@ -218,15 +210,10 @@ function App() {
       </header>
 
       <main className="app-content">
-        {activeTab === 'dashboard' && !showArchive && (
+        {activeTab === 'dashboard' && (
           <Dashboard 
             stats={stats} 
             settings={settings}
-          />
-        )}
-        {activeTab === 'dashboard' && showArchive && (
-          <CombinedArchive 
-            onBack={() => setShowArchive(false)} 
           />
         )}
         {activeTab === 'videos' && (

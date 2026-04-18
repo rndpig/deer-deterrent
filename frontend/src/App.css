@@ -34,19 +34,35 @@
   gap: 0.5rem;
 }
 
-.disk-indicator {
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.5);
+.disk-bar-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: default;
+}
+
+.disk-bar-track {
+  width: 48px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.disk-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.disk-bar-fill.disk-ok { background: #22c55e; }
+.disk-bar-fill.disk-warn { background: #f59e0b; }
+.disk-bar-fill.disk-critical { background: #ef4444; }
+
+.disk-bar-label {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.45);
   white-space: nowrap;
-}
-
-.disk-indicator.disk-caution {
-  color: #f59e0b;
-}
-
-.disk-indicator.disk-warning {
-  color: #ef4444;
-  font-weight: 600;
 }
 
 .btn-hamburger {

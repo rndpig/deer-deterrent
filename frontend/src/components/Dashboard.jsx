@@ -432,7 +432,6 @@ function Dashboard({ stats, settings }) {
       ) : snapshots.length === 0 ? (
         <div className="empty-state">
           <h3>📸 No Snapshots Found</h3>
-          <p>No snapshots match your filters.</p>
         </div>
       ) : (
         <>
