@@ -1317,17 +1317,30 @@ async def periodic_snapshot_poller():
 
 
 async def cleanup_no_deer_snapshots():
-    """Delete no-deer periodic snapshots older than SNAPSHOT_RETENTION_DAYS"""
-    logger.info("Snapshot cleanup task started")
-    
+    """Delete no-deer periodic snapshots and old recordings/videos.
+
+    Runs immediately at startup, then hourly. Recording/video retention is
+    derived from SNAPSHOT_RETENTION_DAYS (max 7 days) so a single setting
+    governs all on-disk cleanup.
+    """
+    logger.info("Snapshot cleanup task started (runs once at startup, then hourly)")
+
+    first_run = True
     while True:
         try:
-            # Run every hour
-            await asyncio.sleep(3600)
-            
+            if first_run:
+                first_run = False
+            else:
+                # Run every hour after the initial pass
+                await asyncio.sleep(3600)
+
             # Calculate cutoff time from configured retention (synced from backend settings)
             retention_days = max(1, int(CONFIG.get("SNAPSHOT_RETENTION_DAYS", 3)))
             cutoff = datetime.now() - timedelta(days=retention_days)
+
+            # Recordings/videos use a 7-day cap (or the snapshot retention if longer)
+            recording_retention_days = max(retention_days, 7)
+            recording_cutoff = datetime.now() - timedelta(days=recording_retention_days)
             
             # Call backend API to delete old no-deer periodic snapshots
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -1345,31 +1358,30 @@ async def cleanup_no_deer_snapshots():
                     result = response.json()
                     deleted_count = result.get("deleted", 0)
                     if deleted_count > 0:
-                        logger.info(f"Cleaned up {deleted_count} old no-deer periodic snapshots")
+                        logger.info(f"Cleaned up {deleted_count} old no-deer periodic snapshots (>{retention_days} days)")
                 else:
                     logger.warning(f"Cleanup request failed: HTTP {response.status_code}")
             
-            # Clean up old downloaded recordings (>30 days) — delete MP4 files
+            # Clean up old downloaded recordings — delete MP4 files
             # but keep video entries in DB so frames/annotations are preserved
             try:
                 if RECORDINGS_DIR.exists():
-                    recording_cutoff = datetime.now() - timedelta(days=30)
                     deleted_recordings = 0
                     for f in RECORDINGS_DIR.glob("*.mp4"):
                         if datetime.fromtimestamp(f.stat().st_mtime) < recording_cutoff:
                             f.unlink()
                             deleted_recordings += 1
                     if deleted_recordings:
-                        logger.info(f"Cleaned up {deleted_recordings} old recording files (>30 days)")
+                        logger.info(f"Cleaned up {deleted_recordings} old recording files (>{recording_retention_days} days)")
             except Exception as e:
                 logger.warning(f"Error cleaning up old recordings: {e}")
             
-            # Clean up old video files via backend (both manual + auto-ingested, >30 days)
+            # Clean up old video files via backend (both manual + auto-ingested)
             try:
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     resp = await client.delete(
                         f"{CONFIG['BACKEND_API_URL']}/api/videos/cleanup-old",
-                        params={"days": 30},
+                        params={"days": recording_retention_days},
                         headers=get_api_headers()
                     )
                     if resp.status_code == 200:

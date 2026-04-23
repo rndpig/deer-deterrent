@@ -76,12 +76,20 @@ function Dashboard({ stats, settings }) {
         if (timeFilter !== 'all') {
         let hours = 168
         if (timeFilter === 'lastCycle') {
-          // Compute hours since last cycle start using active_hours_start from settings
+          // Compute hours since last cycle start using active_hours_start from settings.
+          // "Last cycle" = the most recent meaningful nightly window. If we're early in a
+          // fresh cycle (less than half the cycle elapsed), reach back through the previous
+          // cycle too so users always see last night's data.
           const cycleStart = settings?.active_hours_start ?? 20
+          const cycleEnd = settings?.active_hours_end ?? 6
+          const cycleLength = ((cycleEnd - cycleStart + 24) % 24) || 10
           const now = new Date()
           const nowHour = now.getHours() + now.getMinutes() / 60
           let hoursSinceCycleStart = nowHour - cycleStart
           if (hoursSinceCycleStart < 0) hoursSinceCycleStart += 24
+          if (hoursSinceCycleStart < cycleLength / 2) {
+            hoursSinceCycleStart += 24  // include the previous cycle
+          }
           hours = Math.ceil(hoursSinceCycleStart) || 1
         }
         displayParams.set('time_hours', String(hours))
