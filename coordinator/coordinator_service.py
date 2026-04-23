@@ -65,6 +65,7 @@ CONFIG = {
     "SNAPSHOT_FREQUENCY": 60,  # Ring capture frequency in seconds, synced from backend settings
     "RING_LOCATION_ID": os.getenv("RING_LOCATION_ID", ""),  # Needed for MQTT topics
     "CAMERA_ZONES": {},  # Camera ID → Rainbird zone number, synced from backend settings
+    "SNAPSHOT_RETENTION_DAYS": int(os.getenv("SNAPSHOT_RETENTION_DAYS", "3")),  # Days to keep no-deer periodic snapshots; synced from backend
     "INTERNAL_API_KEY": os.getenv("INTERNAL_API_KEY", ""),  # API key for service-to-service auth
 }
 
@@ -323,6 +324,19 @@ async def fetch_settings_from_backend():
                     CONFIG["CAMERA_ZONES"] = new_zones
                     if old_zones != CONFIG["CAMERA_ZONES"]:
                         logger.info(f"Updated camera_zones: {CONFIG['CAMERA_ZONES']}")
+
+                # Sync snapshot retention (days to keep no-deer periodic snapshots)
+                new_retention = settings.get('snapshot_retention_days')
+                if new_retention is not None:
+                    try:
+                        new_retention_int = max(1, int(new_retention))
+                    except (TypeError, ValueError):
+                        new_retention_int = None
+                    if new_retention_int is not None:
+                        old_retention = CONFIG.get("SNAPSHOT_RETENTION_DAYS", 3)
+                        CONFIG["SNAPSHOT_RETENTION_DAYS"] = new_retention_int
+                        if old_retention != new_retention_int:
+                            logger.info(f"Updated snapshot_retention_days from {old_retention} to {new_retention_int}")
                 
                 # Sync irrigation duration (stored in seconds in backend)
                 new_duration = settings.get('irrigation_duration')
@@ -1303,7 +1317,7 @@ async def periodic_snapshot_poller():
 
 
 async def cleanup_no_deer_snapshots():
-    """Delete snapshots older than 48h with no deer detection"""
+    """Delete no-deer periodic snapshots older than SNAPSHOT_RETENTION_DAYS"""
     logger.info("Snapshot cleanup task started")
     
     while True:
@@ -1311,8 +1325,9 @@ async def cleanup_no_deer_snapshots():
             # Run every hour
             await asyncio.sleep(3600)
             
-            # Calculate cutoff time (48 hours ago)
-            cutoff = datetime.now() - timedelta(hours=48)
+            # Calculate cutoff time from configured retention (synced from backend settings)
+            retention_days = max(1, int(CONFIG.get("SNAPSHOT_RETENTION_DAYS", 3)))
+            cutoff = datetime.now() - timedelta(days=retention_days)
             
             # Call backend API to delete old no-deer periodic snapshots
             async with httpx.AsyncClient(timeout=30.0) as client:

@@ -296,7 +296,7 @@ class SystemSettings(BaseModel):
     irrigation_duration: int = 30
     zone_cooldown: int = 300
     dry_run: bool = True
-    snapshot_retention_cycles: int = 3  # Number of nightly capture cycles (8pm-6am) to retain
+    snapshot_retention_days: int = 3  # Days to keep no-deer periodic snapshots before deletion
     snapshot_frequency: int = 60  # Ring camera snapshot capture frequency in seconds (15, 30, 60, 180)
     default_sampling_rate: float = 1.0  # Video frame extraction rate (frames/sec)
     enabled_cameras: List[str] = ["10cea9e4511f", "c4dbad08f862"]  # Default: Woods + Side cameras
@@ -342,9 +342,21 @@ db.init_database()
 _saved = db.load_settings()
 if _saved:
     try:
-        # Migrate old setting name to new name
-        if 'snapshot_archive_days' in _saved and 'snapshot_retention_cycles' not in _saved:
-            _saved['snapshot_retention_cycles'] = _saved.pop('snapshot_archive_days')
+        # Migrate legacy retention fields to snapshot_retention_days.
+        # Old field 'snapshot_retention_cycles' had max=14 in the UI but was stored
+        # uncoerced after a prior rename from 'snapshot_archive_days' (default 90),
+        # so values >14 are bogus and should fall back to the default.
+        legacy_val = _saved.pop('snapshot_retention_cycles', None)
+        if legacy_val is None:
+            legacy_val = _saved.pop('snapshot_archive_days', None)
+        else:
+            _saved.pop('snapshot_archive_days', None)
+        if 'snapshot_retention_days' not in _saved and legacy_val is not None:
+            try:
+                lv = int(legacy_val)
+                _saved['snapshot_retention_days'] = lv if 1 <= lv <= 30 else 3
+            except (TypeError, ValueError):
+                pass
         settings = SystemSettings(**_saved)
         print(f"✓ Loaded settings from database")
     except Exception as e:
@@ -362,34 +374,13 @@ stats = {
 }
 
 
-async def auto_archive_task():
-    """Background task to periodically archive old snapshots."""
-    while True:
-        try:
-            # Wait 1 hour before first run, then every hour
-            await asyncio.sleep(3600)
-            
-            # Archive snapshots outside the retention window (cycles = nightly capture sessions)
-            count = db.auto_archive_old_snapshots(
-                cycles=settings.snapshot_retention_cycles,
-                active_hours_start=settings.active_hours_start,
-                active_hours_end=settings.active_hours_end
-            )
-            
-            if count > 0:
-                logger.info(f"Auto-archived {count} snapshots outside retention window ({settings.snapshot_retention_cycles} cycles)")
-        except Exception as e:
-            logger.error(f"Error in auto-archive task: {e}")
-
-
 @app.on_event("startup")
 async def startup_event():
     """Initialize detector on startup."""
     # Detector loaded lazily when first needed
     print("✓ Backend started - detector will load on first use")
-    # Start background task for auto-archiving snapshots
-    asyncio.create_task(auto_archive_task())
-    print("✓ Auto-archive task started")
+    # Snapshot deletion is handled by the coordinator (cleanup_no_deer_snapshots)
+    # using settings.snapshot_retention_days as the cutoff.
 
 
 @app.get("/")
