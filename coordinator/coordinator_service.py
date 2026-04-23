@@ -68,6 +68,41 @@ CONFIG = {
     "INTERNAL_API_KEY": os.getenv("INTERNAL_API_KEY", ""),  # API key for service-to-service auth
 }
 
+# Chase sequence: ordered W→E zones. When a deer is detected on a camera mapped to
+# a zone in this list, irrigation fires that zone AND every zone east of it,
+# back-to-back, to chase the deer off the property in their typical direction of
+# travel. Zones not in this list (e.g. Front Door's mapping) fire alone as before.
+CHASE_SEQUENCE: list[int] = [5, 2, 1]
+
+
+def build_chase_chain(start_zone: int) -> list[int]:
+    """Return the list of zones to fire starting at start_zone, going east.
+
+    If start_zone isn't in CHASE_SEQUENCE, returns just [start_zone] (single fire).
+    """
+    try:
+        idx = CHASE_SEQUENCE.index(start_zone)
+        return CHASE_SEQUENCE[idx:]
+    except ValueError:
+        return [start_zone]
+
+
+async def run_chase(zones: list[int], duration: int) -> bool:
+    """Fire each zone sequentially, awaiting `duration` seconds between activations.
+
+    Returns True if at least the first zone activated successfully.
+    """
+    if not zones:
+        return False
+    first_ok = await activate_rainbird(str(zones[0]), duration)
+    if len(zones) == 1:
+        return first_ok
+    logger.info(f"🦌 Chase chain queued: {zones} ({duration}s each)")
+    for next_zone in zones[1:]:
+        await asyncio.sleep(duration)
+        await activate_rainbird(str(next_zone), duration)
+    return first_ok
+
 
 def get_api_headers() -> Dict[str, str]:
     """Get headers for backend API calls (includes API key if configured)."""
@@ -651,26 +686,32 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
         if deer_detected:
             now = datetime.now()
             
-            # Check cooldown — effective minimum is irrigation duration so zones don't overlap
+            # Determine zone & chase chain so cooldown can cover the full sequence
+            camera_zone = CONFIG.get("CAMERA_ZONES", {}).get(camera_id)
+            try:
+                start_zone_int = int(camera_zone) if camera_zone else int(CONFIG["RAINBIRD_ZONE"])
+            except (TypeError, ValueError):
+                start_zone_int = None
+            chain = build_chase_chain(start_zone_int) if start_zone_int is not None else []
+            duration = CONFIG["RAINBIRD_DURATION_SECONDS"]
+            chain_total = duration * len(chain) if chain else duration
+
+            # Check cooldown — must cover full chase chain so zones don't overlap with a re-trigger
             if last_activation_time:
-                effective_cooldown = max(CONFIG["COOLDOWN_SECONDS"], CONFIG["RAINBIRD_DURATION_SECONDS"])
+                effective_cooldown = max(CONFIG["COOLDOWN_SECONDS"], chain_total)
                 elapsed = (now - last_activation_time).total_seconds()
                 if elapsed < effective_cooldown:
                     logger.info(f"Cooldown active: {elapsed:.0f}s/{effective_cooldown}s")
                 else:
                     last_activation_time = None  # Cooldown expired, allow activation
-            
-            if last_activation_time is None:
-                # Determine zone: per-camera mapping from settings, fallback to env var
-                camera_zone = CONFIG.get("CAMERA_ZONES", {}).get(camera_id)
-                zone = str(camera_zone) if camera_zone else CONFIG["RAINBIRD_ZONE"]
-                # Activate irrigation
-                success = await activate_rainbird(
-                    zone,
-                    CONFIG["RAINBIRD_DURATION_SECONDS"]
-                )
-                
-                if success:
+
+            if last_activation_time is None and chain:
+                logger.info(f"Camera {camera_id} → start zone {chain[0]}, chase chain {chain}")
+                # Fire first zone synchronously so we know if it succeeded; rest run in background
+                first_ok = await activate_rainbird(str(chain[0]), duration)
+                if first_ok and len(chain) > 1:
+                    asyncio.create_task(run_chase(chain[1:], duration))
+                if first_ok:
                     last_activation_time = now
                     event_data["irrigation_activated"] = True
                     logger.info("✓✓✓ DEER DETERRENT ACTIVATED ✓✓✓")
