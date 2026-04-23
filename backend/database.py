@@ -36,6 +36,7 @@ def init_database():
             status TEXT DEFAULT 'analyzed',
             video_path TEXT,
             archived BOOLEAN DEFAULT 0,
+            auto_ingested BOOLEAN DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now', 'localtime'))
         )
     """)
@@ -147,6 +148,11 @@ def init_database():
         cursor.execute("ALTER TABLE videos ADD COLUMN archived BOOLEAN DEFAULT 0")
         print("✓ Added 'archived' column to videos table")
         logger.info("Added 'archived' column to videos table")
+    
+    if 'auto_ingested' not in columns:
+        cursor.execute("ALTER TABLE videos ADD COLUMN auto_ingested BOOLEAN DEFAULT 0")
+        print("✓ Added 'auto_ingested' column to videos table")
+        logger.info("Added 'auto_ingested' column to videos table")
     
     # Migration: Add archived column to ring_events if it doesn't exist
     cursor.execute("PRAGMA table_info(ring_events)")
