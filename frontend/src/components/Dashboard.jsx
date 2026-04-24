@@ -13,7 +13,8 @@ function Dashboard({ stats, settings }) {
   const [itemsPerPage] = useState(99) // 99 = 33 rows × 3 cards (no orphans)
   const [feedbackFilter, setFeedbackFilter] = useState('with_deer') // all, with_deer, without_deer
   const [cameraFilter, setCameraFilter] = useState('all') // all, or specific camera ID
-  const [jumpTime, setJumpTime] = useState('') // datetime-local string for "jump to time"
+  const [jumpHour, setJumpHour] = useState('') // hour-of-day for jump-to filter (string for select)
+  const [jumpMinute, setJumpMinute] = useState('') // minute (5-min granularity)
   const [selectedSnapshot, setSelectedSnapshot] = useState(null)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -116,33 +117,42 @@ function Dashboard({ stats, settings }) {
     }
   }
 
-  // Jump to the snapshot closest to a target datetime, optionally scoped to current camera filter.
-  const handleJumpToTime = () => {
-    if (!jumpTime) return
-    const target = new Date(jumpTime).getTime()
-    if (Number.isNaN(target)) {
-      alert('Invalid date/time')
-      return
+  // Build the list of hours that fall within the configured active-hours window.
+  // Wraps across midnight when start > end (e.g. 20 → 6).
+  const activeHourOptions = (() => {
+    const start = settings?.active_hours_start ?? 20
+    const end = settings?.active_hours_end ?? 6
+    const out = []
+    let h = start
+    // length includes start, excludes end (matches "between start and end" intent)
+    const length = ((end - start + 24) % 24) || 24
+    for (let i = 0; i < length; i++) {
+      out.push(h % 24)
+      h++
     }
-    // snapshots already reflects feedbackFilter + cameraFilter + timeFilter
-    const pool = snapshots
-    if (pool.length === 0) {
-      alert('No snapshots loaded for the current filters. Try widening the time range.')
-      return
-    }
+    return out
+  })()
+
+  // Auto-jump to the snapshot nearest to the chosen hour:minute (within currently-loaded snapshots).
+  const jumpToHourMinute = (h, m) => {
+    if (h === '' || m === '' || snapshots.length === 0) return
+    const targetMin = Number(h) * 60 + Number(m)
     let bestIdx = 0
     let bestDelta = Infinity
-    for (let i = 0; i < pool.length; i++) {
-      const t = new Date(pool[i].timestamp).getTime()
-      const d = Math.abs(t - target)
-      if (d < bestDelta) {
-        bestDelta = d
+    for (let i = 0; i < snapshots.length; i++) {
+      const d = new Date(snapshots[i].timestamp)
+      const sm = d.getHours() * 60 + d.getMinutes()
+      // circular distance on a 24h clock so 23:55 vs 00:05 = 10 min
+      let delta = Math.abs(sm - targetMin)
+      if (delta > 720) delta = 1440 - delta
+      if (delta < bestDelta) {
+        bestDelta = delta
         bestIdx = i
       }
     }
     const page = Math.floor(bestIdx / itemsPerPage) + 1
     setCurrentPage(page)
-    setSelectedSnapshot(pool[bestIdx])
+    setSelectedSnapshot(snapshots[bestIdx])
   }
 
     const handleUploadImage = async () => {
@@ -465,22 +475,30 @@ function Dashboard({ stats, settings }) {
         </div>
 
         <div className="filter-section">
-          <label className="filter-label">Jump to:</label>
-          <input
-            type="datetime-local"
-            className="jump-time-input"
-            value={jumpTime}
-            onChange={(e) => setJumpTime(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleJumpToTime() }}
-            title="Find the snapshot closest to this date/time within the current filters"
-          />
-          <button
-            className="jump-time-btn"
-            onClick={handleJumpToTime}
-            disabled={!jumpTime}
+          <label className="filter-label">Jump:</label>
+          <select
+            className="jump-select"
+            value={jumpHour}
+            onChange={(e) => { setJumpHour(e.target.value); jumpToHourMinute(e.target.value, jumpMinute) }}
+            title="Hour"
           >
-            Go
-          </button>
+            <option value="">HH</option>
+            {activeHourOptions.map(h => (
+              <option key={h} value={h}>{String(h).padStart(2, '0')}</option>
+            ))}
+          </select>
+          <span className="jump-colon">:</span>
+          <select
+            className="jump-select"
+            value={jumpMinute}
+            onChange={(e) => { setJumpMinute(e.target.value); jumpToHourMinute(jumpHour, e.target.value) }}
+            title="Minute"
+          >
+            <option value="">MM</option>
+            {Array.from({ length: 12 }, (_, i) => i * 5).map(m => (
+              <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+            ))}
+          </select>
         </div>
       </div>
 
