@@ -13,6 +13,7 @@ function Dashboard({ stats, settings }) {
   const [itemsPerPage] = useState(99) // 99 = 33 rows × 3 cards (no orphans)
   const [feedbackFilter, setFeedbackFilter] = useState('with_deer') // all, with_deer, without_deer
   const [cameraFilter, setCameraFilter] = useState('all') // all, or specific camera ID
+  const [jumpTime, setJumpTime] = useState('') // datetime-local string for "jump to time"
   const [selectedSnapshot, setSelectedSnapshot] = useState(null)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -114,6 +115,36 @@ function Dashboard({ stats, settings }) {
       setLoading(false)
     }
   }
+
+  // Jump to the snapshot closest to a target datetime, optionally scoped to current camera filter.
+  const handleJumpToTime = () => {
+    if (!jumpTime) return
+    const target = new Date(jumpTime).getTime()
+    if (Number.isNaN(target)) {
+      alert('Invalid date/time')
+      return
+    }
+    // snapshots already reflects feedbackFilter + cameraFilter + timeFilter
+    const pool = snapshots
+    if (pool.length === 0) {
+      alert('No snapshots loaded for the current filters. Try widening the time range.')
+      return
+    }
+    let bestIdx = 0
+    let bestDelta = Infinity
+    for (let i = 0; i < pool.length; i++) {
+      const t = new Date(pool[i].timestamp).getTime()
+      const d = Math.abs(t - target)
+      if (d < bestDelta) {
+        bestDelta = d
+        bestIdx = i
+      }
+    }
+    const page = Math.floor(bestIdx / itemsPerPage) + 1
+    setCurrentPage(page)
+    setSelectedSnapshot(pool[bestIdx])
+  }
+
     const handleUploadImage = async () => {
     if (!selectedFile) {
       setUploadResult({ success: false, message: 'Please select an image file' })
@@ -431,6 +462,25 @@ function Dashboard({ stats, settings }) {
             </select>
             <span className="camera-select-arrow">▾</span>
           </div>
+        </div>
+
+        <div className="filter-section">
+          <label className="filter-label">Jump to:</label>
+          <input
+            type="datetime-local"
+            className="jump-time-input"
+            value={jumpTime}
+            onChange={(e) => setJumpTime(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleJumpToTime() }}
+            title="Find the snapshot closest to this date/time within the current filters"
+          />
+          <button
+            className="jump-time-btn"
+            onClick={handleJumpToTime}
+            disabled={!jumpTime}
+          >
+            Go
+          </button>
         </div>
       </div>
 

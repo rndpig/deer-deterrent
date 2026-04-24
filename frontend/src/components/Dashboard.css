@@ -102,6 +102,49 @@
   pointer-events: none;
 }
 
+.jump-time-input {
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  outline: none;
+  transition: all 0.2s;
+  color-scheme: dark;
+}
+
+.jump-time-input:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.jump-time-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.jump-time-btn {
+  margin-left: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  background: rgba(59, 130, 246, 0.85);
+  color: white;
+  border: 1px solid rgba(59, 130, 246, 0.85);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.jump-time-btn:hover:not(:disabled) {
+  background: #3b82f6;
+}
+
+.jump-time-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* Snapshot Grid */
 .snapshot-grid {
   display: grid;
