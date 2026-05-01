@@ -216,18 +216,64 @@ def queue_video_for_processing(camera_id: str, recording_url: str, motion_time: 
     local_path = None
     try:
         RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Prefer the actual recording time (extracted from Ring URL JWT or passed in via motion_time)
+        # so the filename reflects WHEN the motion happened, not when we downloaded it.
+        ts_dt = None
+        if motion_time:
+            try:
+                ts_dt = datetime.fromisoformat(motion_time.replace('Z', '+00:00'))
+                # Convert to local naive time so the filename matches the dashboard timezone.
+                if ts_dt.tzinfo is not None:
+                    ts_dt = ts_dt.astimezone().replace(tzinfo=None)
+            except (ValueError, TypeError):
+                ts_dt = None
+        if ts_dt is None:
+            ts_dt = datetime.now()
+        ts = ts_dt.strftime("%Y%m%d_%H%M%S")
         filename = f"recording_{ts}_{camera_id}.mp4"
         dest = RECORDINGS_DIR / filename
-        
+
         response = requests.get(recording_url, timeout=60, allow_redirects=True)
         response.raise_for_status()
-        
+
         if len(response.content) < 1000:
             logger.warning(f"Downloaded video too small ({len(response.content)} bytes), skipping")
             return
-        
-        dest.write_bytes(response.content)
+
+        # Write to a temp path first, then transmux to faststart so browsers can
+        # start playback before the whole file is downloaded. Falls back to the
+        # original file if ffmpeg is unavailable or the transmux fails.
+        tmp_path = dest.with_suffix(".raw.mp4")
+        tmp_path.write_bytes(response.content)
+        try:
+            import subprocess
+            result = subprocess.run(
+                [
+                    "ffmpeg", "-y", "-loglevel", "error",
+                    "-i", str(tmp_path),
+                    "-c", "copy",
+                    "-movflags", "+faststart",
+                    str(dest),
+                ],
+                capture_output=True, timeout=30,
+            )
+            if result.returncode == 0 and dest.exists() and dest.stat().st_size > 1000:
+                tmp_path.unlink(missing_ok=True)
+                logger.info(f"✓ Transmuxed video to faststart for progressive playback")
+            else:
+                logger.warning(
+                    f"ffmpeg faststart failed (rc={result.returncode}); keeping original. "
+                    f"stderr: {result.stderr.decode('utf-8', errors='ignore')[:200]}"
+                )
+                tmp_path.replace(dest)
+        except FileNotFoundError:
+            logger.warning("ffmpeg not available; keeping original (slow streaming)")
+            tmp_path.replace(dest)
+        except Exception as e:
+            logger.warning(f"ffmpeg faststart error ({e}); keeping original")
+            if tmp_path.exists():
+                tmp_path.replace(dest)
+
         local_path = str(dest)
         logger.info(f"📹 Downloaded recording for camera {camera_id}: {len(response.content)} bytes → {filename}")
     except Exception as e:

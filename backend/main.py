@@ -2952,16 +2952,25 @@ async def update_video_metadata(video_id: int, request: dict):
 
 @app.get("/api/videos/{video_id}/stream")
 async def stream_video(video_id: int):
-    """Stream a video file."""
+    """Stream a video file. FileResponse handles HTTP Range requests for progressive playback."""
     video = db.get_video(video_id)
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
-    
+
     video_path = Path(video.get('video_path', ''))
     if not video_path.exists():
         raise HTTPException(status_code=404, detail="Video file not found")
-    
-    return FileResponse(video_path, media_type="video/mp4")
+
+    # Explicit Accept-Ranges + caching so the browser knows it can request byte ranges
+    # (Cloudflare can also pass-through ranges when this header is present).
+    return FileResponse(
+        video_path,
+        media_type="video/mp4",
+        headers={
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "public, max-age=3600",
+        },
+    )
 
 
 @app.get("/api/videos/{video_id}/thumbnail")
@@ -2986,15 +2995,26 @@ async def get_video_thumbnail(video_id: int):
     if thumbnail_path.exists():
         return FileResponse(thumbnail_path, media_type="image/jpeg")
     
-    # Generate thumbnail from first frame
+    # Generate thumbnail from a frame ~50% into the video (motion subject is
+    # usually present here; frame 0 is just the pre-trigger scene which looks
+    # identical across all clips from the same camera).
     import cv2
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise HTTPException(status_code=500, detail="Could not open video file")
-    
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    if total_frames > 1:
+        target = max(1, total_frames // 2)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, target)
+
     ret, frame = cap.read()
+    if not ret and total_frames > 1:
+        # Fallback: rewind and grab whatever's first if the seek failed
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        ret, frame = cap.read()
     cap.release()
-    
+
     if not ret:
         raise HTTPException(status_code=500, detail="Could not extract frame from video")
     
