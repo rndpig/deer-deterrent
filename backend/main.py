@@ -6,8 +6,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Uplo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
-from typing import List, Optional, Dict
+from pydantic import BaseModel, validator
+from typing import List, Optional, Dict, Union
 from datetime import datetime, timedelta
 from pathlib import Path
 import sys
@@ -300,7 +300,32 @@ class SystemSettings(BaseModel):
     snapshot_frequency: int = 60  # Ring camera snapshot capture frequency in seconds (15, 30, 60, 180)
     default_sampling_rate: float = 1.0  # Video frame extraction rate (frames/sec)
     enabled_cameras: List[str] = ["10cea9e4511f", "c4dbad08f862"]  # Default: Woods + Side cameras
-    camera_zones: Dict[str, int] = {}  # Camera ID → Rainbird zone number
+    # Camera ID → ordered list of Rainbird zones to fire (chase sequence per camera).
+    # Legacy values may be plain ints; the loader/validator normalizes them to lists.
+    camera_zones: Dict[str, Union[int, List[int]]] = {}
+
+    @validator('camera_zones', pre=True)
+    def _normalize_camera_zones(cls, v):
+        if not v:
+            return {}
+        out = {}
+        for cam_id, zones in v.items():
+            if zones is None:
+                continue
+            if isinstance(zones, int):
+                out[cam_id] = [zones]
+            elif isinstance(zones, list):
+                # Strip Nones, coerce to int, drop empties
+                cleaned = [int(z) for z in zones if z is not None and z != ""]
+                if cleaned:
+                    out[cam_id] = cleaned
+            else:
+                # Fallback: try int coercion
+                try:
+                    out[cam_id] = [int(zones)]
+                except (TypeError, ValueError):
+                    pass
+        return out
 
 class ZoneConfig(BaseModel):
     name: str

@@ -69,23 +69,44 @@ CONFIG = {
     "INTERNAL_API_KEY": os.getenv("INTERNAL_API_KEY", ""),  # API key for service-to-service auth
 }
 
-# Chase sequence: ordered W→E zones. When a deer is detected on a camera mapped to
-# a zone in this list, irrigation fires that zone AND every zone east of it,
-# back-to-back, to chase the deer off the property in their typical direction of
-# travel. Zones not in this list (e.g. Front Door's mapping) fire alone as before.
-CHASE_SEQUENCE: list[int] = [5, 2, 1]
+# Per-camera chase sequences are configured via the backend's `camera_zones`
+# setting (Camera ID → ordered list of zones). The coordinator fires those zones
+# back-to-back to chase deer in the appropriate direction. Legacy values that
+# are bare ints are normalized to single-element lists at config-load time.
 
 
-def build_chase_chain(start_zone: int) -> list[int]:
-    """Return the list of zones to fire starting at start_zone, going east.
-
-    If start_zone isn't in CHASE_SEQUENCE, returns just [start_zone] (single fire).
-    """
+def _coerce_zone_list(value) -> list[int]:
+    """Normalize a configured zone value (int | list | None) to list[int]."""
+    if value is None or value == "":
+        return []
+    if isinstance(value, list):
+        out = []
+        for z in value:
+            try:
+                out.append(int(z))
+            except (TypeError, ValueError):
+                continue
+        return out
     try:
-        idx = CHASE_SEQUENCE.index(start_zone)
-        return CHASE_SEQUENCE[idx:]
-    except ValueError:
-        return [start_zone]
+        return [int(value)]
+    except (TypeError, ValueError):
+        return []
+
+
+def build_chase_chain(camera_id: str | None, fallback_zone: int | None = None) -> list[int]:
+    """Return the ordered zone list to fire for a given camera.
+
+    Reads CONFIG['CAMERA_ZONES'][camera_id] which may be a list (chase sequence)
+    or a bare int (single-zone trigger). Falls back to [fallback_zone] if the
+    camera has no mapping.
+    """
+    cam_map = CONFIG.get("CAMERA_ZONES", {}) or {}
+    chain = _coerce_zone_list(cam_map.get(camera_id))
+    if chain:
+        return chain
+    if fallback_zone is not None:
+        return [int(fallback_zone)]
+    return []
 
 
 async def run_chase(zones: list[int], duration: int) -> bool:
@@ -699,28 +720,35 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
         # If deer detected, check cooldown and activate irrigation
         if deer_detected:
             now = datetime.now()
-            
-            # Determine zone & chase chain so cooldown can cover the full sequence
-            camera_zone = CONFIG.get("CAMERA_ZONES", {}).get(camera_id)
+
+            # Build chase chain from per-camera config (list of zones to fire in order).
             try:
-                start_zone_int = int(camera_zone) if camera_zone else int(CONFIG["RAINBIRD_ZONE"])
+                fallback_zone = int(CONFIG["RAINBIRD_ZONE"])
             except (TypeError, ValueError):
-                start_zone_int = None
-            chain = build_chase_chain(start_zone_int) if start_zone_int is not None else []
+                fallback_zone = None
+            chain = build_chase_chain(camera_id, fallback_zone)
             duration = CONFIG["RAINBIRD_DURATION_SECONDS"]
             chain_total = duration * len(chain) if chain else duration
 
             # Check cooldown — must cover full chase chain so zones don't overlap with a re-trigger
             if last_activation_time:
-                effective_cooldown = max(CONFIG["COOLDOWN_SECONDS"], chain_total)
+                user_cooldown = CONFIG["COOLDOWN_SECONDS"]
+                effective_cooldown = max(user_cooldown, chain_total)
                 elapsed = (now - last_activation_time).total_seconds()
                 if elapsed < effective_cooldown:
-                    logger.info(f"Cooldown active: {elapsed:.0f}s/{effective_cooldown}s")
+                    if user_cooldown < chain_total:
+                        logger.warning(
+                            f"⚠ Detection suppressed: chain-duration floor cooldown active "
+                            f"({elapsed:.0f}s/{effective_cooldown}s; user setting={user_cooldown}s, "
+                            f"chain={chain} → {chain_total}s)"
+                        )
+                    else:
+                        logger.info(f"Cooldown active: {elapsed:.0f}s/{effective_cooldown}s")
                 else:
                     last_activation_time = None  # Cooldown expired, allow activation
 
             if last_activation_time is None and chain:
-                logger.info(f"Camera {camera_id} → start zone {chain[0]}, chase chain {chain}")
+                logger.info(f"Camera {camera_id} → chase chain {chain}")
                 # Fire first zone synchronously so we know if it succeeded; rest run in background
                 first_ok = await activate_rainbird(str(chain[0]), duration)
                 if first_ok and len(chain) > 1:

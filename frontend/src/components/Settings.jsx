@@ -111,10 +111,20 @@ function Settings({ settings, setSettings }) {
     fetchRingCameras()
   }, [])
 
-  // Load camera-zone mappings from backend settings
+  // Load camera-zone mappings from backend settings.
+  // Backend may return either int (legacy) or list[int] per camera; normalize to list[int].
   useEffect(() => {
     if (settings && settings.camera_zones) {
-      setCameraZones(prev => ({ ...prev, ...settings.camera_zones }))
+      const normalized = {}
+      for (const [camId, val] of Object.entries(settings.camera_zones)) {
+        if (val == null) continue
+        if (Array.isArray(val)) {
+          normalized[camId] = val.filter(z => z != null && z !== '').map(z => Number(z))
+        } else {
+          normalized[camId] = [Number(val)]
+        }
+      }
+      setCameraZones(prev => ({ ...prev, ...normalized }))
     }
   }, [settings])
 
@@ -174,10 +184,17 @@ function Settings({ settings, setSettings }) {
       })
     }
   }
-    const setZoneForCamera = (cameraId, zoneNumber) => {
-    const newZones = { ...cameraZones, [cameraId]: zoneNumber }
+    const setZoneSlot = (cameraId, slotIndex, zoneNumber) => {
+    // cameraZones[cameraId] is a list of zones in fire order (slot 0 fires first)
+    const current = Array.isArray(cameraZones[cameraId]) ? [...cameraZones[cameraId]] : []
+    // Pad if user selected a later slot before earlier ones
+    while (current.length <= slotIndex) current.push(null)
+    current[slotIndex] = zoneNumber
+    // Trim trailing nulls so we don't persist [5, null, null]
+    while (current.length > 0 && current[current.length - 1] == null) current.pop()
+    const newZones = { ...cameraZones, [cameraId]: current.length ? current : null }
+    if (current.length === 0) delete newZones[cameraId]
     setCameraZones(newZones)
-    // Also update localSettings so it gets included in the save payload
     setLocalSettings(prev => ({ ...prev, camera_zones: newZones }))
   }
     const handleSave = async () => {
@@ -370,19 +387,32 @@ function Settings({ settings, setSettings }) {
                         />
                         {camera.name}
                       </label>
-                      <select
-                        className="zone-select-compact"
-                        value={cameraZones[camera.id] || ''}
-                        onChange={(e) => setZoneForCamera(camera.id, e.target.value ? parseInt(e.target.value) : null)}
-                        disabled={!(localSettings.enabled_cameras || []).includes(camera.id)}
-                      >
-                        <option value="">No Zone</option>
-                        {rainbirdZones.map(zone => (
-                          <option key={zone.number} value={zone.number}>
-                            Zone {zone.number} - {zone.name}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="zone-slots">
+                        {[0, 1, 2].map(slot => {
+                          const slots = Array.isArray(cameraZones[camera.id]) ? cameraZones[camera.id] : []
+                          const value = slots[slot] ?? ''
+                          const enabled = (localSettings.enabled_cameras || []).includes(camera.id)
+                          // Disable slot N+1 unless slot N is set, to keep ordering intuitive
+                          const slotEnabled = enabled && (slot === 0 || (slots[slot - 1] != null && slots[slot - 1] !== ''))
+                          return (
+                            <select
+                              key={slot}
+                              className="zone-select-compact zone-slot-select"
+                              value={value}
+                              onChange={(e) => setZoneSlot(camera.id, slot, e.target.value ? parseInt(e.target.value) : null)}
+                              disabled={!slotEnabled}
+                              title={slot === 0 ? 'Fires first' : slot === 1 ? 'Fires second (chase)' : 'Fires third (chase)'}
+                            >
+                              <option value="">{slot === 0 ? 'No Zone' : '—'}</option>
+                              {rainbirdZones.map(zone => (
+                                <option key={zone.number} value={zone.number}>
+                                  Zone {zone.number} - {zone.name}
+                                </option>
+                              ))}
+                            </select>
+                          )
+                        })}
+                      </div>
                     </div>
                   ))}
                 </div>

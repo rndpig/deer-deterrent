@@ -497,6 +497,17 @@
   cursor: not-allowed;
 }
 
+.zone-slots {
+  display: flex;
+  gap: 0.4rem;
+  flex: 1;
+}
+
+.zone-slot-select {
+  flex: 1;
+  min-width: 0;
+}
+
 .camera-label-compact {
   font-weight: 500;
   color: #374151;
