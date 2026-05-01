@@ -72,8 +72,8 @@ function Settings({ settings, setSettings }) {
         const data = await response.json()
         
         if (data.cameras && data.cameras.length > 0) {
-          // Sort cameras in preferred order: Side > Driveway > Front > Backyard
-          const cameraOrder = ['woods', 'side', 'driveway', 'front', 'backyard']
+          // Sort cameras west-to-east: Woods > Backyard > Side > Driveway > Front
+          const cameraOrder = ['woods', 'backyard', 'side', 'driveway', 'front']
           const sortedCameras = data.cameras.sort((a, b) => {
             const aIndex = cameraOrder.findIndex(name => a.name.toLowerCase().includes(name))
             const bIndex = cameraOrder.findIndex(name => b.name.toLowerCase().includes(name))
@@ -91,13 +91,13 @@ function Settings({ settings, setSettings }) {
         }
       } catch (err) {
         console.error('Error fetching Ring cameras:', err)
-        // Use fallback cameras in preferred order
+        // Use fallback cameras in west-to-east order
         const fallbackCameras = [
           { name: 'Woods', id: '10cea9e4511f', type: 'camera' },
+          { name: 'Backyard', id: 'f045dae9383a', type: 'camera' },
           { name: 'Side', id: 'c4dbad08f862', type: 'camera' },
           { name: 'Driveway', id: '587a624d3fae', type: 'camera' },
-          { name: 'Front', id: '4439c4de7a79', type: 'camera' },
-          { name: 'Backyard', id: 'f045dae9383a', type: 'camera' }
+          { name: 'Front', id: '4439c4de7a79', type: 'camera' }
         ]
         setRingCameras(fallbackCameras)
         const initialZones = {}
