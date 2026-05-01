@@ -61,6 +61,32 @@ function Dashboard({ stats, settings }) {
     return () => window.removeEventListener('show-upload-modal', handleShowUpload)
   }, [])
 
+  // Compute the [start, end) datetime range for the "most recent" active-hours cycle.
+  // Returns null when no cycle bounds apply (e.g. timeFilter !== 'lastCycle').
+  const getMostRecentCycleRange = () => {
+    const cycleStartHour = settings?.active_hours_start ?? 20
+    const cycleEndHour = settings?.active_hours_end ?? 6
+    const cycleLengthHours = ((cycleEndHour - cycleStartHour + 24) % 24) || 24
+    const now = new Date()
+
+    // Start with today's cycle-start datetime, walk back if it's still in the future.
+    let cycleStartDate = new Date(now)
+    cycleStartDate.setHours(cycleStartHour, 0, 0, 0)
+    if (cycleStartDate > now) {
+      cycleStartDate.setDate(cycleStartDate.getDate() - 1)
+    }
+
+    // If we're less than halfway through the current cycle, fall back to the previous
+    // (fully-completed) cycle so users see last night's data instead of an empty page.
+    const elapsedHours = (now - cycleStartDate) / 3600000
+    if (elapsedHours < cycleLengthHours / 2) {
+      cycleStartDate = new Date(cycleStartDate.getTime() - 24 * 3600000)
+    }
+
+    const cycleEndDate = new Date(cycleStartDate.getTime() + cycleLengthHours * 3600000)
+    return { start: cycleStartDate, end: cycleEndDate }
+  }
+
   const loadSnapshots = async () => {
     setLoading(true)
       try {
@@ -75,24 +101,15 @@ function Dashboard({ stats, settings }) {
         displayParams.set('camera_id', cameraFilter)
         deerParams.set('camera_id', cameraFilter)
       }
-        if (timeFilter !== 'all') {
+
+      let cycleRange = null
+      if (timeFilter !== 'all') {
         let hours = 168
         if (timeFilter === 'lastCycle') {
-          // Compute hours since last cycle start using active_hours_start from settings.
-          // "Last cycle" = the most recent meaningful nightly window. If we're early in a
-          // fresh cycle (less than half the cycle elapsed), reach back through the previous
-          // cycle too so users always see last night's data.
-          const cycleStart = settings?.active_hours_start ?? 20
-          const cycleEnd = settings?.active_hours_end ?? 6
-          const cycleLength = ((cycleEnd - cycleStart + 24) % 24) || 10
+          cycleRange = getMostRecentCycleRange()
+          // Fetch a generous window from the server — we trim to exact cycle bounds below.
           const now = new Date()
-          const nowHour = now.getHours() + now.getMinutes() / 60
-          let hoursSinceCycleStart = nowHour - cycleStart
-          if (hoursSinceCycleStart < 0) hoursSinceCycleStart += 24
-          if (hoursSinceCycleStart < cycleLength / 2) {
-            hoursSinceCycleStart += 24  // include the previous cycle
-          }
-          hours = Math.ceil(hoursSinceCycleStart) || 1
+          hours = Math.ceil((now - cycleRange.start) / 3600000) + 1
         }
         displayParams.set('time_hours', String(hours))
       }
@@ -106,8 +123,18 @@ function Dashboard({ stats, settings }) {
 
       const [displayData, deerData] = await Promise.all([displayRes.json(), deerRes.json()])
 
+      let displaySnapshots = displayData.snapshots || []
+      if (cycleRange) {
+        const startMs = cycleRange.start.getTime()
+        const endMs = cycleRange.end.getTime()
+        displaySnapshots = displaySnapshots.filter(s => {
+          const t = new Date(s.timestamp).getTime()
+          return t >= startMs && t < endMs
+        })
+      }
+
       setAllDeerSnapshots(deerData.snapshots || [])
-      setSnapshots(displayData.snapshots || [])
+      setSnapshots(displaySnapshots)
       setCurrentPage(1)
     } catch (error) {
       console.error('Error loading snapshots:', error)
