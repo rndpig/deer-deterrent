@@ -449,20 +449,42 @@ async def settings_refresh_loop():
         await fetch_settings_from_backend()
 
 
-def is_active_hours() -> bool:
-    """Check if current time is within active hours (synced from backend/frontend settings)"""
-    # If active hours feature is disabled, always return True
+def _hour_in_active_window(hour: int) -> bool:
+    """Return True if the given hour-of-day falls inside the configured active window."""
     if not CONFIG.get("ACTIVE_HOURS_ENABLED", True):
         return True
-    
-    current_hour = datetime.now().hour
     start = CONFIG["ACTIVE_HOURS_START"]
     end = CONFIG["ACTIVE_HOURS_END"]
-    
     if start <= end:
-        return start <= current_hour < end
-    else:  # Wraps midnight (e.g., 20:00 to 6:00)
-        return current_hour >= start or current_hour < end
+        return start <= hour < end
+    # Wraps midnight (e.g., 20:00 to 6:00)
+    return hour >= start or hour < end
+
+
+def is_active_hours() -> bool:
+    """Check if current time is within active hours (synced from backend/frontend settings)"""
+    return _hour_in_active_window(datetime.now().hour)
+
+
+def _recording_within_active_hours(recording_time) -> bool:
+    """Check if a recording's actual capture time falls within active hours.
+
+    Used to gate motion-triggered video downloads, since Ring may deliver the
+    event_select URL well after the configured active window. Falls back to the
+    current-time check if recording_time is unavailable.
+    """
+    if not CONFIG.get("ACTIVE_HOURS_ENABLED", True):
+        return True
+    if recording_time is None:
+        return is_active_hours()
+    try:
+        if isinstance(recording_time, datetime):
+            hour = recording_time.hour
+        else:
+            hour = datetime.fromisoformat(str(recording_time)).hour
+    except (ValueError, TypeError):
+        return is_active_hours()
+    return _hour_in_active_window(hour)
 
 
 async def request_high_res_snapshot(camera_id: str) -> Optional[bytes]:
@@ -1166,14 +1188,10 @@ def on_mqtt_message(client, userdata, msg):
         if "event_select" in topic and len(parts) >= 6 and parts[4] == "event_select":
             camera_id = parts[3]
             
-            # Only queue for enabled cameras during active hours
+            # Only queue for enabled cameras
             enabled_cameras = CONFIG.get("ENABLED_CAMERAS", [])
             if enabled_cameras and camera_id not in enabled_cameras:
                 logger.debug(f"Camera {camera_id} not enabled, skipping video queuing")
-                return
-            
-            if not is_active_hours():
-                logger.debug(f"Outside active hours, skipping video queuing")
                 return
             
             try:
@@ -1197,6 +1215,9 @@ def on_mqtt_message(client, userdata, msg):
                     recording_time = extract_recording_time_from_url(recording_url)
                     if recording_time:
                         logger.info(f"📹 Extracted recording time from URL for camera {camera_id}: {recording_time}")
+                    if not _recording_within_active_hours(recording_time):
+                        logger.info(f"📹 Skipping video for camera {camera_id} — recording time {recording_time} is outside active hours ({CONFIG['ACTIVE_HOURS_START']}-{CONFIG['ACTIVE_HOURS_END']})")
+                        return
                     event_id = last_motion_ring_event.get(camera_id)
                     queue_video_for_processing(camera_id, recording_url, motion_time=recording_time or datetime.now().isoformat(), ring_event_id=event_id)
                 elif recording_url:
@@ -1207,6 +1228,9 @@ def on_mqtt_message(client, userdata, msg):
                 # Payload might be a direct URL string
                 if payload and '.mp4' in payload.lower() and payload.startswith('http'):
                     recording_time = extract_recording_time_from_url(payload)
+                    if not _recording_within_active_hours(recording_time):
+                        logger.info(f"📹 Skipping video for camera {camera_id} — recording time {recording_time} is outside active hours ({CONFIG['ACTIVE_HOURS_START']}-{CONFIG['ACTIVE_HOURS_END']})")
+                        return
                     event_id = last_motion_ring_event.get(camera_id)
                     queue_video_for_processing(camera_id, payload, motion_time=recording_time or datetime.now().isoformat(), ring_event_id=event_id)
                 else:
