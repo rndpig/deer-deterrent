@@ -360,17 +360,23 @@ function Settings({ settings, setSettings }) {
       )}
 
       <div className="settings-sections">
-        {/* Compact Card Grid for Quick Settings */}
-        <div className="settings-grid">
-          {/* Combined Camera Detection + Zone Mapping - Double-wide card */}
-          <div className="settings-card camera-zones-card">
+        {/* Detection Cameras — full-width row above the rest */}
+        <div className="settings-card camera-zones-card camera-zones-card-full">
             <h3>Detection Cameras</h3>
             <div className="card-content">
               <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#666' }}>
-                Select which cameras to use for deer detection and link to irrigation zones
+                Select which cameras to use for deer detection and link to irrigation zones (zones fire in order: Zone 1 first, then 2, then 3)
               </p>
               {ringCameras.length > 0 && rainbirdZones.length > 0 ? (
                 <div className="camera-zone-compact">
+                  <div className="camera-zone-row-combined camera-zone-header-row">
+                    <div className="camera-zone-header-spacer" />
+                    <div className="zone-slots">
+                      <div className="zone-slot-header">Zone 1</div>
+                      <div className="zone-slot-header">Zone 2</div>
+                      <div className="zone-slot-header">Zone 3</div>
+                    </div>
+                  </div>
                   {ringCameras.map(camera => (
                     <div key={camera.id} className="camera-zone-row-combined">
                       <label className="checkbox-inline" style={{ marginBottom: 0, minWidth: '140px' }}>
@@ -406,7 +412,7 @@ function Settings({ settings, setSettings }) {
                               <option value="">{slot === 0 ? 'No Zone' : '—'}</option>
                               {rainbirdZones.map(zone => (
                                 <option key={zone.number} value={zone.number}>
-                                  Zone {zone.number} - {zone.name}
+                                  {zone.number} - {zone.name}
                                 </option>
                               ))}
                             </select>
@@ -423,6 +429,9 @@ function Settings({ settings, setSettings }) {
               )}
             </div>
           </div>
+
+        {/* Compact Card Grid for Quick Settings */}
+        <div className="settings-grid">
 
           {/* Snapshot Archive + Active Hours */}
           <div className="settings-card">

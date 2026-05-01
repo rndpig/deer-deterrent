@@ -119,9 +119,44 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
-/* Double-wide card for camera zones */
+/* Double-wide card for camera zones (when inside the grid) */
 .settings-card.camera-zones-card {
   grid-column: span 2;
+}
+
+/* Full-width camera card placed above the grid */
+.settings-card.camera-zones-card-full {
+  grid-column: unset;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.camera-zone-header-row {
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.camera-zone-header-spacer {
+  min-width: 140px;
+}
+
+.zone-slot-header {
+  flex: 1;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+@media (prefers-color-scheme: dark) {
+  .camera-zone-header-row {
+    border-bottom-color: #404040;
+  }
+  .zone-slot-header {
+    color: #9ca3af;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
