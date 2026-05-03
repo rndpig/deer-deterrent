@@ -7,6 +7,7 @@ import { apiFetch, API_URL } from '../api'
 function Dashboard({ stats, settings }) {
   const [snapshots, setSnapshots] = useState([])
   const [allDeerSnapshots, setAllDeerSnapshots] = useState([]) // all deer detections (all-time) for accurate stats
+  const [chaseVideoMap, setChaseVideoMap] = useState({}) // { [event_id]: video_id } — events with chase recordings
   const [loading, setLoading] = useState(true)
   const [timeFilter, setTimeFilter] = useState('lastCycle') // lastCycle, last7d, all
   const [currentPage, setCurrentPage] = useState(1)
@@ -113,15 +114,22 @@ function Dashboard({ stats, settings }) {
         }
         displayParams.set('time_hours', String(hours))
       }
-        const [displayRes, deerRes] = await Promise.all([
+        const [displayRes, deerRes, chaseRes] = await Promise.all([
         apiFetch(`/api/snapshots?${displayParams}`),
-        apiFetch(`/api/snapshots?${deerParams}`)
+        apiFetch(`/api/snapshots?${deerParams}`),
+        apiFetch('/api/chase-videos')
       ])
 
       if (!displayRes.ok) throw new Error(`HTTP ${displayRes.status}: ${displayRes.statusText}`)
       if (!deerRes.ok) throw new Error(`Deer fetch HTTP ${deerRes.status}: ${deerRes.statusText}`)
 
       const [displayData, deerData] = await Promise.all([displayRes.json(), deerRes.json()])
+      if (chaseRes.ok) {
+        try {
+          const chaseData = await chaseRes.json()
+          setChaseVideoMap(chaseData.mapping || {})
+        } catch { /* non-fatal */ }
+      }
 
       let displaySnapshots = displayData.snapshots || []
       if (cycleRange) {
@@ -160,7 +168,16 @@ function Dashboard({ stats, settings }) {
     return out
   })()
 
+  // Format a 0-23 hour value as a 12-hour clock label with AM/PM (e.g. 0 -> "12 AM", 20 -> "8 PM").
+  const formatHour12 = (h) => {
+    const hour = Number(h)
+    const period = hour < 12 ? 'AM' : 'PM'
+    const display = hour % 12 === 0 ? 12 : hour % 12
+    return `${display} ${period}`
+  }
+
   // Auto-jump to the snapshot nearest to the chosen hour:minute (within currently-loaded snapshots).
+  // Navigates to the page containing the matching card and scrolls/flashes it (does NOT open the modal).
   const jumpToHourMinute = (h, m) => {
     if (h === '' || m === '' || snapshots.length === 0) return
     const targetMin = Number(h) * 60 + Number(m)
@@ -178,8 +195,17 @@ function Dashboard({ stats, settings }) {
       }
     }
     const page = Math.floor(bestIdx / itemsPerPage) + 1
+    const targetId = snapshots[bestIdx].id
     setCurrentPage(page)
-    setSelectedSnapshot(snapshots[bestIdx])
+    // Wait for the page to render, then scroll to the card and highlight it briefly.
+    setTimeout(() => {
+      const el = document.querySelector(`[data-snapshot-id="${targetId}"]`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.classList.add('snapshot-jump-highlight')
+        setTimeout(() => el.classList.remove('snapshot-jump-highlight'), 2200)
+      }
+    }, 80)
   }
 
     const handleUploadImage = async () => {
@@ -482,50 +508,54 @@ function Dashboard({ stats, settings }) {
           </div>
         </div>
 
-        <div className="filter-section">
-          <label className="filter-label">Camera:</label>
-          <div className="camera-select-wrapper">
-            <select
-              className="camera-select"
-              value={cameraFilter}
-              onChange={(e) => setCameraFilter(e.target.value)}
-            >
-              <option value="all">All Cameras</option>
-              <option value="10cea9e4511f">Woods</option>
-              <option value="c4dbad08f862">Side</option>
-              <option value="587a624d3fae">Driveway</option>
-              <option value="4439c4de7a79">Front Door</option>
-              <option value="f045dae9383a">Back</option>
-            </select>
-            <span className="camera-select-arrow">▾</span>
+        <div className="filter-row-camera-jump">
+          <div className="filter-section">
+            <label className="filter-label">Camera:</label>
+            <div className="camera-select-wrapper">
+              <select
+                className="camera-select"
+                value={cameraFilter}
+                onChange={(e) => setCameraFilter(e.target.value)}
+              >
+                <option value="all">All Cameras</option>
+                <option value="10cea9e4511f">Woods</option>
+                <option value="c4dbad08f862">Side</option>
+                <option value="587a624d3fae">Driveway</option>
+                <option value="4439c4de7a79">Front Door</option>
+                <option value="f045dae9383a">Back</option>
+              </select>
+              <span className="camera-select-arrow">▾</span>
+            </div>
           </div>
-        </div>
 
-        <div className="filter-section">
-          <label className="filter-label">Jump:</label>
-          <select
-            className="jump-select"
-            value={jumpHour}
-            onChange={(e) => { setJumpHour(e.target.value); jumpToHourMinute(e.target.value, jumpMinute) }}
-            title="Hour"
-          >
-            <option value="">HH</option>
-            {activeHourOptions.map(h => (
-              <option key={h} value={h}>{String(h).padStart(2, '0')}</option>
-            ))}
-          </select>
-          <span className="jump-colon">:</span>
-          <select
-            className="jump-select"
-            value={jumpMinute}
-            onChange={(e) => { setJumpMinute(e.target.value); jumpToHourMinute(jumpHour, e.target.value) }}
-            title="Minute"
-          >
-            <option value="">MM</option>
-            {Array.from({ length: 12 }, (_, i) => i * 5).map(m => (
-              <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
-            ))}
-          </select>
+          <div className="filter-section filter-section-jump">
+            <label className="filter-label">Jump:</label>
+            <div className="jump-controls">
+              <select
+                className="jump-select"
+                value={jumpHour}
+                onChange={(e) => { setJumpHour(e.target.value); jumpToHourMinute(e.target.value, jumpMinute) }}
+                title="Hour"
+              >
+                <option value="">HH</option>
+                {activeHourOptions.map(h => (
+                  <option key={h} value={h}>{formatHour12(h)}</option>
+                ))}
+              </select>
+              <span className="jump-colon">:</span>
+              <select
+                className="jump-select"
+                value={jumpMinute}
+                onChange={(e) => { setJumpMinute(e.target.value); jumpToHourMinute(jumpHour, e.target.value) }}
+                title="Minute"
+              >
+                <option value="">MM</option>
+                {Array.from({ length: 12 }, (_, i) => i * 5).map(m => (
+                  <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -542,6 +572,7 @@ function Dashboard({ stats, settings }) {
             {snapshots.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((snapshot) => (
             <div
               key={snapshot.id}
+              data-snapshot-id={snapshot.id}
               className={`snapshot-card ${snapshot.deer_detected ? 'with-deer' : ''}`}
               onClick={() => setSelectedSnapshot(snapshot)}
             >
@@ -560,6 +591,22 @@ function Dashboard({ stats, settings }) {
                 {!!snapshot.irrigation_activated && (
                   <div className="irrigation-badge">
                     💦
+                  </div>
+                )}
+                {chaseVideoMap[String(snapshot.id)] && (
+                  <div
+                    className="chase-video-badge"
+                    title="Chase recording available — click to open in Videos tab"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const videoId = chaseVideoMap[String(snapshot.id)]
+                      try {
+                        sessionStorage.setItem('focusVideoId', String(videoId))
+                      } catch { /* ignore */ }
+                      window.dispatchEvent(new CustomEvent('navigate-tab', { detail: { tab: 'videos', videoId } }))
+                    }}
+                  >
+                    🎬
                   </div>
                 )}
               </div>

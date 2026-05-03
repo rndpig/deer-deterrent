@@ -143,6 +143,7 @@ camera_snapshots: Dict[str, bytes] = {}  # Store latest snapshot for each camera
 last_periodic_snapshot_time: Dict[str, datetime] = {}  # Track last periodic snapshot per camera
 last_snapshot_hash: Dict[str, str] = {}  # Track snapshot hashes to prevent duplicate processing
 last_motion_ring_event: Dict[str, int] = {}  # Track most recent ring_event_id per camera (for linking recordings)
+chase_in_progress: Dict[str, bool] = {}  # Per-camera flag: True while a chase RTSP recording is being captured
 
 # Video queue: accumulate recording URLs during active hours, process after
 PENDING_VIDEOS_FILE = Path("/app/data/pending_videos.json")
@@ -670,6 +671,148 @@ async def log_to_backend(event_data: Dict[str, Any]):
         logger.error(f"Failed to log to backend: {e}")
 
 
+async def record_chase_video(camera_id: str, ring_event_id: Optional[int]) -> None:
+    """Record ~2 minutes of RTSP from a camera after a confirmed deer detection
+    triggered irrigation. The resulting MP4 is registered in the Video Library
+    with `triggering_event_id=ring_event_id` so the dashboard can link the
+    snapshot card to the chase footage.
+
+    Strategy:
+      1. Try ffmpeg-direct against `rtsp://ring-mqtt:8554/{camera_id}_live`.
+      2. If ffmpeg cannot connect within ~5s, publish stream/active=ON over MQTT
+         (this asks ring-mqtt to start the live stream) and retry once.
+
+    Per-camera lock (`chase_in_progress`) prevents overlapping recordings.
+    """
+    global chase_in_progress
+
+    if chase_in_progress.get(camera_id, False):
+        return
+    chase_in_progress[camera_id] = True
+
+    duration_seconds = 120  # 2-minute chase window
+    rtsp_url = f"rtsp://ring-mqtt:8554/{camera_id}_live"
+
+    try:
+        RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+        ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        evt_part = ring_event_id if ring_event_id is not None else "noevt"
+        filename = f"chase_{evt_part}_{camera_id}_{ts_str}.mp4"
+        dest = RECORDINGS_DIR / filename
+        tmp_path = dest.with_suffix(".raw.mp4")
+
+        async def _run_ffmpeg() -> tuple[int, str]:
+            """Run ffmpeg to capture `duration_seconds` of RTSP. Returns (rc, stderr)."""
+            proc = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-rtsp_transport", "tcp",
+                "-stimeout", "5000000",  # 5s socket timeout (microseconds)
+                "-i", rtsp_url,
+                "-t", str(duration_seconds),
+                "-c", "copy",
+                "-an",  # drop audio (Ring audio is often missing/garbled)
+                str(tmp_path),
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                _, stderr = await asyncio.wait_for(
+                    proc.communicate(), timeout=duration_seconds + 30
+                )
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                return -1, "ffmpeg watchdog timeout"
+            return proc.returncode or 0, (stderr or b"").decode("utf-8", errors="ignore")
+
+        logger.info(
+            f"🎬 Starting chase recording for {camera_id} (event #{evt_part}) "
+            f"→ {filename} ({duration_seconds}s)"
+        )
+
+        rc, err = await _run_ffmpeg()
+
+        # Stream may not be live yet — ask ring-mqtt to start it and retry once.
+        if (rc != 0 or not tmp_path.exists() or tmp_path.stat().st_size < 100_000) and CONFIG.get("RING_LOCATION_ID"):
+            logger.warning(
+                f"Chase recording first attempt failed for {camera_id} (rc={rc}); "
+                f"requesting ring-mqtt to start live stream and retrying. stderr: {err[:200]}"
+            )
+            try:
+                if mqtt_client is not None:
+                    topic = f"ring/{CONFIG['RING_LOCATION_ID']}/camera/{camera_id}/stream/active/command"
+                    mqtt_client.publish(topic, "ON", qos=0)
+                    await asyncio.sleep(3.0)  # give ring-mqtt a moment to bring the stream up
+            except Exception as e:
+                logger.warning(f"Failed to publish stream/active for {camera_id}: {e}")
+            tmp_path.unlink(missing_ok=True)
+            rc, err = await _run_ffmpeg()
+
+        if rc != 0 or not tmp_path.exists() or tmp_path.stat().st_size < 100_000:
+            logger.error(
+                f"Chase recording failed for {camera_id} (rc={rc}); "
+                f"stderr: {err[:300]}"
+            )
+            tmp_path.unlink(missing_ok=True)
+            return
+
+        # Transmux to faststart for progressive browser playback (mirror existing pattern).
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-i", str(tmp_path),
+                "-c", "copy",
+                "-movflags", "+faststart",
+                str(dest),
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, fserr = await asyncio.wait_for(proc.communicate(), timeout=60)
+            if proc.returncode == 0 and dest.exists() and dest.stat().st_size > 100_000:
+                tmp_path.unlink(missing_ok=True)
+            else:
+                logger.warning(
+                    f"Faststart transmux failed for chase recording (rc={proc.returncode}); "
+                    f"keeping raw file. stderr: {(fserr or b'').decode('utf-8', errors='ignore')[:200]}"
+                )
+                tmp_path.replace(dest)
+        except Exception as e:
+            logger.warning(f"Faststart transmux error for chase recording: {e}; keeping raw file")
+            if tmp_path.exists():
+                tmp_path.replace(dest)
+
+        size_mb = dest.stat().st_size / (1024 * 1024)
+        logger.info(f"🎬 Chase recording saved: {filename} ({size_mb:.1f} MB)")
+
+        # Register in Video Library with triggering_event_id so the dashboard can link it.
+        try:
+            reg_response = requests.post(
+                f"{CONFIG['BACKEND_API_URL']}/api/videos/register",
+                json={
+                    "video_path": f"snapshots/recordings/{filename}",
+                    "camera_id": camera_id,
+                    "filename": filename,
+                    "triggering_event_id": ring_event_id,
+                },
+                headers=get_api_headers(),
+                timeout=10.0,
+            )
+            if reg_response.status_code == 200:
+                video_id = reg_response.json().get("video_id")
+                logger.info(f"🎬 Registered chase video in library (id={video_id}) for event #{evt_part}")
+            else:
+                logger.warning(
+                    f"Failed to register chase video: HTTP {reg_response.status_code} {reg_response.text[:200]}"
+                )
+        except Exception as e:
+            logger.error(f"Failed to register chase video in library: {e}")
+
+    except Exception as e:
+        logger.error(f"record_chase_video error for {camera_id}: {e}", exc_info=True)
+    finally:
+        chase_in_progress[camera_id] = False
+
+
 async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: bytes = None, snapshot_url: str = None, request_snapshot: bool = False, source: str = "unknown", ring_event_id: int = None):
     """Process a camera motion event"""
     global last_activation_time
@@ -825,6 +968,13 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
                     last_activation_time = now
                     event_data["irrigation_activated"] = True
                     logger.info("✓✓✓ DEER DETERRENT ACTIVATED ✓✓✓")
+                    # Kick off a 2-minute RTSP "chase" recording for this camera, linked back to the
+                    # ring_event whose detection triggered it. Per-camera lock prevents overlapping
+                    # chase recordings if the same camera re-fires inside the cooldown.
+                    if not chase_in_progress.get(camera_id, False):
+                        asyncio.create_task(record_chase_video(camera_id, ring_event_id))
+                    else:
+                        logger.info(f"Chase recording already in progress for {camera_id}; skipping")
         
         # Update Ring event with detection result (including bboxes and irrigation status)
         if ring_event_id:

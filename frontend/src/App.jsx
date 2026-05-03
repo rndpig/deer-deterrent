@@ -15,7 +15,6 @@ function App() {
   const [settings, setSettings] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
   const [ws, setWs] = useState(null)
-  const [showMenu, setShowMenu] = useState(false)
   const [diskUsage, setDiskUsage] = useState(null)
 
   // Connect to WebSocket
@@ -91,6 +90,17 @@ function App() {
       .catch(err => console.error('Error fetching disk usage:', err))
   }, [user])
 
+  // Cross-component navigation: Dashboard chase-video badge dispatches a 'navigate-tab'
+  // CustomEvent to jump to the Videos tab (and optionally focus a specific video).
+  useEffect(() => {
+    const handler = (e) => {
+      const tab = e?.detail?.tab
+      if (tab) setActiveTab(tab)
+    }
+    window.addEventListener('navigate-tab', handler)
+    return () => window.removeEventListener('navigate-tab', handler)
+  }, [])
+
   // Show loading state
   if (loading) {
     return (
@@ -133,36 +143,6 @@ function App() {
                 <span className="disk-bar-label">{diskUsage.free_gb}GB free</span>
               </div>
             )}
-            <button 
-              className="btn-hamburger"
-              onClick={() => setShowMenu(!showMenu)}
-              aria-label="Menu"
-            >
-              ☰
-            </button>
-            {showMenu && (
-              <div className="dropdown-menu">
-                <button 
-                  className="dropdown-item"
-                  onClick={() => {
-                    setActiveTab('videos')
-                    setShowArchive(false)
-                    setShowMenu(false)
-                  }}
-                >
-                  🎬 Videos
-                </button>
-                <button 
-                  className="dropdown-item"
-                  onClick={() => {
-                    signOut()
-                    setShowMenu(false)
-                  }}
-                >
-                  Sign Out
-                </button>
-              </div>
-            )}
           </div>
         </div>
         <nav className="tabs">
@@ -171,6 +151,12 @@ function App() {
             onClick={() => setActiveTab('dashboard')}
           >
             Dashboard
+          </button>
+          <button 
+            className={activeTab === 'videos' ? 'active' : ''}
+            onClick={() => setActiveTab('videos')}
+          >
+            Videos
           </button>
           <button 
             className={activeTab === 'stats' ? 'active' : ''}

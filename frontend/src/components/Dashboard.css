@@ -144,6 +144,32 @@
   margin: 0 0.1rem;
 }
 
+/* Camera + Jump row wrapper.
+   Desktop: behaves like the previous flat layout - the wrapper itself participates
+   in the parent flex row, and Camera + Jump sit beside each other naturally.
+   Mobile (<=768px): becomes a single horizontal row so both controls share one line. */
+.filter-row-camera-jump {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.jump-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Brief flash to highlight the snapshot the Jump-to feature lands on. */
+@keyframes snapshot-jump-flash {
+  0%   { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.9), 0 0 14px rgba(59, 130, 246, 0.6); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+
+.snapshot-card.snapshot-jump-highlight {
+  animation: snapshot-jump-flash 2.2s ease-out;
+}
+
 /* Snapshot Grid */
 .snapshot-grid {
   display: grid;
@@ -235,6 +261,30 @@
 .irrigation-fired {
   color: #60a5fa;
   font-weight: 600;
+}
+
+.chase-video-badge {
+  position: absolute;
+  top: 6px;
+  left: 50px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #facc15;
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  line-height: 1.4;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  z-index: 3;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.1s ease, background 0.1s ease;
+}
+
+.chase-video-badge:hover {
+  background: rgba(0, 0, 0, 0.9);
+  transform: scale(1.08);
 }
 
 .deer-count-badge-modal {
@@ -1153,6 +1203,38 @@
     flex-direction: column;
     gap: 0.4rem;
     width: 100%;
+  }
+
+  /* Camera + Jump share one row on mobile.
+     Camera (the wider control) takes the remaining space; Jump shrinks to fit. */
+  .filter-row-camera-jump {
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  .filter-row-camera-jump .filter-section {
+    width: auto;
+  }
+
+  .filter-row-camera-jump .filter-section:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .filter-row-camera-jump .camera-select-wrapper,
+  .filter-row-camera-jump .camera-select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .filter-section-jump {
+    flex: 0 0 auto;
+  }
+
+  .filter-section-jump .jump-select {
+    width: 72px;
   }
 
   .filter-section .filter-label {

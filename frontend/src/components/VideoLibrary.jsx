@@ -43,6 +43,23 @@ function VideoLibrary() {
     loadVideos()
     loadTrainingStatus()
   }, [])
+
+  // If we were navigated here from the Dashboard's chase-video badge, scroll the
+  // matching video card into view and flash it. Triggered after `videos` loads.
+  useEffect(() => {
+    if (!videos || videos.length === 0) return
+    let focusId = null
+    try { focusId = sessionStorage.getItem('focusVideoId') } catch { /* ignore */ }
+    if (!focusId) return
+    try { sessionStorage.removeItem('focusVideoId') } catch { /* ignore */ }
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-video-id="${focusId}"]`)
+      if (!el) return
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('video-card-flash')
+      setTimeout(() => el.classList.remove('video-card-flash'), 2000)
+    })
+  }, [videos])
   
   // Close menu when clicking outside
   useEffect(() => {
@@ -667,7 +684,7 @@ function VideoLibrary() {
       ) : (
         <div className="video-grid">
           {videos.map((video) => (
-            <div key={video.id} className="video-card">
+            <div key={video.id} data-video-id={video.id} className="video-card">
               <div 
                 className="video-thumbnail"
                 onClick={() => handlePlayVideo(video)}

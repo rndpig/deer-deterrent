@@ -524,6 +524,7 @@ async def register_video(data: dict):
     video_path = data.get("video_path", "")
     camera_id = data.get("camera_id", "")
     filename = data.get("filename", "")
+    triggering_event_id = data.get("triggering_event_id")  # Optional: link to ring_event that triggered this chase recording
     
     if not video_path or not filename:
         raise HTTPException(status_code=400, detail="video_path and filename are required")
@@ -569,11 +570,34 @@ async def register_video(data: dict):
         fps=fps,
         total_frames=total_frames,
         video_path=video_path,
-        auto_ingested=True
+        auto_ingested=True,
+        triggering_event_id=triggering_event_id
     )
     
-    logger.info(f"Registered auto-ingested video #{video_id}: {filename} ({camera_name})")
+    logger.info(f"Registered auto-ingested video #{video_id}: {filename} ({camera_name}){' [chase for event #' + str(triggering_event_id) + ']' if triggering_event_id else ''}")
     return {"status": "success", "video_id": video_id}
+
+
+@app.get("/api/chase-videos")
+async def list_chase_videos(hours: int = 168):
+    """Return mapping of triggering ring_event_id -> video_id for chase recordings.
+
+    Used by the dashboard to show a 'has chase video' badge on snapshot cards.
+    Default 168h (7 days) covers all currently-displayable snapshots.
+    """
+    with db.db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, triggering_event_id
+            FROM videos
+            WHERE triggering_event_id IS NOT NULL
+              AND upload_date >= datetime('now', ?, 'localtime')
+            """,
+            (f'-{int(hours)} hours',)
+        )
+        rows = cursor.fetchall()
+    return {"mapping": {str(r[1]): r[0] for r in rows}}
 
 
 @app.get("/api/ring-events")

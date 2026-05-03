@@ -153,6 +153,13 @@ def init_database():
         cursor.execute("ALTER TABLE videos ADD COLUMN auto_ingested BOOLEAN DEFAULT 0")
         print("✓ Added 'auto_ingested' column to videos table")
         logger.info("Added 'auto_ingested' column to videos table")
+
+    # Chase recordings: link a video back to the ring_event whose detection triggered it
+    if 'triggering_event_id' not in columns:
+        cursor.execute("ALTER TABLE videos ADD COLUMN triggering_event_id INTEGER")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_videos_triggering_event ON videos(triggering_event_id)")
+        print("✓ Added 'triggering_event_id' column to videos table")
+        logger.info("Added 'triggering_event_id' column to videos table")
     
     # Migration: Add archived column to ring_events if it doesn't exist
     cursor.execute("PRAGMA table_info(ring_events)")
@@ -275,16 +282,18 @@ def db_connection():
 
 # Video operations
 def add_video(filename: str, camera_name: str, duration: float, fps: float, 
-              total_frames: int, video_path: str, auto_ingested: bool = False) -> int:
+              total_frames: int, video_path: str, auto_ingested: bool = False,
+              triggering_event_id: int = None) -> int:
     """Add a new video to the database."""
     with db_connection() as conn:
         cursor = conn.cursor()
         
         cursor.execute("""
             INSERT INTO videos (filename, upload_date, camera_name, duration_seconds, 
-                              fps, total_frames, video_path, auto_ingested)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (filename, datetime.now().isoformat(), camera_name, duration, fps, total_frames, video_path, auto_ingested))
+                              fps, total_frames, video_path, auto_ingested, triggering_event_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (filename, datetime.now().isoformat(), camera_name, duration, fps, total_frames,
+              video_path, auto_ingested, triggering_event_id))
         
         video_id = cursor.lastrowid
         conn.commit()
