@@ -401,21 +401,23 @@ function Settings({ settings, setSettings }) {
                           // Disable slot N+1 unless slot N is set, to keep ordering intuitive
                           const slotEnabled = enabled && (slot === 0 || (slots[slot - 1] != null && slots[slot - 1] !== ''))
                           return (
-                            <select
-                              key={slot}
-                              className="zone-select-compact zone-slot-select"
-                              value={value}
-                              onChange={(e) => setZoneSlot(camera.id, slot, e.target.value ? parseInt(e.target.value) : null)}
-                              disabled={!slotEnabled}
-                              title={slot === 0 ? 'Fires first' : slot === 1 ? 'Fires second (chase)' : 'Fires third (chase)'}
-                            >
-                              <option value="">{slot === 0 ? 'No Zone' : '—'}</option>
-                              {rainbirdZones.map(zone => (
-                                <option key={zone.number} value={zone.number}>
-                                  {zone.number} - {zone.name}
-                                </option>
-                              ))}
-                            </select>
+                            <div key={slot} className="zone-slot-wrapper">
+                              <span className="zone-slot-mobile-label">Zone {slot + 1}</span>
+                              <select
+                                className="zone-select-compact zone-slot-select"
+                                value={value}
+                                onChange={(e) => setZoneSlot(camera.id, slot, e.target.value ? parseInt(e.target.value) : null)}
+                                disabled={!slotEnabled}
+                                title={slot === 0 ? 'Fires first' : slot === 1 ? 'Fires second (chase)' : 'Fires third (chase)'}
+                              >
+                                <option value="">{slot === 0 ? 'No Zone' : '—'}</option>
+                                {rainbirdZones.map(zone => (
+                                  <option key={zone.number} value={zone.number}>
+                                    {zone.number} - {zone.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
                           )
                         })}
                       </div>

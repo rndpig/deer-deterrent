@@ -538,6 +538,29 @@
   flex: 1;
 }
 
+.zone-slot-wrapper {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.zone-slot-mobile-label {
+  display: none; /* shown only on mobile via media query below */
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 0.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+@media (prefers-color-scheme: dark) {
+  .zone-slot-mobile-label {
+    color: #9ca3af;
+  }
+}
+
 .zone-slot-select {
   flex: 1;
   min-width: 0;
@@ -684,6 +707,47 @@
   .zone-select {
     max-width: 100%;
     width: 100%;
+  }
+
+  /* Stack the 3-zone selectors vertically per camera so they don't run off-screen.
+     Hide the Zone 1/2/3 header row (labels appear inside each <select> instead). */
+  .camera-zone-header-row {
+    display: none;
+  }
+
+  .camera-zone-row-combined {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(127, 127, 127, 0.2);
+  }
+
+  .camera-zone-row-combined:last-child {
+    border-bottom: none;
+  }
+
+  .camera-zone-row-combined .checkbox-inline {
+    min-width: 0 !important;
+  }
+
+  .zone-slots {
+    flex-direction: column;
+    gap: 0.4rem;
+    width: 100%;
+  }
+
+  .zone-slot-wrapper {
+    width: 100%;
+  }
+
+  .zone-slot-mobile-label {
+    display: block;
+  }
+
+  .zone-slot-select {
+    width: 100%;
+    min-width: 0;
   }
 }
 
