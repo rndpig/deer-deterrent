@@ -205,6 +205,10 @@ function Dashboard({ stats, settings }) {
         el.classList.add('snapshot-jump-highlight')
         setTimeout(() => el.classList.remove('snapshot-jump-highlight'), 2200)
       }
+      // Reset the Jump-to selectors so they're ready for another jump without
+      // a manual reset step.
+      setJumpHour('')
+      setJumpMinute('')
     }, 80)
   }
 
