@@ -531,7 +531,17 @@ async def register_video(data: dict):
     
     # Resolve camera name from Ring camera ID
     camera_name = RING_CAMERA_ID_MAP.get(camera_id, camera_id or "Unknown")
-    
+
+    # Idempotency guard: Ring-MQTT republishes recording attributes periodically,
+    # which would otherwise cause the coordinator to register the same recording
+    # over and over. Treat (filename, camera_name) as the natural key.
+    existing = db.get_video_by_filename_and_camera(filename, camera_name)
+    if existing:
+        logger.debug(
+            f"Video {filename} ({camera_name}) already registered as #{existing['id']}, skipping duplicate register"
+        )
+        return {"status": "duplicate", "video_id": existing["id"]}
+
     # Get video metadata via ffprobe if available
     duration = 0.0
     fps = 15.0

@@ -300,6 +300,17 @@ def add_video(filename: str, camera_name: str, duration: float, fps: float,
         
         return video_id
 
+def get_video_by_filename_and_camera(filename: str, camera_name: str) -> Optional[Dict]:
+    """Look up a video by its natural key (filename + camera) for idempotent registration."""
+    with db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM videos WHERE filename = ? AND camera_name = ? LIMIT 1",
+            (filename, camera_name),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
 def get_all_videos() -> List[Dict]:
     """Get all non-archived videos with frame and detection counts."""
     with db_connection() as conn:

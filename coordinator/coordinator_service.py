@@ -208,32 +208,39 @@ def queue_video_for_processing(camera_id: str, recording_url: str, motion_time: 
     the local file path in pending_videos.json for deferred frame extraction.
     """
     pending = load_pending_videos()
-    # Deduplicate by URL
+    # Deduplicate by URL within current pending queue
     if any(v.get("url") == recording_url for v in pending):
         logger.debug(f"Video URL already queued for camera {camera_id}, skipping")
         return
-    
+
+    # Compute the destination filename (driven by recording start time, not now()),
+    # then short-circuit if the file is already on disk. Ring-MQTT republishes the
+    # event_select/attributes state topic periodically (and on reconnect), each
+    # time with a freshly-signed URL pointing at the SAME underlying recording.
+    # Without this check we'd re-download the same MP4 and re-register a new DB
+    # row every ~10 minutes, producing the duplicate cards seen in the dashboard.
+    RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+    ts_dt = None
+    if motion_time:
+        try:
+            ts_dt = datetime.fromisoformat(motion_time.replace('Z', '+00:00'))
+            if ts_dt.tzinfo is not None:
+                ts_dt = ts_dt.astimezone().replace(tzinfo=None)
+        except (ValueError, TypeError):
+            ts_dt = None
+    if ts_dt is None:
+        ts_dt = datetime.now()
+    ts = ts_dt.strftime("%Y%m%d_%H%M%S")
+    filename = f"recording_{ts}_{camera_id}.mp4"
+    dest = RECORDINGS_DIR / filename
+
+    if dest.exists() and dest.stat().st_size > 1000:
+        logger.debug(f"Recording {filename} already on disk, skipping re-download/re-register")
+        return
+
     # Download the MP4 immediately before the URL expires
     local_path = None
     try:
-        RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
-        # Prefer the actual recording time (extracted from Ring URL JWT or passed in via motion_time)
-        # so the filename reflects WHEN the motion happened, not when we downloaded it.
-        ts_dt = None
-        if motion_time:
-            try:
-                ts_dt = datetime.fromisoformat(motion_time.replace('Z', '+00:00'))
-                # Convert to local naive time so the filename matches the dashboard timezone.
-                if ts_dt.tzinfo is not None:
-                    ts_dt = ts_dt.astimezone().replace(tzinfo=None)
-            except (ValueError, TypeError):
-                ts_dt = None
-        if ts_dt is None:
-            ts_dt = datetime.now()
-        ts = ts_dt.strftime("%Y%m%d_%H%M%S")
-        filename = f"recording_{ts}_{camera_id}.mp4"
-        dest = RECORDINGS_DIR / filename
-
         response = requests.get(recording_url, timeout=60, allow_redirects=True)
         response.raise_for_status()
 
