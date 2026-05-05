@@ -1168,7 +1168,34 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
                     logger.warning(f"Extracted frame too small ({len(frame_bytes)} bytes) at t={frame_time:.1f}s, skipping")
                     frame_path.unlink(missing_ok=True)
                     continue
-                
+
+                # Frame-content dedup: Ring sometimes republishes the same recording inside
+                # a fresh MP4 container (different file md5, identical video stream). After
+                # extraction the resulting JPEG is byte-identical to one we already kept.
+                # Hash this jpg and skip if any existing video_*.jpg for the same camera
+                # has the same content.
+                import hashlib as _hashlib
+                frame_md5 = _hashlib.md5(frame_bytes).hexdigest()
+                snapshots_dir = Path("/app/snapshots")
+                already_have = False
+                for existing in snapshots_dir.glob(f"video_*_{camera_id}_f*.jpg"):
+                    if existing == frame_path:
+                        continue
+                    try:
+                        if existing.stat().st_size != len(frame_bytes):
+                            continue
+                        if _hashlib.md5(existing.read_bytes()).hexdigest() == frame_md5:
+                            logger.info(
+                                f"\U0001f9ff Frame-content duplicate of {existing.name} (md5={frame_md5[:8]}) \u2014 skipping"
+                            )
+                            frame_path.unlink(missing_ok=True)
+                            already_have = True
+                            break
+                    except OSError:
+                        continue
+                if already_have:
+                    continue
+
                 # Compute frame timestamp: original motion time + frame offset into video
                 frame_timestamp = event_time + timedelta(seconds=frame_time)
                 
