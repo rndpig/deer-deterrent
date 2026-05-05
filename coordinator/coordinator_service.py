@@ -1043,6 +1043,8 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
         now = datetime.now()
         
         # Use local file if already downloaded, otherwise download from URL
+        # Frame timestamp prefix is shared by both branches (used in frame filenames).
+        ts = event_time.strftime("%Y%m%d_%H%M%S")
         if local_path and Path(local_path).exists():
             temp_video = Path(local_path)
             logger.info(f"📹 Using pre-downloaded video for camera {camera_id}: {temp_video.name} ({temp_video.stat().st_size} bytes)")
@@ -1062,7 +1064,6 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
             logger.info(f"Downloaded video: {len(video_bytes)} bytes")
 
             # Save video to temp file (use event_time for naming)
-            ts = event_time.strftime("%Y%m%d_%H%M%S")
             temp_video = Path(f"/app/snapshots/video_{ts}_{camera_id}.mp4")
             temp_video.parent.mkdir(parents=True, exist_ok=True)
             temp_video.write_bytes(video_bytes)
@@ -1094,7 +1095,8 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
         
         if duration <= 0:
             logger.warning(f"Could not determine video duration, cleaning up")
-            temp_video.unlink(missing_ok=True)
+            if not local_path:
+                temp_video.unlink(missing_ok=True)
             return
         
         logger.info(f"Video info: duration={duration:.1f}s, fps={fps:.1f}")
