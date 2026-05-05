@@ -1651,24 +1651,40 @@ async def cleanup_no_deer_snapshots():
 
 
 async def video_batch_processor():
-    """Process queued videos after active hours end.
-    
-    Monitors for the active→inactive transition and then batch-processes
-    all accumulated video URLs. This avoids CPU contention with real-time
-    snapshot detection during the nightly monitoring window.
+    """Process queued videos whenever we are outside active hours.
+
+    Triggers whenever there are pending videos AND we are currently inactive.
+    Previously this required a live active→inactive transition, which meant a
+    coordinator restart during the day would silently strand the queue until
+    the next day's transition. This version drains opportunistically and is
+    idempotent (the queue is cleared after each successful drain).
     """
     logger.info("Video batch processor started")
-    was_active = is_active_hours()
-    
+
     while True:
         try:
             await asyncio.sleep(60)  # Check every minute
-            
+
             currently_active = is_active_hours()
-            
-            if was_active and not currently_active:
-                # Transition: active hours just ended — process the queue
+
+            if not currently_active:
+                # Outside active hours — drain whatever is queued (if anything)
                 pending = load_pending_videos()
+                # Dedupe by local_path: Ring-MQTT can republish the same recording
+                # multiple times; we only need to process the underlying file once.
+                seen_paths = set()
+                deduped = []
+                for entry in pending:
+                    lp = entry.get("local_path") or entry.get("url")
+                    if lp in seen_paths:
+                        continue
+                    seen_paths.add(lp)
+                    deduped.append(entry)
+                if len(deduped) != len(pending):
+                    logger.info(
+                        f"🎬 Pending queue deduped {len(pending)} → {len(deduped)} (same file republished)"
+                    )
+                pending = deduped
                 if pending:
                     # Filter to only videos from active monitoring hours
                     start_h = CONFIG.get("ACTIVE_HOURS_START", 20)
@@ -1731,11 +1747,8 @@ async def video_batch_processor():
                     logger.info(f"🎬 Batch video processing complete: {processed}/{len(valid)} videos processed")
                     # Clear the queue
                     save_pending_videos([])
-                else:
-                    logger.info("Active hours ended — no videos queued")
-            
-            was_active = currently_active
-            
+                # else: queue empty, nothing to do (silent — runs every minute)
+
         except Exception as e:
             logger.error(f"Error in video batch processor: {e}", exc_info=True)
             await asyncio.sleep(60)
