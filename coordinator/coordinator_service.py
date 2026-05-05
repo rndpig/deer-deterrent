@@ -1048,25 +1048,25 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
             logger.info(f"📹 Using pre-downloaded video for camera {camera_id}: {temp_video.name} ({temp_video.stat().st_size} bytes)")
         else:
             logger.info(f"📹 Downloading motion video for camera {camera_id}: {recording_url[:80]}...")
-            
+
             # Download the MP4 file
             async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
                 response = await client.get(recording_url)
                 response.raise_for_status()
                 video_bytes = response.content
-            
+
             if len(video_bytes) < 1000:
                 logger.warning(f"Video too small ({len(video_bytes)} bytes), likely invalid — skipping")
                 return
-            
+
             logger.info(f"Downloaded video: {len(video_bytes)} bytes")
-            
+
             # Save video to temp file (use event_time for naming)
-        ts = event_time.strftime("%Y%m%d_%H%M%S")
-        temp_video = Path(f"/app/snapshots/video_{ts}_{camera_id}.mp4")
-        temp_video.parent.mkdir(parents=True, exist_ok=True)
-        temp_video.write_bytes(video_bytes)
-        
+            ts = event_time.strftime("%Y%m%d_%H%M%S")
+            temp_video = Path(f"/app/snapshots/video_{ts}_{camera_id}.mp4")
+            temp_video.parent.mkdir(parents=True, exist_ok=True)
+            temp_video.write_bytes(video_bytes)
+
         # Get video duration and fps via ffprobe
         probe_result = subprocess.run([
             'ffprobe', '-v', 'quiet', '-print_format', 'json',
@@ -1208,8 +1208,10 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
             except Exception as e:
                 logger.error(f"Error processing video frame at t={frame_time:.1f}s: {e}")
         
-        # Clean up temp video file
-        temp_video.unlink(missing_ok=True)
+        # Clean up temp video file (only if we downloaded it — never delete the
+        # user's archived recording in the Video Library)
+        if not local_path:
+            temp_video.unlink(missing_ok=True)
         
         logger.info(f"📹 Video frame extraction complete: {frames_processed} frames processed, {deer_found} with deer")
         
@@ -1220,8 +1222,9 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
     except Exception as e:
         logger.error(f"Error in video frame extraction for camera {camera_id}: {e}", exc_info=True)
     finally:
-        # Clean up temp file if it still exists
-        if temp_video is not None:
+        # Clean up temp file if it still exists — but ONLY if it was a temp
+        # download (local_path branch points at a permanent recording).
+        if temp_video is not None and not local_path:
             try:
                 temp_video.unlink(missing_ok=True)
             except Exception:
