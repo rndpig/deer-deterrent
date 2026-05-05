@@ -248,6 +248,21 @@ def queue_video_for_processing(camera_id: str, recording_url: str, motion_time: 
             logger.warning(f"Downloaded video too small ({len(response.content)} bytes), skipping")
             return
 
+        # Content-hash dedup: Ring-MQTT historically republished the SAME recording
+        # under different motion_times, producing many filename-distinct files with
+        # identical bytes. Hash the payload and skip if we already have it on disk
+        # under any name.
+        import hashlib
+        content_hash = hashlib.md5(response.content).hexdigest()
+        for existing in RECORDINGS_DIR.glob(f"recording_*_{camera_id}.mp4"):
+            if existing.stat().st_size != len(response.content):
+                continue
+            if hashlib.md5(existing.read_bytes()).hexdigest() == content_hash:
+                logger.info(
+                    f"📹 Content-hash duplicate of existing {existing.name} (md5={content_hash[:8]}) — skipping download"
+                )
+                return
+
         # Write to a temp path first, then transmux to faststart so browsers can
         # start playback before the whole file is downloaded. Falls back to the
         # original file if ffmpeg is unavailable or the transmux fails.
@@ -1134,6 +1149,12 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
                 extract_result = subprocess.run([
                     'ffmpeg', '-ss', str(frame_time),
                     '-i', str(temp_video),
+                    # Scale to 640x360 (matching periodic snapshot resolution) so the
+                    # bboxes returned by ml-detector are in the same reference space the
+                    # frontend assumes (BBOX_REF_WIDTH/HEIGHT in BoundingBoxImage.jsx).
+                    # Without this, high-res Ring recordings produce source-pixel bboxes
+                    # (e.g. x1=1396) that render off-screen on the dashboard card.
+                    '-vf', 'scale=640:360',
                     '-vframes', '1', '-q:v', '2',
                     '-y', str(frame_path)
                 ], capture_output=True, text=True, timeout=15)
