@@ -2,7 +2,7 @@
 FastAPI backend for Deer Deterrent System.
 Provides REST API and WebSocket for real-time updates.
 """
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form, Request, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -3075,7 +3075,7 @@ async def get_video_thumbnail(video_id: int):
 
 
 @app.post("/api/videos/{video_id}/register-frame")
-async def register_video_frame(video_id: int, request: Request, api_key: str = Depends(require_api_key)):
+async def register_video_frame(video_id: int, request: Request):
     """Register a single extracted frame (and its detections) into the frames/detections tables.
 
     Called by the coordinator after each frame is extracted and processed.
