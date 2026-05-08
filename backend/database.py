@@ -311,6 +311,36 @@ def get_video_by_filename_and_camera(filename: str, camera_name: str) -> Optiona
         row = cursor.fetchone()
         return dict(row) if row else None
 
+def _augment_with_ring_event_counts(videos: List[Dict], conn) -> None:
+    """For auto-ingested videos (filename starts with 'recording_'), the
+    coordinator stores extracted frames as ring_events with snapshot_path
+    like 'snapshots/video_<ts>_<cam>_f<N>.jpg' rather than rows in the
+    `frames`/`detections` tables. Augment the supplied video dicts with
+    those counts so the Video Library card shows realistic numbers.
+    """
+    cursor = conn.cursor()
+    for video in videos:
+        # Only augment if frames table has nothing for this video — manual
+        # uploads should keep using the frames/detections counts.
+        if video.get('frame_count'):
+            continue
+        filename = video.get('filename') or ''
+        if not filename.startswith('recording_') or not filename.endswith('.mp4'):
+            continue
+        # 'recording_20260508_002118_587a624d3fae.mp4' -> 'video_20260508_002118_587a624d3fae_'
+        prefix = 'snapshots/' + filename.replace('recording_', 'video_', 1)[:-len('.mp4')] + '_'
+        like_pattern = prefix + 'f%'
+        cursor.execute(
+            "SELECT COUNT(*) AS frames, SUM(CASE WHEN deer_detected = 1 THEN 1 ELSE 0 END) AS detections"
+            " FROM ring_events WHERE snapshot_path LIKE ?",
+            (like_pattern,),
+        )
+        row = cursor.fetchone()
+        if row and row['frames']:
+            video['frame_count'] = row['frames']
+            video['detection_count'] = row['detections'] or 0
+
+
 def get_all_videos() -> List[Dict]:
     """Get all non-archived videos with frame and detection counts."""
     with db_connection() as conn:
@@ -332,6 +362,7 @@ def get_all_videos() -> List[Dict]:
         """)
         
         videos = [dict(row) for row in cursor.fetchall()]
+        _augment_with_ring_event_counts(videos, conn)
         
         return videos
 
@@ -458,6 +489,7 @@ def get_archived_videos() -> List[Dict]:
     """)
     
     videos = [dict(row) for row in cursor.fetchall()]
+    _augment_with_ring_event_counts(videos, conn)
     conn.close()
     
     return videos
