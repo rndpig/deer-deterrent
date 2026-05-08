@@ -341,6 +341,7 @@ def queue_video_for_processing(camera_id: str, recording_url: str, motion_time: 
         "camera_id": camera_id,
         "url": recording_url,
         "local_path": local_path,
+        "video_id": video_id,
         "ring_event_id": ring_event_id,
         "queued_at": datetime.now().isoformat(),
         "motion_time": motion_time or datetime.now().isoformat()
@@ -1025,7 +1026,7 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
         logger.error(f"Error processing camera event: {e}", exc_info=True)
 
 
-async def process_video_frames(camera_id: str, recording_url: str, motion_time: str = None, local_path: str = None):
+async def process_video_frames(camera_id: str, recording_url: str, motion_time: str = None, local_path: str = None, video_id: int = None):
     """Extract frames from a Ring motion video and run ML detection on each.
     
     If local_path is provided, uses the already-downloaded file.
@@ -1245,7 +1246,30 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
                         )
                 except Exception as e:
                     logger.error(f"Failed to update ring event #{ring_event_id}: {e}")
-                
+
+                # Register frame in the frames/detections tables so the Annotation Tool
+                # can load it for review and annotation.
+                if video_id is not None:
+                    try:
+                        frame_detections = [
+                            {"confidence": d["confidence"], "bbox": d["bbox"], "class": d.get("class", "deer")}
+                            for d in detection_result.get("detections", [])
+                            if d.get("class", "deer").lower() == "deer"
+                        ] if deer_detected else []
+                        async with httpx.AsyncClient(timeout=5.0) as client:
+                            await client.post(
+                                f"{CONFIG['BACKEND_API_URL']}/api/videos/{video_id}/register-frame",
+                                json={
+                                    "frame_number": frames_processed,
+                                    "timestamp_in_video": frame_time,
+                                    "filename": frame_filename,
+                                    "detections": frame_detections,
+                                },
+                                headers=get_api_headers()
+                            )
+                    except Exception as e:
+                        logger.warning(f"Failed to register frame in annotation DB: {e}")
+
                 frames_processed += 1
                 if deer_detected:
                     deer_found += 1
@@ -1771,6 +1795,7 @@ async def video_batch_processor():
                         mt = entry.get("motion_time")
                         lp = entry.get("local_path")
                         eid = entry.get("ring_event_id")
+                        vid = entry.get("video_id")
                         
                         # Check if the associated snapshot was marked as false positive
                         if eid:
@@ -1793,7 +1818,7 @@ async def video_batch_processor():
                                 logger.warning(f"Could not check false_positive status for event #{eid}: {e}")
                         
                         if url or lp:
-                            await process_video_frames(cam, url, motion_time=mt, local_path=lp)
+                            await process_video_frames(cam, url, motion_time=mt, local_path=lp, video_id=vid)
                             processed += 1
                     if fp_skipped:
                         logger.info(f"🎬 Skipped {fp_skipped} videos from false-positive events")

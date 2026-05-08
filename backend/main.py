@@ -2105,8 +2105,15 @@ async def get_training_frame(frame_name: str):
         if not str(frame_path).startswith(str(Path("data/training_frames").resolve())):
             raise HTTPException(status_code=400, detail="Invalid frame path")
         if not frame_path.exists():
-            logger.error(f"Frame not found: {frame_name}")
-            raise HTTPException(status_code=404, detail="Frame not found")
+            # Also check /app/snapshots/ — auto-ingested video frames from the coordinator
+            # are stored there (shared volume) rather than in data/frames/
+            snap_path = (Path("/app/snapshots") / frame_name).resolve()
+            if not str(snap_path).startswith(str(Path("/app/snapshots").resolve())):
+                raise HTTPException(status_code=400, detail="Invalid frame path")
+            if not snap_path.exists():
+                logger.error(f"Frame not found: {frame_name}")
+                raise HTTPException(status_code=404, detail="Frame not found")
+            return FileResponse(snap_path)
     return FileResponse(frame_path)
 
 
@@ -3065,6 +3072,59 @@ async def get_video_thumbnail(video_id: int):
     cv2.imwrite(str(thumbnail_path), frame)
     
     return FileResponse(thumbnail_path, media_type="image/jpeg")
+
+
+@app.post("/api/videos/{video_id}/register-frame")
+async def register_video_frame(video_id: int, request: Request, api_key: str = Depends(require_api_key)):
+    """Register a single extracted frame (and its detections) into the frames/detections tables.
+
+    Called by the coordinator after each frame is extracted and processed.
+    Body JSON:
+      {
+        "frame_number": int,          # sequential index within this video pass
+        "timestamp_in_video": float,  # seconds into the video
+        "filename": str,              # just the filename, e.g. "video_20260508_002118_<cam>_f2.jpg"
+        "detections": [               # may be empty list
+          {"confidence": float, "bbox": {"x1":f, "y1":f, "x2":f, "y2":f}}
+        ]
+      }
+    Returns {"frame_id": int}
+    """
+    video = db.get_video(video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    body = await request.json()
+    frame_number = body.get("frame_number")
+    timestamp_in_video = body.get("timestamp_in_video", 0.0)
+    filename = body.get("filename", "")
+    detections = body.get("detections", [])
+
+    if not filename or frame_number is None:
+        raise HTTPException(status_code=422, detail="filename and frame_number are required")
+
+    # Image will be served via /api/training-frames/<filename>; that endpoint
+    # already falls back to /app/snapshots/ where the coordinator stores it.
+    image_path = f"/api/training-frames/{filename}"
+    has_dets = len(detections) > 0
+
+    frame_id = db.add_frame(
+        video_id=video_id,
+        frame_number=frame_number,
+        timestamp_in_video=float(timestamp_in_video),
+        image_path=image_path,
+        has_detections=has_dets,
+    )
+
+    for det in detections:
+        bbox = det.get("bbox", {})
+        conf = det.get("confidence", 0.0)
+        cls = det.get("class", "deer")
+        if all(k in bbox for k in ("x1", "y1", "x2", "y2")):
+            db.add_detection(frame_id=frame_id, bbox=bbox, confidence=conf, class_name=cls)
+
+    logger.info(f"Registered frame #{frame_number} for video {video_id}: {filename} (dets={len(detections)})")
+    return {"frame_id": frame_id, "ok": True}
 
 
 @app.get("/api/videos/{video_id}/has-frames")
