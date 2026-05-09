@@ -521,6 +521,7 @@
   border-radius: 12px;
   max-width: 1000px;
   width: 90vw;
+  height: 92vh;
   max-height: 92vh;
   display: flex;
   flex-direction: column;
