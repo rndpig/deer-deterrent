@@ -1,14 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '../api'
 
-const CAMERA_NAMES = {
-  '587a624d3fae': 'Driveway',
-  '4439c4de7a79': 'Front Door',
-  'f045dae9383a': 'Back',
-  '10cea9e4511f': 'Woods',
-  'c4dbad08f862': 'Side',
-}
-
 function formatDateTime(ts) {
   if (!ts) return '—'
   const d = new Date(ts)
@@ -28,7 +20,7 @@ function RecentIrrigationCard() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await apiFetch('/api/stats/recent-irrigation?limit=10')
+        const res = await apiFetch('/api/stats/recent-irrigation?limit=15')
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         setEvents(data.events || [])
@@ -42,8 +34,8 @@ function RecentIrrigationCard() {
   }, [])
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg p-4 flex flex-col">
-      <h3 className="text-sm font-semibold text-white/70 uppercase tracking-wide mb-3">
+    <div className="bg-white/5 border border-white/10 rounded-lg p-4 flex flex-col h-full">
+      <h3 className="text-sm font-semibold text-white/70 uppercase tracking-wide mb-3 flex-shrink-0">
         💦 Recent Irrigation
       </h3>
       {loading ? (
@@ -51,21 +43,19 @@ function RecentIrrigationCard() {
       ) : events.length === 0 ? (
         <div className="text-white/30 text-sm italic">No irrigation triggers yet.</div>
       ) : (
-        <ol className="flex flex-col gap-1.5">
+        <ol className="flex flex-col gap-1 flex-1 min-h-0 overflow-auto">
           {events.map((ev) => (
             <li
               key={ev.id}
               className="flex items-center justify-between text-xs text-white/80 border-b border-white/5 pb-1 last:border-b-0"
             >
               <span className="font-mono tabular-nums">{formatDateTime(ev.timestamp)}</span>
-              <span className="text-white/50">
-                {CAMERA_NAMES[ev.camera_id] || ev.camera_name || ev.camera_id || '—'}
-              </span>
+              <span className="text-white/50 ml-2 text-right">{ev.zones || '—'}</span>
             </li>
           ))}
         </ol>
       )}
-      <div className="mt-3 text-[11px] text-white/30">
+      <div className="mt-2 text-[11px] text-white/30 flex-shrink-0">
         Last {events.length} trigger{events.length === 1 ? '' : 's'}
       </div>
     </div>

@@ -5386,10 +5386,10 @@ async def get_heatmap_data(camera_id: str = None):
 
 
 @app.get("/api/stats/recent-irrigation")
-async def get_recent_irrigation(limit: int = 10):
+async def get_recent_irrigation(limit: int = 15):
     """
     Return the most recent ring_events that triggered irrigation.
-    Used by the Stats page to keep an eye on trigger frequency / false-positive rate.
+    Includes the irrigation zone(s) derived from the current camera_zones setting.
     """
     conn = db.get_connection()
     cursor = conn.cursor()
@@ -5405,14 +5405,20 @@ async def get_recent_irrigation(limit: int = 10):
     )
     rows = cursor.fetchall()
 
+    # Build camera_id → zone list from current settings
+    cam_zones = settings.camera_zones  # Dict[camera_id, List[int]]
+
     events = []
     for row in rows:
         cam_id = row["camera_id"] if isinstance(row, dict) or hasattr(row, "keys") else row[1]
+        zones_for_cam = cam_zones.get(cam_id, [])
+        zone_str = ", ".join(f"Zone {z}" for z in zones_for_cam) if zones_for_cam else "—"
         events.append({
             "id": row["id"] if hasattr(row, "keys") else row[0],
             "camera_id": cam_id,
             "camera_name": RING_CAMERA_ID_MAP.get(cam_id, cam_id or "Unknown"),
             "timestamp": row["timestamp"] if hasattr(row, "keys") else row[2],
+            "zones": zone_str,
         })
 
     return {"events": events, "count": len(events)}
