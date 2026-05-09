@@ -27,6 +27,17 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
     }
   }, [boxes, imageLoaded])
 
+  // Size of the ✕ delete button drawn on each box (in canvas internal pixels)
+  const X_BTN_SIZE = 32
+
+  // Compute the ✕ button hit area for a normalized box, in canvas internal coords
+  const xButtonRect = (box, canvas) => {
+    const x = box.x * canvas.width
+    const y = box.y * canvas.height
+    const w = box.width * canvas.width
+    return { x: x + w - X_BTN_SIZE, y: y, w: X_BTN_SIZE, h: X_BTN_SIZE }
+  }
+
   const redrawCanvas = () => {
     const canvas = canvasRef.current
     if (!canvas || !imageRef.current) return
@@ -39,30 +50,36 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
     // Draw image
     ctx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height)
     
-    // Calculate scale factors
-    const scaleX = canvas.width / imageDimensions.width
-    const scaleY = canvas.height / imageDimensions.height
-    
     // Draw existing boxes (stored in normalized 0-1 coordinates)
-    ctx.strokeStyle = '#10b981'
-    ctx.lineWidth = 3
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.1)'
-    
     boxes.forEach((box, index) => {
-      // Convert normalized coordinates to canvas coordinates
       const x = box.x * canvas.width
       const y = box.y * canvas.height
       const w = box.width * canvas.width
       const h = box.height * canvas.height
       
+      ctx.strokeStyle = '#10b981'
+      ctx.lineWidth = 3
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.1)'
       ctx.fillRect(x, y, w, h)
       ctx.strokeRect(x, y, w, h)
       
-      // Draw box number
+      // Box label (bottom-left, away from the ✕ button)
       ctx.fillStyle = '#10b981'
       ctx.font = 'bold 16px sans-serif'
-      ctx.fillText(`Deer ${index + 1}`, x + 5, y + 20)
-      ctx.fillStyle = 'rgba(16, 185, 129, 0.1)'
+      ctx.fillText(`Deer ${index + 1}`, x + 5, y + h - 6)
+      
+      // ✕ delete button: red square in top-right corner
+      const btn = xButtonRect(box, canvas)
+      ctx.fillStyle = '#ef4444'
+      ctx.fillRect(btn.x, btn.y, btn.w, btn.h)
+      ctx.strokeStyle = '#fff'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.moveTo(btn.x + 8, btn.y + 8)
+      ctx.lineTo(btn.x + btn.w - 8, btn.y + btn.h - 8)
+      ctx.moveTo(btn.x + btn.w - 8, btn.y + 8)
+      ctx.lineTo(btn.x + 8, btn.y + btn.h - 8)
+      ctx.stroke()
     })
     
     // Draw current box being drawn
@@ -79,7 +96,6 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
 
   const handlePointerDown = (e) => {
     const canvas = canvasRef.current
-    canvas.setPointerCapture(e.pointerId)
     const rect = canvas.getBoundingClientRect()
     
     // Get pointer position relative to canvas display
@@ -92,7 +108,17 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
     
     const x = pointerX * scaleX
     const y = pointerY * scaleY
-    
+
+    // Hit-test ✕ buttons (top-most box first)
+    for (let i = boxes.length - 1; i >= 0; i--) {
+      const btn = xButtonRect(boxes[i], canvas)
+      if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
+        handleRemoveBox(i)
+        return // don't start drawing
+      }
+    }
+
+    canvas.setPointerCapture(e.pointerId)
     setDrawing(true)
     setCurrentBox({ x, y, width: 0, height: 0 })
   }
@@ -188,35 +214,10 @@ function AnnotationTool({ imageSrc, existingBoxes = [], onSave, onCancel }) {
               style={{ cursor: drawing ? 'crosshair' : 'default' }}
             />
           </div>
-          
-          <div className="annotation-sidebar-compact">
-            <div className="annotation-instructions-compact">
-              <p>🖱️ Click/touch and drag to draw a box around each deer</p>
-              <p>📐 Draw tight boxes around the deer's body</p>
-              <p>🗑️ Click "Remove" to undo mistakes</p>
-            </div>
-            
-            <div className="box-list-compact">
-              <h3>Bounding Boxes ({boxes.length})</h3>
-              {boxes.length === 0 ? (
-                <p className="no-boxes">No boxes drawn yet</p>
-              ) : (
-                <ul>
-                  {boxes.map((box, index) => (
-                    <li key={index}>
-                      <span>Deer {index + 1}</span>
-                      <button 
-                        className="remove-box-btn"
-                        onClick={() => handleRemoveBox(index)}
-                      >
-                        Remove
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
+        </div>
+
+        <div className="annotation-tip">
+          Drag to draw a box around each deer — click the red ✕ on a box to remove it. {boxes.length} box{boxes.length !== 1 ? 'es' : ''} drawn.
         </div>
         
         <div className="annotation-actions">

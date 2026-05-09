@@ -521,19 +521,21 @@
   padding: 0.5rem 0;
 }
 
-/* Label + ignore button grouped together as the "camera name" column */
+/* Label + ignore button grouped together as the "camera name" column.
+   Fixed width prevents the ignore-zone count badge from pushing zone selects. */
 .camera-row-label {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  min-width: 140px;
+  width: 200px;
   flex-shrink: 0;
+  flex-grow: 0;
 }
 
 /* Compact inline pill button for ignore-zone editing */
 .ignore-zone-btn {
-  font-size: 0.7rem;
-  padding: 2px 7px;
+  font-size: 0.65rem;
+  padding: 1px 6px;
   border-radius: 10px;
   border: 1px solid #475569;
   background: transparent;
@@ -541,6 +543,7 @@
   cursor: pointer;
   white-space: nowrap;
   line-height: 1.4;
+  margin-left: auto;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 

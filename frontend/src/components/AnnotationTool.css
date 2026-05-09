@@ -83,6 +83,17 @@
   font-size: 1.25rem;
 }
 
+/* Compact one-line instruction below the canvas (replaces the old right sidebar) */
+.annotation-tip {
+  padding: 0.5rem 1rem;
+  background: #1e3a8a;
+  border-top: 1px solid #1e40af;
+  color: #dbeafe;
+  font-size: 0.8rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 .annotation-sidebar-compact {
   width: 280px;
   background: #2d2d2d;
