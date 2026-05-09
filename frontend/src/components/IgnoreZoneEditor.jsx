@@ -23,6 +23,7 @@ export default function IgnoreZoneEditor({ cameraId, cameraName, zones = [], onC
 
   const [imageUrl, setImageUrl] = useState(null)
   const [imageError, setImageError] = useState(false)
+  const [imgLoaded, setImgLoaded] = useState(false)
   const [drawing, setDrawing] = useState(false)
   const [dragStart, setDragStart] = useState(null)
   const [dragCurrent, setDragCurrent] = useState(null)
@@ -155,8 +156,8 @@ export default function IgnoreZoneEditor({ cameraId, cameraName, zones = [], onC
         </div>
 
         <p className="ize-hint">
-          Drag to draw a region where detections will be ignored.
-          {zones.length > 0 && ` ${zones.length} zone${zones.length !== 1 ? 's' : ''} defined.`}
+          Drag to draw an ignore region. Click ✕ on a zone to remove it.
+          {zones.length > 0 && <strong> {zones.length} zone{zones.length !== 1 ? 's' : ''} defined.</strong>}
         </p>
 
         <div className="ize-canvas-wrap" ref={containerRef}>
@@ -182,13 +183,14 @@ export default function IgnoreZoneEditor({ cameraId, cameraName, zones = [], onC
                   alt={`${cameraName} reference`}
                   className="ize-image"
                   draggable={false}
+                  onLoad={() => setImgLoaded(true)}
                 />
               ) : (
                 <div className="ize-loading">Loading snapshot…</div>
               )}
 
-              {/* Existing zones */}
-              {imageUrl && zones.map((zone, i) => {
+              {/* Existing zones — only render after image has loaded so getBoundingClientRect() is valid */}
+              {imageUrl && imgLoaded && zones.map((zone, i) => {
                 const d = zoneToDisplay(zone)
                 if (!d) return null
                 return (

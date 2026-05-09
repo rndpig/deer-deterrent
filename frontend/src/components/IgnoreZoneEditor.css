@@ -12,24 +12,25 @@
   background: #1e293b;
   border: 1px solid #334155;
   border-radius: 12px;
-  padding: 24px;
-  width: min(90vw, 720px);
-  max-height: 90vh;
-  overflow-y: auto;
+  padding: 14px 16px;
+  width: min(92vw, 720px);
+  max-height: 96vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 .ize-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .ize-header h2 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1rem;
   color: #f1f5f9;
 }
 
@@ -51,12 +52,16 @@
 
 .ize-hint {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: #94a3b8;
+  flex-shrink: 0;
 }
 
 .ize-canvas-wrap {
   position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .ize-img-container {
@@ -71,6 +76,9 @@
   display: block;
   width: 100%;
   height: auto;
+  /* Cap height so header + hint + footer always fit in viewport without scrolling.
+     Chrome accounts for: padding (28px) + header (28px) + hint (22px) + footer (44px) + gaps (32px) ≈ 154px */
+  max-height: calc(96vh - 154px);
   border-radius: 6px;
   border: 1px solid #334155;
   pointer-events: none;
@@ -139,6 +147,7 @@
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+  flex-shrink: 0;
 }
 
 .ize-clear {
