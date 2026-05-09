@@ -65,6 +65,7 @@ CONFIG = {
     "SNAPSHOT_FREQUENCY": 60,  # Ring capture frequency in seconds, synced from backend settings
     "RING_LOCATION_ID": os.getenv("RING_LOCATION_ID", ""),  # Needed for MQTT topics
     "CAMERA_ZONES": {},  # Camera ID → Rainbird zone number, synced from backend settings
+    "CAMERA_IGNORE_ZONES": {},  # Camera ID → list of {x1,y1,x2,y2} rects (640×360 px coords); synced from backend
     "SNAPSHOT_RETENTION_DAYS": int(os.getenv("SNAPSHOT_RETENTION_DAYS", "3")),  # Days to keep no-deer periodic snapshots; synced from backend
     "INTERNAL_API_KEY": os.getenv("INTERNAL_API_KEY", ""),  # API key for service-to-service auth
 }
@@ -416,6 +417,13 @@ async def fetch_settings_from_backend():
                     if old_zones != CONFIG["CAMERA_ZONES"]:
                         logger.info(f"Updated camera_zones: {CONFIG['CAMERA_ZONES']}")
 
+                # Sync per-camera ignore zones (rectangular suppression regions)
+                new_ignore = settings.get('camera_ignore_zones')
+                if new_ignore is not None:
+                    CONFIG["CAMERA_IGNORE_ZONES"] = new_ignore
+                    if new_ignore:
+                        logger.info(f"Updated camera_ignore_zones: {list(new_ignore.keys())}")
+
                 # Sync snapshot retention (days to keep no-deer periodic snapshots)
                 new_retention = settings.get('snapshot_retention_days')
                 if new_retention is not None:
@@ -564,6 +572,37 @@ async def download_snapshot(url: str) -> bytes:
     except Exception as e:
         logger.error(f"Failed to download snapshot: {e}")
         raise
+
+
+def _detection_in_ignore_zone(bbox: Dict[str, float], ignore_zones: List[Dict[str, float]]) -> bool:
+    """Return True if bbox center falls inside any configured ignore zone."""
+    cx = (bbox.get("x1", 0) + bbox.get("x2", 0)) / 2
+    cy = (bbox.get("y1", 0) + bbox.get("y2", 0)) / 2
+    for z in ignore_zones:
+        if z["x1"] <= cx <= z["x2"] and z["y1"] <= cy <= z["y2"]:
+            return True
+    return False
+
+
+def apply_ignore_zones(detection_result: Dict[str, Any], camera_id: str) -> Dict[str, Any]:
+    """Filter detections whose center falls inside a configured ignore zone for this camera.
+    Returns a new dict with 'detections' and 'deer_detected' updated accordingly.
+    """
+    ignore_zones = CONFIG.get("CAMERA_IGNORE_ZONES", {}).get(camera_id, [])
+    if not ignore_zones:
+        return detection_result
+
+    original = detection_result.get("detections", [])
+    filtered = [d for d in original if not _detection_in_ignore_zone(d.get("bbox", {}), ignore_zones)]
+    suppressed = len(original) - len(filtered)
+    if suppressed:
+        logger.info(f"Ignore zones suppressed {suppressed}/{len(original)} detection(s) for camera {camera_id}")
+
+    updated = dict(detection_result)
+    updated["detections"] = filtered
+    updated["deer_detected"] = any(d.get("class", "deer").lower() == "deer" for d in filtered)
+    updated["num_detections"] = len(filtered)
+    return updated
 
 
 async def detect_deer(image_bytes: bytes) -> Dict[str, Any]:
@@ -924,6 +963,9 @@ async def process_camera_event(camera_id: str, timestamp: str, snapshot_bytes: b
         
         # Run ML detection
         detection_result = await detect_deer(image_bytes)
+
+        # Apply per-camera ignore zones — suppress detections in masked regions
+        detection_result = apply_ignore_zones(detection_result, camera_id)
         
         # Check if deer detected
         deer_detected = detection_result.get("deer_detected", False)
@@ -1218,6 +1260,9 @@ async def process_video_frames(camera_id: str, recording_url: str, motion_time: 
                 
                 # Run ML detection
                 detection_result = await detect_deer(frame_bytes)
+
+                # Apply per-camera ignore zones — suppress detections in masked regions
+                detection_result = apply_ignore_zones(detection_result, camera_id)
                 
                 deer_detected = detection_result.get("deer_detected", False)
                 confidence = 0.0

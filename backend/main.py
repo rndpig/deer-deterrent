@@ -303,6 +303,10 @@ class SystemSettings(BaseModel):
     # Camera ID → ordered list of Rainbird zones to fire (chase sequence per camera).
     # Legacy values may be plain ints; the loader/validator normalizes them to lists.
     camera_zones: Dict[str, Union[int, List[int]]] = {}
+    # Camera ID → list of rectangular ignore zones in 640×360 pixel coords.
+    # Detections whose bbox center falls inside any zone are suppressed (not stored as deer).
+    # Schema: { "<camera_id>": [{"x1": float, "y1": float, "x2": float, "y2": float}, ...] }
+    camera_ignore_zones: Dict[str, List[Dict[str, float]]] = {}
 
     @validator('camera_zones', pre=True)
     def _normalize_camera_zones(cls, v):

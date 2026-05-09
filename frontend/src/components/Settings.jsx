@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import './Settings.css'
 import { apiFetch, API_URL } from '../api'
+import IgnoreZoneEditor from './IgnoreZoneEditor'
 
 function Settings({ settings, setSettings }) {
   // Default settings that match backend defaults
@@ -17,7 +18,8 @@ function Settings({ settings, setSettings }) {
     default_sampling_rate: 1.0,  // frames per second
     snapshot_retention_days: 3,  // days to keep no-deer periodic snapshots before deletion
     enabled_cameras: ['10cea9e4511f', 'c4dbad08f862'],  // Default: Woods + Side cameras
-    camera_zones: {}  // Camera ID → Rainbird zone number
+    camera_zones: {},  // Camera ID → Rainbird zone number
+    camera_ignore_zones: {}  // Camera ID → list of {x1,y1,x2,y2} ignore rects
   }
 
   // Initialize settings from API (passed as prop) or defaults
@@ -28,6 +30,7 @@ function Settings({ settings, setSettings }) {
   const [rainbirdZones, setRainbirdZones] = useState([])
   const [ringCameras, setRingCameras] = useState([])
   const [cameraZones, setCameraZones] = useState({})
+  const [ignoreZoneEditorCamera, setIgnoreZoneEditorCamera] = useState(null) // camera obj being edited
   const [testingIrrigation, setTestingIrrigation] = useState(false)
   const [testMessage, setTestMessage] = useState('')
   const [coordinatorStats, setCoordinatorStats] = useState(null)
@@ -432,6 +435,41 @@ function Settings({ settings, setSettings }) {
             </div>
           </div>
 
+        {/* Ignore Zones — full-width, below Detection Cameras */}
+        <div className="settings-card camera-zones-card camera-zones-card-full">
+          <h3>Ignore Zones</h3>
+          <div className="card-content">
+            <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#666' }}>
+              Draw rectangular regions on each camera where ML detections are suppressed.
+              Useful for eliminating persistent false positives (e.g., daylilies, lights).
+            </p>
+            <div className="camera-zone-compact">
+              {ringCameras.map(camera => {
+                const zones = (localSettings.camera_ignore_zones || {})[camera.id] || []
+                return (
+                  <div key={camera.id} className="camera-zone-row-combined" style={{ alignItems: 'center' }}>
+                    <span style={{ minWidth: '140px', fontSize: '0.9rem', color: '#e2e8f0' }}>
+                      {camera.name}
+                    </span>
+                    <span style={{ flex: 1, fontSize: '0.85rem', color: '#94a3b8' }}>
+                      {zones.length === 0
+                        ? 'No ignore zones'
+                        : `${zones.length} zone${zones.length !== 1 ? 's' : ''} defined`}
+                    </span>
+                    <button
+                      className="test-zone-btn"
+                      style={{ marginLeft: '12px' }}
+                      onClick={() => setIgnoreZoneEditorCamera(camera)}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
         {/* Compact Card Grid for Quick Settings */}
         <div className="settings-grid">
 
@@ -745,6 +783,24 @@ function Settings({ settings, setSettings }) {
             </div>
           </div>
         </div>
+      )}
+
+      {ignoreZoneEditorCamera && (
+        <IgnoreZoneEditor
+          cameraId={ignoreZoneEditorCamera.id}
+          cameraName={ignoreZoneEditorCamera.name}
+          zones={(localSettings.camera_ignore_zones || {})[ignoreZoneEditorCamera.id] || []}
+          onChange={(updatedZones) => {
+            setLocalSettings(prev => ({
+              ...prev,
+              camera_ignore_zones: {
+                ...(prev.camera_ignore_zones || {}),
+                [ignoreZoneEditorCamera.id]: updatedZones
+              }
+            }))
+          }}
+          onClose={() => setIgnoreZoneEditorCamera(null)}
+        />
       )}
     </div>
   )
