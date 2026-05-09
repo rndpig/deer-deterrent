@@ -368,7 +368,8 @@ function Settings({ settings, setSettings }) {
             <h3>Detection Cameras</h3>
             <div className="card-content">
               <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#666' }}>
-                Select which cameras to use for deer detection and link to irrigation zones (zones fire in order: Zone 1 first, then 2, then 3)
+                Select cameras for deer detection and link irrigation zones (fire order: Zone 1 → 2 → 3).
+                Use the <span style={{ fontStyle: 'italic' }}>Ignore</span> button to mask regions where false positives occur.
               </p>
               {ringCameras.length > 0 && rainbirdZones.length > 0 ? (
                 <div className="camera-zone-compact">
@@ -380,22 +381,33 @@ function Settings({ settings, setSettings }) {
                       <div className="zone-slot-header">Zone 3</div>
                     </div>
                   </div>
-                  {ringCameras.map(camera => (
+                  {ringCameras.map(camera => {
+                    const ignoreZones = (localSettings.camera_ignore_zones || {})[camera.id] || []
+                    return (
                     <div key={camera.id} className="camera-zone-row-combined">
-                      <label className="checkbox-inline" style={{ marginBottom: 0, minWidth: '140px' }}>
-                        <input
-                          type="checkbox"
-                          checked={(localSettings.enabled_cameras || []).includes(camera.id)}
-                          onChange={(e) => {
-                            const current = localSettings.enabled_cameras || [];
-                            const updated = e.target.checked
-                              ? [...current, camera.id]
-                              : current.filter(id => id !== camera.id);
-                            handleChange('enabled_cameras', updated);
-                          }}
-                        />
-                        {camera.name}
-                      </label>
+                      <div className="camera-row-label">
+                        <label className="checkbox-inline" style={{ marginBottom: 0 }}>
+                          <input
+                            type="checkbox"
+                            checked={(localSettings.enabled_cameras || []).includes(camera.id)}
+                            onChange={(e) => {
+                              const current = localSettings.enabled_cameras || [];
+                              const updated = e.target.checked
+                                ? [...current, camera.id]
+                                : current.filter(id => id !== camera.id);
+                              handleChange('enabled_cameras', updated);
+                            }}
+                          />
+                          {camera.name}
+                        </label>
+                        <button
+                          className={`ignore-zone-btn${ignoreZones.length > 0 ? ' ignore-zone-btn--active' : ''}`}
+                          onClick={() => setIgnoreZoneEditorCamera(camera)}
+                          title={ignoreZones.length > 0 ? `${ignoreZones.length} ignore zone${ignoreZones.length !== 1 ? 's' : ''} — click to edit` : 'Add ignore zones'}
+                        >
+                          {ignoreZones.length > 0 ? `Ignore (${ignoreZones.length})` : 'Ignore'}
+                        </button>
+                      </div>
                       <div className="zone-slots">
                         {[0, 1, 2].map(slot => {
                           const slots = Array.isArray(cameraZones[camera.id]) ? cameraZones[camera.id] : []
@@ -425,7 +437,8 @@ function Settings({ settings, setSettings }) {
                         })}
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="loading-zones-compact">
@@ -434,41 +447,6 @@ function Settings({ settings, setSettings }) {
               )}
             </div>
           </div>
-
-        {/* Ignore Zones — full-width, below Detection Cameras */}
-        <div className="settings-card camera-zones-card camera-zones-card-full">
-          <h3>Ignore Zones</h3>
-          <div className="card-content">
-            <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#666' }}>
-              Draw rectangular regions on each camera where ML detections are suppressed.
-              Useful for eliminating persistent false positives (e.g., daylilies, lights).
-            </p>
-            <div className="camera-zone-compact">
-              {ringCameras.map(camera => {
-                const zones = (localSettings.camera_ignore_zones || {})[camera.id] || []
-                return (
-                  <div key={camera.id} className="camera-zone-row-combined" style={{ alignItems: 'center' }}>
-                    <span style={{ minWidth: '140px', fontSize: '0.9rem', color: '#e2e8f0' }}>
-                      {camera.name}
-                    </span>
-                    <span style={{ flex: 1, fontSize: '0.85rem', color: '#94a3b8' }}>
-                      {zones.length === 0
-                        ? 'No ignore zones'
-                        : `${zones.length} zone${zones.length !== 1 ? 's' : ''} defined`}
-                    </span>
-                    <button
-                      className="test-zone-btn"
-                      style={{ marginLeft: '12px' }}
-                      onClick={() => setIgnoreZoneEditorCamera(camera)}
-                    >
-                      Edit
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
 
         {/* Compact Card Grid for Quick Settings */}
         <div className="settings-grid">

@@ -521,6 +521,46 @@
   padding: 0.5rem 0;
 }
 
+/* Label + ignore button grouped together as the "camera name" column */
+.camera-row-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 140px;
+  flex-shrink: 0;
+}
+
+/* Compact inline pill button for ignore-zone editing */
+.ignore-zone-btn {
+  font-size: 0.7rem;
+  padding: 2px 7px;
+  border-radius: 10px;
+  border: 1px solid #475569;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.4;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.ignore-zone-btn:hover {
+  border-color: #94a3b8;
+  color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+/* Active state — one or more zones defined */
+.ignore-zone-btn--active {
+  border-color: #ef4444;
+  color: #fca5a5;
+}
+
+.ignore-zone-btn--active:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #f87171;
+}
+
 .camera-zone-row-combined .checkbox-inline {
   display: flex;
   align-items: center;
@@ -729,6 +769,13 @@
 
   .camera-zone-row-combined .checkbox-inline {
     min-width: 0 !important;
+  }
+
+  /* Keep camera name + ignore button side-by-side even when row stacks */
+  .camera-row-label {
+    min-width: 0;
+    width: 100%;
+    flex-wrap: nowrap;
   }
 
   .zone-slots {
