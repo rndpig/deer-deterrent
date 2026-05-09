@@ -148,11 +148,11 @@ export default function IgnoreZoneEditor({ cameraId, cameraName, zones = [], onC
   const inProgress = dragRect()
 
   return (
-    <div className="ize-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+    <div className="ize-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(zones) }}>
       <div className="ize-modal">
         <div className="ize-header">
           <h2>Ignore Zones — {cameraName}</h2>
-          <button className="ize-close" onClick={onClose}>✕</button>
+          <button className="ize-close" onClick={() => onClose(zones)}>✕</button>
         </div>
 
         <p className="ize-hint">
@@ -224,7 +224,7 @@ export default function IgnoreZoneEditor({ cameraId, cameraName, zones = [], onC
           {zones.length > 0 && (
             <button className="ize-clear" onClick={() => onChange([])}>Clear All</button>
           )}
-          <button className="ize-done" onClick={onClose}>Done</button>
+          <button className="ize-done" onClick={() => onClose(zones)}>Done</button>
         </div>
       </div>
     </div>

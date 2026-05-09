@@ -777,7 +777,39 @@ function Settings({ settings, setSettings }) {
               }
             }))
           }}
-          onClose={() => setIgnoreZoneEditorCamera(null)}
+          onClose={(finalZones) => {
+            // Build the updated settings inline so we have the latest zones without
+            // relying on the state update from onChange having flushed yet.
+            const updatedIgnoreZones = {
+              ...(localSettings.camera_ignore_zones || {}),
+              [ignoreZoneEditorCamera.id]: finalZones
+            }
+            const updatedSettings = { ...localSettings, camera_ignore_zones: updatedIgnoreZones }
+            setLocalSettings(updatedSettings)
+            setIgnoreZoneEditorCamera(null)
+            // Auto-save immediately — user should not have to remember to hit Save
+            const cleanSettings = {
+              ...updatedSettings,
+              camera_zones: Object.fromEntries(
+                Object.entries(updatedSettings.camera_zones || {}).filter(([, v]) => v != null)
+              )
+            }
+            apiFetch('/api/settings', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(cleanSettings)
+            }).then(r => r.ok ? r.json() : Promise.reject(r.status))
+              .then(data => {
+                if (setSettings) setSettings(data.settings)
+                setMessage(`✓ Ignore zones saved for ${ignoreZoneEditorCamera.name}`)
+                setTimeout(() => setMessage(''), 3000)
+              })
+              .catch(err => {
+                console.error('Failed to save ignore zones:', err)
+                setMessage('⚠ Failed to save ignore zones — try Save Settings manually')
+                setTimeout(() => setMessage(''), 5000)
+              })
+          }}
         />
       )}
     </div>
