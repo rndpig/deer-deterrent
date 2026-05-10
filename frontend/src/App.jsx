@@ -16,6 +16,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [ws, setWs] = useState(null)
   const [diskUsage, setDiskUsage] = useState(null)
+  const [systemHealth, setSystemHealth] = useState(null)
 
   // Connect to WebSocket
   useEffect(() => {
@@ -90,6 +91,25 @@ function App() {
       .catch(err => console.error('Error fetching disk usage:', err))
   }, [user])
 
+  // Poll dependent-service health every 30s; surfaces a banner if coordinator or
+  // ml-detector is down (e.g. crash-loop). The endpoint is open (no auth) so a
+  // backend auth hiccup won't mask a real outage.
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    const check = () => {
+      apiFetch('/api/system-health')
+        .then(r => r.json())
+        .then(data => { if (!cancelled) setSystemHealth(data) })
+        .catch(() => {
+          if (!cancelled) setSystemHealth({ ok: false, services: {}, error: 'unreachable' })
+        })
+    }
+    check()
+    const id = setInterval(check, 30000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [user])
+
   // Cross-component navigation: Dashboard chase-video badge dispatches a 'navigate-tab'
   // CustomEvent to jump to the Videos tab (and optionally focus a specific video).
   useEffect(() => {
@@ -128,6 +148,21 @@ function App() {
 
   return (
     <div className="app">
+      {systemHealth && !systemHealth.ok && (
+        <div className="system-health-banner" role="alert">
+          <span className="system-health-banner__icon" aria-hidden="true">⚠️</span>
+          <span className="system-health-banner__text">
+            System degraded —
+            {' '}
+            {Object.entries(systemHealth.services || {})
+              .filter(([, s]) => !s?.ok)
+              .map(([name]) => name.replace('_', ' '))
+              .join(', ') || 'backend unreachable'}
+            {' '}
+            unreachable. New snapshots/detections may be missing until restored.
+          </span>
+        </div>
+      )}
       <header className="app-header">
         <div className="header-content">
           <h1>🦌 Deer Deterrent System</h1>

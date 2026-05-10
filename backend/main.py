@@ -163,6 +163,7 @@ OPEN_PATHS = {
     "/", "/health", "/api/health", "/docs", "/openapi.json", "/redoc",
     "/api/reference-images",  # list cameras with reference images
     "/api/stats/heatmap",     # heatmap data for frontend
+    "/api/system-health",     # dependent-service health probe (dashboard banner)
 }
 # GET-only prefixes open without auth — image/file serving for <img> tags
 OPEN_GET_PREFIXES = [
@@ -1333,6 +1334,36 @@ async def get_coordinator_stats():
     except Exception as e:
         logger.error(f"Failed to fetch coordinator stats: {e}")
         raise HTTPException(status_code=503, detail="Coordinator unavailable")
+
+
+@app.get("/api/system-health")
+async def system_health():
+    """Probe dependent services so the dashboard can warn when something is down.
+
+    Checked on every dashboard load and polled every 30s. Returns 200 even when
+    services are down — the payload's `ok` flag drives the UI banner.
+    """
+    import requests as req
+    targets = {
+        "coordinator": "http://deer-coordinator:5000/health",
+        "ml_detector": "http://deer-ml-detector:8001/health",
+    }
+    services = {}
+    for name, url in targets.items():
+        try:
+            r = req.get(url, timeout=3)
+            services[name] = {
+                "ok": r.status_code == 200,
+                "status_code": r.status_code,
+            }
+        except Exception as e:
+            services[name] = {"ok": False, "error": str(e)[:160]}
+    all_ok = all(s.get("ok") for s in services.values())
+    return {
+        "ok": all_ok,
+        "services": services,
+        "checked_at": datetime.now().isoformat(),
+    }
 
 
 @app.post("/api/test-irrigation")
