@@ -12,7 +12,7 @@ import hashlib
 import itertools
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import asyncio
 import queue
 import threading
