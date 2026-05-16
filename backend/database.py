@@ -208,7 +208,17 @@ def init_database():
             updated_at TEXT DEFAULT (datetime('now', 'localtime'))
         )
     """)
-    
+
+    # Property overlay table (single-row JSON document store for map overlay)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS property_overlay (
+            id         INTEGER PRIMARY KEY CHECK (id = 1),
+            data_json  TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            updated_by TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
     
@@ -248,6 +258,43 @@ def load_settings() -> Optional[dict]:
         except (json.JSONDecodeError, TypeError) as e:
             logger.warning(f"Failed to parse saved settings: {e}")
     return None
+
+
+# ── Property overlay ──────────────────────────────────────────────────────────
+
+def get_property_overlay() -> Optional[dict]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT data_json FROM property_overlay WHERE id = 1")
+        row = cursor.fetchone()
+    except sqlite3.OperationalError:
+        conn.close()
+        return None
+    conn.close()
+    if row:
+        try:
+            return json.loads(row["data_json"])
+        except (json.JSONDecodeError, TypeError):
+            return None
+    return None
+
+
+def save_property_overlay(data_dict: dict, updated_by: str = None) -> str:
+    updated_at = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO property_overlay (id, data_json, updated_at, updated_by)
+        VALUES (1, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            data_json  = excluded.data_json,
+            updated_at = excluded.updated_at,
+            updated_by = excluded.updated_by
+    """, (json.dumps(data_dict), updated_at, updated_by))
+    conn.commit()
+    conn.close()
+    return updated_at
 
 
 def get_connection():

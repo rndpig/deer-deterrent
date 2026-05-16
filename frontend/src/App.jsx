@@ -6,6 +6,7 @@ import Stats from './components/Stats'
 import Settings from './components/Settings'
 import AuthButton from './components/AuthButton'
 import VideoLibrary from './components/VideoLibrary'
+import PropertyMap from './components/PropertyMap/PropertyMap'
 import { useAuth } from './hooks/useAuth'
 import { apiFetch, API_URL } from './api'
 
@@ -200,6 +201,12 @@ function App() {
             Stats
           </button>
           <button 
+            className={activeTab === 'map' ? 'active' : ''}
+            onClick={() => setActiveTab('map')}
+          >
+            Map
+          </button>
+          <button 
             className={activeTab === 'settings' ? 'active' : ''}
             onClick={() => setActiveTab('settings')}
           >
@@ -220,6 +227,9 @@ function App() {
         )}
         {activeTab === 'stats' && (
           <Stats />
+        )}
+        {activeTab === 'map' && (
+          <PropertyMap />
         )}
         {activeTab === 'settings' && (
           <Settings 

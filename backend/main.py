@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, validator
-from typing import List, Optional, Dict, Union
+from typing import List, Optional, Dict, Union, Any
 from datetime import datetime, timedelta
 from pathlib import Path
 import sys
@@ -20,6 +20,8 @@ import shutil
 import base64
 import os
 import httpx
+import hashlib
+import io
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -39,6 +41,32 @@ r2_storage = None
 
 # Model version cache - read from VERSION file
 _model_version_cache = None
+
+# Property map image state
+_IMAGE_PATH = Path("data/property-map.png")
+_IMAGE_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
+_image_etag: Optional[str] = None
+_image_bytes: Optional[bytes] = None
+
+_DEFAULT_OVERLAY = {
+    "schema_version": 1,
+    "updated_at": None,
+    "image": {
+        "url": "/api/property-map/image",
+        "intrinsic_width": 1782,
+        "intrinsic_height": 768,
+    },
+    "layers": [
+        {"id": "cameras", "name": "Cameras", "icon": "camera",
+         "default_visible_in": ["deer"], "items": []},
+        {"id": "zones", "name": "Irrigation Zones", "icon": "droplet-fill",
+         "default_visible_in": ["deer"], "items": []},
+        {"id": "sensors", "name": "Sensors", "icon": "droplet",
+         "default_visible_in": ["weather"], "items": []},
+        {"id": "labels", "name": "Labels", "icon": "type",
+         "default_visible_in": ["deer", "weather"], "items": []},
+    ],
+}
 
 def get_model_version() -> str:
     """Get model version from VERSION file, cached for performance."""
@@ -140,6 +168,17 @@ async def startup_init_db():
     db.init_database()
     print("Database ready!")
 
+    # Pre-load property map image into memory and compute ETag
+    global _image_etag, _image_bytes
+    if _IMAGE_PATH.exists():
+        raw = _IMAGE_PATH.read_bytes()
+        if len(raw) <= _IMAGE_MAX_BYTES:
+            _image_bytes = raw
+        _image_etag = hashlib.sha256(raw).hexdigest()[:32]
+        print(f"Property map image loaded ({len(raw)} bytes), ETag={_image_etag[:8]}...")
+    else:
+        print("Property map image not found at data/property-map.png — upload via POST /api/property-map/image")
+
 # CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,
@@ -148,7 +187,8 @@ app.add_middleware(
         "http://localhost:5173",
         "https://deer-deterrent-rnp.web.app",
         "https://deer.rndpig.com",
-        "https://deer-deterrent.vercel.app"
+        "https://deer-deterrent.vercel.app",
+        "https://weather-monitor-rnp.web.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -164,6 +204,7 @@ OPEN_PATHS = {
     "/api/reference-images",  # list cameras with reference images
     "/api/stats/heatmap",     # heatmap data for frontend
     "/api/system-health",     # dependent-service health probe (dashboard banner)
+    "/api/property-map/health",  # property map health check
 }
 # GET-only prefixes open without auth — image/file serving for <img> tags
 OPEN_GET_PREFIXES = [
@@ -173,6 +214,7 @@ OPEN_GET_PREFIXES = [
     "/api/images/",
     "/api/videos/",         # .../stream, .../thumbnail endpoints
     "/api/reference-images/",  # heatmap background images
+    "/api/property-map/",   # image + overlays GETs are open
 ]
 
 @app.middleware("http")
@@ -252,6 +294,31 @@ detection_history = []  # Legacy - will be phased out
 detection_reviews = {}  # Store manual reviews for training
 missed_detections = []  # Store user-reported missed deer
 active_websockets = []
+
+# ── Property Map Models ───────────────────────────────────────────────────────
+class OverlayImageModel(BaseModel):
+    url: str = "/api/property-map/image"
+    intrinsic_width: int
+    intrinsic_height: int
+
+class LayerModel(BaseModel):
+    id: str
+    name: str
+    icon: Optional[str] = None
+    default_visible_in: List[str] = []
+    items: List[Any] = []
+
+class OverlayDocumentModel(BaseModel):
+    schema_version: int = 1
+    updated_at: Optional[str] = None
+    image: OverlayImageModel
+    layers: List[LayerModel]
+
+    @validator("schema_version")
+    def must_be_v1(cls, v):
+        if v != 1:
+            raise ValueError("Only schema_version=1 is supported")
+        return v
 
 # Models
 class DetectionEvent(BaseModel):
@@ -1399,6 +1466,93 @@ async def stop_irrigation():
     except Exception as e:
         logger.error(f"Failed to stop irrigation: {e}")
         raise HTTPException(status_code=503, detail=f"Stop irrigation failed: {str(e)}")
+
+
+# ── Property Map Endpoints ────────────────────────────────────────────────────
+
+@app.get("/api/property-map/health")
+async def property_map_health():
+    overlay = db.get_property_overlay() or _DEFAULT_OVERLAY
+    total_items = sum(len(layer.get("items", [])) for layer in overlay.get("layers", []))
+    return {
+        "ok": True,
+        "has_image": _IMAGE_PATH.exists(),
+        "overlays_count": total_items,
+    }
+
+
+@app.get("/api/property-map/image")
+async def property_map_image(request: Request):
+    if not _IMAGE_PATH.exists():
+        raise HTTPException(status_code=404, detail="Property map image not uploaded yet")
+
+    if_none_match = request.headers.get("If-None-Match", "")
+    if _image_etag and if_none_match == f'"{_image_etag}"':
+        from fastapi.responses import Response as FastResponse
+        return FastResponse(status_code=304)
+
+    headers = {
+        "Cache-Control": "public, max-age=86400",
+        "Content-Type": "image/png",
+    }
+    if _image_etag:
+        headers["ETag"] = f'"{_image_etag}"'
+
+    if _image_bytes is not None:
+        from fastapi.responses import Response as FastResponse
+        return FastResponse(content=_image_bytes, media_type="image/png", headers=headers)
+
+    return FileResponse(str(_IMAGE_PATH), media_type="image/png", headers=headers)
+
+
+@app.post("/api/property-map/image")
+async def upload_property_map_image(request: Request, file: UploadFile = File(...)):
+    global _image_etag, _image_bytes
+    if file.content_type not in ("image/png", "image/x-png"):
+        raise HTTPException(status_code=400, detail="Only PNG files are accepted")
+
+    raw = await file.read()
+    if len(raw) > _IMAGE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Image too large (max 5 MB)")
+
+    try:
+        from PIL import Image as PilImage
+        img = PilImage.open(io.BytesIO(raw))
+        width, height = img.size
+    except Exception:
+        raise HTTPException(status_code=400, detail="File is not a valid PNG image")
+
+    _IMAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _IMAGE_PATH.write_bytes(raw)
+
+    etag = hashlib.sha256(raw).hexdigest()[:32]
+    _image_etag = etag
+    _image_bytes = raw if len(raw) <= _IMAGE_MAX_BYTES else None
+
+    overlay = db.get_property_overlay() or dict(_DEFAULT_OVERLAY)
+    overlay.setdefault("image", {})["intrinsic_width"] = width
+    overlay.setdefault("image", {})["intrinsic_height"] = height
+    overlay["image"]["url"] = "/api/property-map/image"
+    db.save_property_overlay(overlay, updated_by=getattr(request.state, "user_id", None))
+
+    logger.info(f"Property map image replaced: {width}x{height}, ETag={etag[:8]}")
+    return {"intrinsic_width": width, "intrinsic_height": height, "etag": etag}
+
+
+@app.get("/api/property-map/overlays")
+async def get_property_map_overlays():
+    data = db.get_property_overlay()
+    if data is None:
+        return _DEFAULT_OVERLAY
+    return data
+
+
+@app.put("/api/property-map/overlays")
+async def put_property_map_overlays(request: Request, body: OverlayDocumentModel):
+    user_id = getattr(request.state, "user_id", None)
+    data = body.dict()
+    data["updated_at"] = db.save_property_overlay(data, updated_by=user_id)
+    return data
 
 
 # Note: /api/coordinator/logs endpoint removed — use `docker compose logs coordinator` instead.
