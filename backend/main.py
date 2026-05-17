@@ -205,6 +205,8 @@ OPEN_PATHS = {
     "/api/stats/heatmap",     # heatmap data for frontend
     "/api/system-health",     # dependent-service health probe (dashboard banner)
     "/api/property-map/health",  # property map health check
+    "/cams/video-stream.js",  # go2rtc web component JS (loaded via <script src>)
+    "/cams/ws",               # auth handled inside the WS endpoint, like /ws
 }
 # GET-only prefixes open without auth — image/file serving for <img> tags
 OPEN_GET_PREFIXES = [
