@@ -205,7 +205,6 @@ OPEN_PATHS = {
     "/api/stats/heatmap",     # heatmap data for frontend
     "/api/system-health",     # dependent-service health probe (dashboard banner)
     "/api/property-map/health",  # property map health check
-    "/cams/video-stream.js",  # go2rtc web component JS (loaded via <script src>)
     "/cams/ws",               # auth handled inside the WS endpoint, like /ws
 }
 # GET-only prefixes open without auth — image/file serving for <img> tags
@@ -217,6 +216,7 @@ OPEN_GET_PREFIXES = [
     "/api/videos/",         # .../stream, .../thumbnail endpoints
     "/api/reference-images/",  # heatmap background images
     "/api/property-map/",   # image + overlays GETs are open
+    "/cams/",               # go2rtc static assets (video-stream.js, video-rtc.js, ...)
 ]
 
 @app.middleware("http")
@@ -2517,20 +2517,30 @@ async def get_detection_image(image_name: str):
 GO2RTC_URL = os.getenv("GO2RTC_URL", "http://deer-go2rtc:1984")
 
 
-@app.get("/cams/video-stream.js")
-async def cams_video_stream_js():
-    """Proxy go2rtc's web component JS so the browser loads it same-origin."""
+@app.get("/cams/{filename:path}")
+async def cams_static(filename: str):
+    """Proxy go2rtc's static assets (video-stream.js, video-rtc.js, etc.).
+
+    Restricted to harmless web-asset extensions so this can't be used to fetch
+    arbitrary go2rtc API endpoints without auth.
+    """
+    if filename in {"ws"} or ".." in filename or filename.startswith("/"):
+        raise HTTPException(status_code=404, detail="Not found")
+    allowed_ext = {".js", ".css", ".html", ".map", ".mjs", ".ico", ".png", ".svg"}
+    if not any(filename.endswith(ext) for ext in allowed_ext):
+        raise HTTPException(status_code=404, detail="Not found")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.get(f"{GO2RTC_URL}/video-stream.js")
+            r = await client.get(f"{GO2RTC_URL}/{filename}")
     except Exception as e:
-        logger.warning(f"go2rtc video-stream.js fetch failed: {e}")
+        logger.warning(f"go2rtc proxy fetch failed for {filename}: {e}")
         raise HTTPException(status_code=502, detail="go2rtc unreachable")
     if r.status_code != 200:
-        raise HTTPException(status_code=r.status_code, detail="go2rtc returned non-200")
+        raise HTTPException(status_code=r.status_code, detail="go2rtc non-200")
+    media_type = r.headers.get("content-type", "application/octet-stream")
     return Response(
         content=r.content,
-        media_type="application/javascript",
+        media_type=media_type,
         headers={"Cache-Control": "public, max-age=3600"},
     )
 
