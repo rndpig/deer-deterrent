@@ -88,6 +88,31 @@ services:
       - deer-network
 
   # ===========================================================================
+  # go2rtc Relay - WebRTC/MSE camera streaming for the dashboard
+  # Reads RTSP from ring-mqtt (port 8554) and exposes WebRTC/MSE API on 1984.
+  # Frontend uses wss://cam-stream.rndpig.com/api/ws (Cloudflare → :1984).
+  # ===========================================================================
+  go2rtc:
+    image: alexxit/go2rtc
+    container_name: deer-go2rtc
+    restart: unless-stopped
+
+    depends_on:
+      - ring-mqtt
+
+    volumes:
+      - ./dell-deployment/go2rtc:/config
+
+    ports:
+      - "1984:1984"
+
+    environment:
+      - TZ=${TIMEZONE:-America/Chicago}
+
+    networks:
+      - deer-network
+
+  # ===========================================================================
   # Backend API - FastAPI Server
   # ===========================================================================
   backend:
