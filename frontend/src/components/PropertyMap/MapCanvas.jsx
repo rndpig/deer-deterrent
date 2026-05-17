@@ -7,6 +7,7 @@ import CameraLiveView from './CameraLiveView'
 import { RING_ID_TO_STREAM_NAME } from './cameraDefaults'
 
 const DEG2RAD = Math.PI / 180
+const WEATHER_API_URL = import.meta.env.VITE_WEATHER_API_URL || 'https://weather-api.rndpig.com'
 
 function fovPath(cx, cy, rotation, fovDeg, range) {
   const halfFov = fovDeg / 2
@@ -310,7 +311,7 @@ function PolygonHandles({
   )
 }
 
-function MarkerItem({ item, selected, editMode, containerRef, onSelect, onUpdate }) {
+function MarkerItem({ item, selected, editMode, containerRef, onSelect, onUpdate, onViewClick }) {
   const color = item.color ?? '#06b6d4'
   const pctX = normalizedToPercent(item.x)
   const pctY = normalizedToPercent(item.y)
@@ -325,14 +326,18 @@ function MarkerItem({ item, selected, editMode, containerRef, onSelect, onUpdate
   })
 
   const handleDown = (e) => {
-    if (!editMode) { onSelect(item.id); return }
+    if (!editMode) {
+      onSelect(item.id)
+      onViewClick?.(e)
+      return
+    }
     startDrag(e)
   }
 
   return (
     <div
       className={`pm-marker${editMode ? ' edit-mode' : ''}${selected ? ' selected' : ''}`}
-      style={{ left: pctX, top: pctY }}
+      style={{ left: pctX, top: pctY, cursor: editMode ? 'grab' : 'pointer' }}
       onPointerDown={handleDown}
     >
       <div className="pm-marker-dot" style={{ background: color }} />
@@ -382,16 +387,30 @@ function LabelItem({ item, selected, editMode, containerRef, onSelect, onUpdate 
 function CameraPopover({ item, pos, onClose }) {
   const cameraId = item.meta?.ring_camera_id
   const streamName = cameraId ? RING_ID_TO_STREAM_NAME[cameraId] : null
+  const isStreaming = !!streamName
+
+  // When we have a live stream, render as a centered modal (large video).
+  // Otherwise keep the small anchored popover.
+  if (isStreaming) {
+    return (
+      <>
+        <div className="pm-modal-backdrop" onClick={onClose} />
+        <div className="pm-popover pm-popover--modal">
+          <button className="pm-popover__close" onClick={onClose}>✕</button>
+          <div className="pm-popover__title">{item.label}</div>
+          <CameraLiveView streamName={streamName} label={item.label} />
+        </div>
+      </>
+    )
+  }
 
   return (
     <div className="pm-popover" style={{ left: pos.x, top: pos.y }}>
       <button className="pm-popover__close" onClick={onClose}>✕</button>
       <div className="pm-popover__title">{item.label}</div>
-      {streamName
-        ? <CameraLiveView streamName={streamName} label={item.label} />
-        : cameraId
-          ? <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Stream not configured</div>
-          : <div style={{ color: '#64748b', fontSize: '0.75rem' }}>No Ring ID configured</div>
+      {cameraId
+        ? <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Stream not configured</div>
+        : <div style={{ color: '#64748b', fontSize: '0.75rem' }}>No Ring ID configured</div>
       }
     </div>
   )
@@ -440,6 +459,91 @@ function ZonePopover({ item, pos, onClose }) {
       ) : (
         <div style={{ color: '#64748b', fontSize: '0.75rem' }}>No Rainbird zone configured</div>
       )}
+    </div>
+  )
+}
+
+function formatRelative(iso) {
+  if (!iso) return ''
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return ''
+  const secs = Math.max(0, Math.round((Date.now() - t) / 1000))
+  if (secs < 60) return `${secs}s ago`
+  const mins = Math.round(secs / 60)
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.round(hrs / 24)}d ago`
+}
+
+function SensorPopover({ item, pos, onClose }) {
+  const meta = item.meta ?? {}
+  const kind = meta.kind
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState(null)
+  const [data, setData] = useState(null) // { value, unit, timestamp }
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      setLoading(true); setErr(null); setData(null)
+      try {
+        if (kind === 'soil_moisture') {
+          const ch = Number(meta.channel)
+          if (!ch || ch < 1 || ch > 8) throw new Error('No channel configured (1-8)')
+          const res = await fetch(`${WEATHER_API_URL}/api/current`)
+          if (!res.ok) throw new Error(`Weather API: ${res.status}`)
+          const json = await res.json()
+          const value = json[`soil_moisture_${ch}`]
+          if (value == null) throw new Error(`No reading for channel ${ch}`)
+          if (!cancelled) setData({ value, unit: '%', timestamp: json.timestamp, sub: `Channel ${ch}` })
+        } else if (kind === 'light') {
+          const res = await fetch(`${WEATHER_API_URL}/api/light/current`)
+          if (!res.ok) throw new Error(`Weather API: ${res.status}`)
+          const json = await res.json()
+          const sensors = json.sensors ?? []
+          const name = meta.name || meta.channel
+          const found = name
+            ? sensors.find(s => s.name === String(name))
+            : sensors[0]
+          if (!found) throw new Error(name ? `Sensor '${name}' not found` : 'No light sensors')
+          if (!cancelled) setData({ value: found.lux, unit: 'lux', timestamp: found.timestamp, sub: found.name })
+        } else {
+          throw new Error('Sensor kind not configured')
+        }
+      } catch (e) {
+        if (!cancelled) setErr(e.message)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [kind, meta.channel, meta.name])
+
+  const renderValue = () => {
+    if (loading) return <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Loading…</div>
+    if (err) return <div style={{ color: '#f87171', fontSize: '0.75rem' }}>{err}</div>
+    if (!data) return null
+    const v = typeof data.value === 'number' ? data.value.toFixed(data.unit === 'lux' ? 0 : 1) : data.value
+    return (
+      <div>
+        <div style={{ fontSize: '1.4rem', fontWeight: 600, color: '#f1f5f9' }}>
+          {v}<span style={{ fontSize: '0.85rem', color: '#94a3b8', marginLeft: 4 }}>{data.unit}</span>
+        </div>
+        {data.sub && <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>{data.sub}</div>}
+        <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 4 }}>
+          {formatRelative(data.timestamp)}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="pm-popover" style={{ left: pos.x, top: pos.y }}>
+      <button className="pm-popover__close" onClick={onClose}>✕</button>
+      <div className="pm-popover__title">{item.label}</div>
+      {renderValue()}
     </div>
   )
 }
@@ -635,6 +739,10 @@ export default function MapCanvas({
                   containerRef={containerRef}
                   onSelect={onSelect}
                   onUpdate={(patch) => onUpdateItem(layer.id, item.id, patch)}
+                  onViewClick={(e) => {
+                    if (editMode) return
+                    setPopover({ type: 'sensor', item, pos: popoverPosFromEvent(e) })
+                  }}
                 />
               )
             }
@@ -678,6 +786,9 @@ export default function MapCanvas({
         )}
         {popover?.type === 'zone' && (
           <ZonePopover item={popover.item} pos={popover.pos} onClose={() => setPopover(null)} />
+        )}
+        {popover?.type === 'sensor' && (
+          <SensorPopover item={popover.item} pos={popover.pos} onClose={() => setPopover(null)} />
         )}
       </div>
     </div>
