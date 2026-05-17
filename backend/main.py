@@ -2553,16 +2553,20 @@ async def cams_ws(websocket: WebSocket):
     """
     import websockets as ws_client  # local import — small module load cost
 
-    token = websocket.query_params.get("token")
+    src = websocket.query_params.get("src", "")
+    token = websocket.query_params.get("token", "")
+    logger.info(f"[cams/ws] upgrade src={src!r} token_len={len(token)}")
+
     if not token:
+        logger.warning("[cams/ws] rejecting: no token")
         await websocket.close(code=4001, reason="Token required")
         return
     if not auth_module._verify_firebase_token(token):
+        logger.warning("[cams/ws] rejecting: invalid token")
         await websocket.close(code=4001, reason="Invalid or expired token")
         return
-
-    src = websocket.query_params.get("src", "")
     if not src or not all(c.isalnum() or c in "-_" for c in src):
+        logger.warning(f"[cams/ws] rejecting: bad src {src!r}")
         await websocket.close(code=4002, reason="Invalid src")
         return
 
@@ -2572,9 +2576,12 @@ async def cams_ws(websocket: WebSocket):
     )
 
     await websocket.accept()
+    logger.info(f"[cams/ws] accepted, connecting upstream {upstream_url}")
 
     try:
         async with ws_client.connect(upstream_url, max_size=None) as upstream:
+            logger.info(f"[cams/ws] upstream connected for src={src}")
+
             async def client_to_upstream():
                 try:
                     while True:
@@ -2587,8 +2594,8 @@ async def cams_ws(websocket: WebSocket):
                         if data is None:
                             continue
                         await upstream.send(data)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"[cams/ws] client->upstream ended: {e}")
 
             async def upstream_to_client():
                 try:
@@ -2597,17 +2604,18 @@ async def cams_ws(websocket: WebSocket):
                             await websocket.send_bytes(data)
                         else:
                             await websocket.send_text(data)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"[cams/ws] upstream->client ended: {e}")
 
             await asyncio.gather(client_to_upstream(), upstream_to_client())
     except Exception as e:
-        logger.warning(f"cam ws bridge failed for src={src}: {e}")
+        logger.warning(f"[cams/ws] bridge failed for src={src}: {type(e).__name__}: {e}")
     finally:
         try:
             await websocket.close()
         except Exception:
             pass
+        logger.info(f"[cams/ws] closed src={src}")
 
 
 @app.websocket("/ws")
