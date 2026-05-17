@@ -5,7 +5,7 @@ Provides REST API and WebSocket for real-time updates.
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, validator
 from typing import List, Optional, Dict, Union, Any
 from datetime import datetime, timedelta
@@ -2504,6 +2504,98 @@ async def get_detection_image(image_name: str):
     if not image_path.exists():
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(image_path)
+
+
+# ============================================================================
+# go2rtc Camera Stream Proxy
+# Reverse-proxies the go2rtc relay so the browser only ever talks to this
+# backend (same-origin). Avoids cross-origin/CORS pain and lets each app on
+# its own subdomain protect the streams with its own auth (here: Firebase).
+# ============================================================================
+GO2RTC_URL = os.getenv("GO2RTC_URL", "http://deer-go2rtc:1984")
+
+
+@app.get("/cams/video-stream.js")
+async def cams_video_stream_js():
+    """Proxy go2rtc's web component JS so the browser loads it same-origin."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(f"{GO2RTC_URL}/video-stream.js")
+    except Exception as e:
+        logger.warning(f"go2rtc video-stream.js fetch failed: {e}")
+        raise HTTPException(status_code=502, detail="go2rtc unreachable")
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail="go2rtc returned non-200")
+    return Response(
+        content=r.content,
+        media_type="application/javascript",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.websocket("/cams/ws")
+async def cams_ws(websocket: WebSocket):
+    """Bridge a browser WebSocket to go2rtc's /api/ws?src=<name>.
+
+    Requires a valid Firebase token (?token=...) like the main /ws endpoint.
+    """
+    import websockets as ws_client  # local import — small module load cost
+
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4001, reason="Token required")
+        return
+    if not auth_module._verify_firebase_token(token):
+        await websocket.close(code=4001, reason="Invalid or expired token")
+        return
+
+    src = websocket.query_params.get("src", "")
+    if not src or not all(c.isalnum() or c in "-_" for c in src):
+        await websocket.close(code=4002, reason="Invalid src")
+        return
+
+    upstream_url = (
+        GO2RTC_URL.replace("http://", "ws://").replace("https://", "wss://")
+        + f"/api/ws?src={src}"
+    )
+
+    await websocket.accept()
+
+    try:
+        async with ws_client.connect(upstream_url, max_size=None) as upstream:
+            async def client_to_upstream():
+                try:
+                    while True:
+                        msg = await websocket.receive()
+                        if msg.get("type") == "websocket.disconnect":
+                            break
+                        data = msg.get("bytes")
+                        if data is None:
+                            data = msg.get("text")
+                        if data is None:
+                            continue
+                        await upstream.send(data)
+                except Exception:
+                    pass
+
+            async def upstream_to_client():
+                try:
+                    async for data in upstream:
+                        if isinstance(data, (bytes, bytearray)):
+                            await websocket.send_bytes(data)
+                        else:
+                            await websocket.send_text(data)
+                except Exception:
+                    pass
+
+            await asyncio.gather(client_to_upstream(), upstream_to_client())
+    except Exception as e:
+        logger.warning(f"cam ws bridge failed for src={src}: {e}")
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 @app.websocket("/ws")
