@@ -15,6 +15,8 @@ function App() {
   const [stats, setStats] = useState(null)
   const [settings, setSettings] = useState(null)
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [previousTab, setPreviousTab] = useState('dashboard')
+  const [showMap, setShowMap] = useState(false)
   const [ws, setWs] = useState(null)
   const [diskUsage, setDiskUsage] = useState(null)
   const [systemHealth, setSystemHealth] = useState(null)
@@ -201,8 +203,11 @@ function App() {
             Stats
           </button>
           <button 
-            className={activeTab === 'map' ? 'active' : ''}
-            onClick={() => setActiveTab('map')}
+            className={showMap ? 'active' : ''}
+            onClick={() => {
+              setPreviousTab(activeTab)
+              setShowMap(true)
+            }}
           >
             Map
           </button>
@@ -228,9 +233,6 @@ function App() {
         {activeTab === 'stats' && (
           <Stats />
         )}
-        {activeTab === 'map' && (
-          <PropertyMap />
-        )}
         {activeTab === 'settings' && (
           <Settings 
             settings={settings} 
@@ -238,6 +240,9 @@ function App() {
           />
         )}
       </main>
+      {showMap && (
+        <PropertyMap onClose={() => { setShowMap(false); setActiveTab(previousTab) }} />
+      )}
     </div>
   )
 }

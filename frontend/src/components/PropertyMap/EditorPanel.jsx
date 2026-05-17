@@ -1,10 +1,4 @@
-const CAMERA_IDS = [
-  { id: '10cea9e4511f', label: 'Woods' },
-  { id: 'c4dbad08f862', label: 'Side' },
-  { id: '587a624d3fae', label: 'Driveway' },
-  { id: '4439c4de7a79', label: 'Front Door' },
-  { id: 'f045dae9383a', label: 'Back' },
-]
+import { CAMERA_ID_LIST, getCameraDefaults, getCameraModelInfo } from './cameraDefaults'
 
 function Field({ label, children }) {
   return (
@@ -29,6 +23,31 @@ function SliderField({ label, value, min, max, step = 1, onChange }) {
 
 function CameraEditor({ item, onUpdate, onDelete }) {
   const meta = item.meta ?? {}
+  const modelInfo = getCameraModelInfo(meta.ring_camera_id)
+
+  const handleRingCameraChange = (e) => {
+    const ringId = e.target.value
+    const patch = { meta: { ...meta, ring_camera_id: ringId } }
+    // Auto-apply hardware FOV/range when selecting a known camera, but only
+    // if the user hasn't already set custom values that differ from the
+    // previous model's defaults (we always apply on first selection).
+    const defaults = getCameraDefaults(ringId)
+    if (defaults) {
+      patch.fov_deg = defaults.fov_deg
+      patch.range = defaults.range
+      if (!item.label || item.label === 'New Camera') {
+        const info = getCameraModelInfo(ringId)
+        if (info) patch.label = info.label
+      }
+    }
+    onUpdate(patch)
+  }
+
+  const handleResetDefaults = () => {
+    const defaults = getCameraDefaults(meta.ring_camera_id)
+    if (defaults) onUpdate(defaults)
+  }
+
   return (
     <>
       <Field label="Label">
@@ -40,18 +59,35 @@ function CameraEditor({ item, onUpdate, onDelete }) {
           <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{item.color}</span>
         </div>
       </Field>
-      <SliderField label="Rotation" value={item.rotation_deg ?? 0} min={-180} max={180} onChange={v => onUpdate({ rotation_deg: v })} />
-      <SliderField label="FOV" value={item.fov_deg ?? 90} min={10} max={360} onChange={v => onUpdate({ fov_deg: v })} />
-      <SliderField label="Range" value={item.range ?? 0.15} min={0.01} max={1} step={0.01} onChange={v => onUpdate({ range: v })} />
       <Field label="Ring Camera">
         <select
           value={meta.ring_camera_id ?? ''}
-          onChange={e => onUpdate({ meta: { ...meta, ring_camera_id: e.target.value } })}
+          onChange={handleRingCameraChange}
         >
           <option value="">— none —</option>
-          {CAMERA_IDS.map(c => <option key={c.id} value={c.id}>{c.label} ({c.id.slice(0, 8)}…)</option>)}
+          {CAMERA_ID_LIST.map(c => (
+            <option key={c.id} value={c.id}>{c.label} — {c.model}</option>
+          ))}
         </select>
       </Field>
+      {modelInfo && (
+        <div className="pm-field-row" style={{ justifyContent: 'space-between' }}>
+          <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+            {modelInfo.model}
+          </span>
+          <button
+            type="button"
+            className="pm-btn"
+            onClick={handleResetDefaults}
+            title="Reset FOV and range to this camera model's hardware specs"
+          >
+            Reset to model defaults
+          </button>
+        </div>
+      )}
+      <SliderField label="Rotation" value={item.rotation_deg ?? 0} min={-180} max={180} onChange={v => onUpdate({ rotation_deg: v })} />
+      <SliderField label="FOV" value={item.fov_deg ?? 90} min={10} max={360} onChange={v => onUpdate({ fov_deg: v })} />
+      <SliderField label="Range" value={item.range ?? 0.15} min={0.01} max={1} step={0.01} onChange={v => onUpdate({ range: v })} />
       <div className="pm-coords">x: {(item.x ?? 0).toFixed(3)}, y: {(item.y ?? 0).toFixed(3)}</div>
       <button className="pm-delete-btn" onClick={() => {
         if (window.confirm(`Delete camera "${item.label}"?`)) onDelete()

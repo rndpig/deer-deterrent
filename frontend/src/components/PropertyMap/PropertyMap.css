@@ -6,6 +6,83 @@
   color: #f1f5f9;
 }
 
+/* Fullscreen modal variant — used when invoked via the Map tab. */
+.pm-container--modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  height: 100vh;
+  width: 100vw;
+}
+
+.pm-close-btn {
+  background: transparent;
+  border: 1px solid #475569;
+  color: #cbd5e1;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.25rem 0.55rem;
+  margin-left: 0.4rem;
+}
+
+.pm-close-btn:hover {
+  background: #7f1d1d;
+  border-color: #991b1b;
+  color: #fff;
+}
+
+/* Camera dot — HTML overlay so it stays circular regardless of the
+   map image's aspect ratio (the SVG cone layer uses
+   preserveAspectRatio="none" which would squash an SVG circle). */
+.pm-cam-dot {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.9);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.4);
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  z-index: 5;
+  pointer-events: all;
+  touch-action: none;
+}
+
+.pm-cam-dot.edit-mode { cursor: grab; }
+.pm-cam-dot.edit-mode:active { cursor: grabbing; }
+.pm-cam-dot.selected {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(59,130,246,0.6);
+}
+
+.pm-cam-dot-label {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  white-space: nowrap;
+  background: rgba(0,0,0,0.6);
+  padding: 1px 5px;
+  border-radius: 4px;
+  pointer-events: none;
+  color: #f1f5f9;
+}
+
+.pm-cam-rotate-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #3b82f6;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  z-index: 6;
+  touch-action: none;
+}
+
+.pm-cam-rotate-handle:active { cursor: grabbing; }
+
 .pm-loading,
 .pm-error {
   display: flex;
@@ -173,6 +250,7 @@
   transform: translate(-50%, -50%);
   pointer-events: all;
   cursor: pointer;
+  touch-action: none;
 }
 
 .pm-marker.edit-mode {
@@ -390,7 +468,7 @@
   transition: opacity 0.15s;
 }
 .pm-fov-cone:hover { opacity: 0.85; }
-.pm-vertex-handle { cursor: move; }
-.pm-midpoint-handle { cursor: pointer; opacity: 0.5; }
+.pm-vertex-handle { cursor: move; touch-action: none; }
+.pm-midpoint-handle { cursor: pointer; opacity: 0.5; touch-action: none; }
 .pm-midpoint-handle:hover { opacity: 1; }
-.pm-rotate-handle { cursor: ew-resize; }
+.pm-rotate-handle { cursor: ew-resize; touch-action: none; }

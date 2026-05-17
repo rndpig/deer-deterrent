@@ -12,7 +12,7 @@ const genId = (prefix) => `${prefix}-${(++_idCounter).toString(36)}`
 
 export default function MapToolbar({
   overlay, layerVisibility, editMode, user, saveStatus,
-  onEditToggle, onLayerToggle, onAddItem, onUploadImage
+  onEditToggle, onLayerToggle, onAddItem, onUploadImage, onClose,
 }) {
   const [showAdd, setShowAdd] = useState(false)
 
@@ -24,8 +24,10 @@ export default function MapToolbar({
       label: 'New Camera',
       x: 0.5, y: 0.5,
       rotation_deg: 0,
-      fov_deg: 90,
-      range: 0.15,
+      // Default to a typical Ring Floodlight Cam (140° HFOV). User can pick a
+      // specific model in the editor to refine these.
+      fov_deg: 140,
+      range: 0.20,
       color: '#3b82f6',
       meta: {},
     })
@@ -115,6 +117,15 @@ export default function MapToolbar({
         )}
 
         <span className={`pm-save-status ${statusClass}`}>{statusText}</span>
+
+        {onClose && (
+          <button
+            className="pm-btn pm-close-btn"
+            onClick={onClose}
+            title="Close map"
+            aria-label="Close map"
+          >✕</button>
+        )}
       </div>
     </div>
   )

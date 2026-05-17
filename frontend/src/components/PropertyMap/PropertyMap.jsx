@@ -21,7 +21,7 @@ function initLayerVisibility(layers) {
   return result
 }
 
-export default function PropertyMap() {
+export default function PropertyMap({ onClose }) {
   const { user } = useAuth()
   const [overlay, setOverlay] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -42,6 +42,14 @@ export default function PropertyMap() {
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [])
+
+  // Escape closes the fullscreen modal
+  useEffect(() => {
+    if (!onClose) return
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
 
   const persistLayers = useCallback((vis) => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(vis)) } catch {}
@@ -144,8 +152,10 @@ export default function PropertyMap() {
 
   const selection = getSelection()
 
+  const containerClass = onClose ? 'pm-container pm-container--modal' : 'pm-container'
+
   return (
-    <div className="pm-container">
+    <div className={containerClass} role={onClose ? 'dialog' : undefined} aria-modal={onClose ? 'true' : undefined}>
       <MapToolbar
         overlay={overlay}
         layerVisibility={layerVisibility}
@@ -156,6 +166,7 @@ export default function PropertyMap() {
         onLayerToggle={setLayerVisible}
         onAddItem={addItem}
         onUploadImage={() => setShowUploadModal(true)}
+        onClose={onClose}
       />
       <div className="pm-body">
         <MapCanvas

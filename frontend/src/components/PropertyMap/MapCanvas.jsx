@@ -1,6 +1,7 @@
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { API_URL, apiFetch } from '../../api'
-import { pixelToNormalized, normalizedToPercent } from './coords'
+import { pixelToNormalized, normalizedToPercent, clamp01 } from './coords'
+import { useMapDrag } from './useMapDrag'
 
 const DEG2RAD = Math.PI / 180
 
@@ -21,129 +22,138 @@ function polygonPoints(poly) {
   return poly.map(([x, y]) => `${x * 100},${y * 100}`).join(' ')
 }
 
-function CameraItem({ item, selected, editMode, containerRef, onSelect, onUpdate }) {
+/* -------------------------------------------------------------------------
+ * Cameras are split between SVG (FOV cone) and HTML (the circular dot +
+ * rotation handle). The SVG uses preserveAspectRatio="none" so it can
+ * stretch to non-square aspect ratios — that's what was squashing the
+ * camera circle into an oval. HTML overlay elements aren't affected.
+ * ------------------------------------------------------------------------- */
+function CameraCone({ item }) {
   const cx = item.x * 100
   const cy = item.y * 100
   const rotation = item.rotation_deg ?? 0
   const fovDeg = item.fov_deg ?? 90
   const range = item.range ?? 0.15
   const color = item.color ?? '#3b82f6'
-
-  const handleMarkerDown = useCallback((e) => {
-    if (!editMode) { onSelect(item.id); return }
-    e.preventDefault(); e.stopPropagation()
-    onSelect(item.id)
-    e.currentTarget.setPointerCapture(e.pointerId)
-    const move = (me) => {
-      const rect = containerRef.current?.getBoundingClientRect()
-      if (!rect) return
-      const n = pixelToNormalized(me.clientX, me.clientY, rect)
-      onUpdate({ x: n.x, y: n.y })
-    }
-    const up = () => {
-      e.currentTarget?.releasePointerCapture?.(e.pointerId)
-      e.currentTarget?.removeEventListener('pointermove', move)
-      e.currentTarget?.removeEventListener('pointerup', up)
-    }
-    e.currentTarget.addEventListener('pointermove', move)
-    e.currentTarget.addEventListener('pointerup', up)
-  }, [editMode, item.id, containerRef, onSelect, onUpdate])
-
-  const rad = rotation * DEG2RAD
-  const handleX = cx + 3 * Math.sin(rad)
-  const handleY = cy - 3 * Math.cos(rad)
-
-  const handleRotateDown = useCallback((e) => {
-    if (!editMode) return
-    e.preventDefault(); e.stopPropagation()
-    e.currentTarget.setPointerCapture(e.pointerId)
-    const move = (me) => {
-      const rect = containerRef.current?.getBoundingClientRect()
-      if (!rect) return
-      const nx = (me.clientX - rect.left) / rect.width * 100
-      const ny = (me.clientY - rect.top)  / rect.height * 100
-      const dx = nx - cx, dy = ny - cy
-      const angle = Math.atan2(dx, -dy) / DEG2RAD
-      onUpdate({ rotation_deg: Math.round(angle) })
-    }
-    const up = () => {
-      e.currentTarget?.releasePointerCapture?.(e.pointerId)
-      e.currentTarget?.removeEventListener('pointermove', move)
-      e.currentTarget?.removeEventListener('pointerup', up)
-    }
-    e.currentTarget.addEventListener('pointermove', move)
-    e.currentTarget.addEventListener('pointerup', up)
-  }, [editMode, cx, cy, containerRef, onUpdate])
-
   return (
-    <g>
-      <path
-        d={fovPath(cx, cy, rotation, fovDeg, range)}
-        fill={color}
-        fillOpacity={0.25}
-        stroke={color}
-        strokeWidth={0.3}
-        className="pm-fov-cone"
-        onClick={() => onSelect(item.id)}
-      />
-      <circle
-        cx={cx} cy={cy} r={1.2}
-        fill={color}
-        stroke="#fff"
-        strokeWidth={0.3}
-        style={{ cursor: editMode ? 'grab' : 'pointer' }}
-        onPointerDown={handleMarkerDown}
-      />
-      {selected && (
-        <line
-          x1={cx} y1={cy} x2={handleX} y2={handleY}
-          stroke="#fff" strokeWidth={0.2} strokeDasharray="0.5 0.5"
-        />
-      )}
-      {editMode && selected && (
-        <circle
-          cx={handleX} cy={handleY} r={0.8}
-          fill="#fff" stroke={color} strokeWidth={0.3}
-          className="pm-rotate-handle"
-          onPointerDown={handleRotateDown}
-        />
-      )}
-    </g>
+    <path
+      d={fovPath(cx, cy, rotation, fovDeg, range)}
+      fill={color}
+      fillOpacity={0.25}
+      stroke={color}
+      strokeWidth={0.3}
+      className="pm-fov-cone"
+      pointerEvents="none"
+    />
   )
 }
 
-function PolygonItem({ item, selected, editMode, containerRef, onSelect, onUpdate }) {
+function CameraMarker({ item, selected, editMode, containerRef, onSelect, onUpdate, onViewClick }) {
+  const color = item.color ?? '#3b82f6'
+  const rotation = item.rotation_deg ?? 0
+  const pctX = normalizedToPercent(item.x)
+  const pctY = normalizedToPercent(item.y)
+
+  const startDrag = useMapDrag({
+    containerRef,
+    onStart: () => onSelect(item.id),
+    onMove: (me, rect) => {
+      const n = pixelToNormalized(me.clientX, me.clientY, rect)
+      onUpdate({ x: n.x, y: n.y })
+    },
+  })
+
+  const startRotate = useMapDrag({
+    containerRef,
+    onMove: (me, rect) => {
+      const cxPx = rect.left + item.x * rect.width
+      const cyPx = rect.top  + item.y * rect.height
+      const dx = me.clientX - cxPx
+      const dy = me.clientY - cyPx
+      const angle = Math.atan2(dx, -dy) / DEG2RAD
+      onUpdate({ rotation_deg: Math.round(angle) })
+    },
+  })
+
+  const onDotPointerDown = (e) => {
+    if (!editMode) {
+      onSelect(item.id)
+      onViewClick?.(e)
+      return
+    }
+    startDrag(e)
+  }
+
+  // Rotation handle position (~6% of container width along rotation vector)
+  const handleOffsetPct = 6
+  const rad = rotation * DEG2RAD
+  const handleLeft = clamp01(item.x + (handleOffsetPct / 100) * Math.sin(rad))
+  const handleTop  = clamp01(item.y - (handleOffsetPct / 100) * Math.cos(rad))
+
+  return (
+    <>
+      <div
+        className={`pm-cam-dot${editMode ? ' edit-mode' : ''}${selected ? ' selected' : ''}`}
+        style={{ left: pctX, top: pctY, background: color }}
+        onPointerDown={onDotPointerDown}
+        title={item.label}
+      >
+        <span className="pm-cam-dot-label">{item.label}</span>
+      </div>
+      {selected && editMode && (
+        <div
+          className="pm-cam-rotate-handle"
+          style={{
+            left: normalizedToPercent(handleLeft),
+            top:  normalizedToPercent(handleTop),
+            borderColor: color,
+          }}
+          onPointerDown={startRotate}
+          title="Drag to rotate"
+        />
+      )}
+    </>
+  )
+}
+
+// Polygon vertex extracted as a component so each gets its own hook instance
+// (Rules of Hooks: can't call hooks inside loops/map callbacks).
+function PolyVertex({ idx, x, y, color, poly, containerRef, onSelect, onUpdate, onContextMenu }) {
+  const start = useMapDrag({
+    containerRef,
+    onStart: onSelect,
+    onMove: (me, rect) => {
+      const n = pixelToNormalized(me.clientX, me.clientY, rect)
+      const newPoly = poly.map((pt, i) => i === idx ? [n.x, n.y] : pt)
+      onUpdate({ polygon: newPoly })
+    },
+  })
+  return (
+    <circle
+      cx={x * 100} cy={y * 100} r={1.0}
+      fill="#fff" stroke={color} strokeWidth={0.3}
+      className="pm-vertex-handle"
+      onPointerDown={start}
+      onContextMenu={onContextMenu}
+    />
+  )
+}
+
+function PolygonItem({ item, selected, editMode, containerRef, onSelect, onUpdate, onViewClick }) {
   const color = item.color ?? '#4ade80'
   const fillOpacity = item.fill_opacity ?? 0.35
   const strokeWidth = item.stroke_width ?? 2
   const poly = item.polygon ?? []
 
   const handlePolyDown = useCallback((e) => {
-    if (!editMode) { onSelect(item.id); return }
+    if (!editMode) {
+      onSelect(item.id)
+      onViewClick?.(e)
+      return
+    }
     e.preventDefault(); e.stopPropagation()
     onSelect(item.id)
-  }, [editMode, item.id, onSelect])
-
-  const handleVertexDown = useCallback((e, idx) => {
-    e.preventDefault(); e.stopPropagation()
-    if (!editMode) return
-    onSelect(item.id)
-    e.currentTarget.setPointerCapture(e.pointerId)
-    const move = (me) => {
-      const rect = containerRef.current?.getBoundingClientRect()
-      if (!rect) return
-      const n = pixelToNormalized(me.clientX, me.clientY, rect)
-      const newPoly = poly.map((pt, i) => i === idx ? [n.x, n.y] : pt)
-      onUpdate({ polygon: newPoly })
-    }
-    const up = () => {
-      e.currentTarget?.releasePointerCapture?.(e.pointerId)
-      e.currentTarget?.removeEventListener('pointermove', move)
-      e.currentTarget?.removeEventListener('pointerup', up)
-    }
-    e.currentTarget.addEventListener('pointermove', move)
-    e.currentTarget.addEventListener('pointerup', up)
-  }, [editMode, item.id, poly, containerRef, onSelect, onUpdate])
+  }, [editMode, item.id, onSelect, onViewClick])
 
   const handleVertexRightClick = useCallback((e, idx) => {
     e.preventDefault()
@@ -175,12 +185,16 @@ function PolygonItem({ item, selected, editMode, containerRef, onSelect, onUpdat
         onPointerDown={handlePolyDown}
       />
       {selected && editMode && poly.map(([x, y], idx) => (
-        <circle
+        <PolyVertex
           key={idx}
-          cx={x * 100} cy={y * 100} r={1.0}
-          fill="#fff" stroke={color} strokeWidth={0.3}
-          className="pm-vertex-handle"
-          onPointerDown={(e) => handleVertexDown(e, idx)}
+          idx={idx}
+          x={x}
+          y={y}
+          color={color}
+          poly={poly}
+          containerRef={containerRef}
+          onSelect={() => onSelect(item.id)}
+          onUpdate={onUpdate}
           onContextMenu={(e) => handleVertexRightClick(e, idx)}
         />
       ))}
@@ -206,25 +220,19 @@ function MarkerItem({ item, selected, editMode, containerRef, onSelect, onUpdate
   const pctX = normalizedToPercent(item.x)
   const pctY = normalizedToPercent(item.y)
 
-  const handleDown = useCallback((e) => {
-    if (!editMode) { onSelect(item.id); return }
-    e.preventDefault(); e.stopPropagation()
-    onSelect(item.id)
-    e.currentTarget.setPointerCapture(e.pointerId)
-    const move = (me) => {
-      const rect = containerRef.current?.getBoundingClientRect()
-      if (!rect) return
+  const startDrag = useMapDrag({
+    containerRef,
+    onStart: () => onSelect(item.id),
+    onMove: (me, rect) => {
       const n = pixelToNormalized(me.clientX, me.clientY, rect)
       onUpdate({ x: n.x, y: n.y })
-    }
-    const up = () => {
-      e.currentTarget?.releasePointerCapture?.(e.pointerId)
-      e.currentTarget?.removeEventListener('pointermove', move)
-      e.currentTarget?.removeEventListener('pointerup', up)
-    }
-    e.currentTarget.addEventListener('pointermove', move)
-    e.currentTarget.addEventListener('pointerup', up)
-  }, [editMode, item.id, containerRef, onSelect, onUpdate])
+    },
+  })
+
+  const handleDown = (e) => {
+    if (!editMode) { onSelect(item.id); return }
+    startDrag(e)
+  }
 
   return (
     <div
@@ -242,25 +250,19 @@ function LabelItem({ item, selected, editMode, containerRef, onSelect, onUpdate 
   const pctX = normalizedToPercent(item.x)
   const pctY = normalizedToPercent(item.y)
 
-  const handleDown = useCallback((e) => {
-    if (!editMode) { onSelect(item.id); return }
-    e.preventDefault(); e.stopPropagation()
-    onSelect(item.id)
-    e.currentTarget.setPointerCapture(e.pointerId)
-    const move = (me) => {
-      const rect = containerRef.current?.getBoundingClientRect()
-      if (!rect) return
+  const startDrag = useMapDrag({
+    containerRef,
+    onStart: () => onSelect(item.id),
+    onMove: (me, rect) => {
       const n = pixelToNormalized(me.clientX, me.clientY, rect)
       onUpdate({ x: n.x, y: n.y })
-    }
-    const up = () => {
-      e.currentTarget?.releasePointerCapture?.(e.pointerId)
-      e.currentTarget?.removeEventListener('pointermove', move)
-      e.currentTarget?.removeEventListener('pointerup', up)
-    }
-    e.currentTarget.addEventListener('pointermove', move)
-    e.currentTarget.addEventListener('pointerup', up)
-  }, [editMode, item.id, containerRef, onSelect, onUpdate])
+    },
+  })
+
+  const handleDown = (e) => {
+    if (!editMode) { onSelect(item.id); return }
+    startDrag(e)
+  }
 
   return (
     <div
@@ -286,13 +288,13 @@ function CameraPopover({ item, pos, onClose }) {
   const [snapshot, setSnapshot] = useState(null)
   const cameraId = item.meta?.ring_camera_id
 
-  useState(() => {
+  useEffect(() => {
     if (!cameraId) return
     apiFetch(`/api/snapshots?camera_id=${cameraId}&limit=1`)
       .then(r => r.json())
       .then(data => { if (data?.length) setSnapshot(data[0]) })
       .catch(() => {})
-  })
+  }, [cameraId])
 
   return (
     <div className="pm-popover" style={{ left: pos.x, top: pos.y }}>
@@ -373,18 +375,15 @@ export default function MapCanvas({
     }
   }
 
-  const handleItemViewClick = (type, item, e) => {
-    if (editMode) return
+  const popoverPosFromEvent = (e) => {
     const rect = containerRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const pos = { x: e.clientX - rect.left, y: e.clientY - rect.top }
-    onSelect(item.id)
-    if (type === 'camera') setPopover({ type: 'camera', item, pos })
-    else if (type === 'polygon') setPopover({ type: 'zone', item, pos })
-    else setPopover(null)
+    if (!rect) return { x: 0, y: 0 }
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
   }
 
   if (!overlay) return null
+
+  const visibleLayers = overlay.layers.filter(l => layerVisibility[l.id])
 
   return (
     <div className="pm-canvas-wrapper" onClick={handleCanvasClick}>
@@ -400,29 +399,17 @@ export default function MapCanvas({
           onError={(e) => { e.target.style.background = '#1e293b'; e.target.alt = 'Map image not yet uploaded' }}
         />
 
+        {/* SVG layer: cones, polygons, vertex/midpoint handles. */}
         <svg
           className={`pm-svg-overlay${editMode ? ' edit-mode' : ''}`}
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
           xmlns="http://www.w3.org/2000/svg"
         >
-          {overlay.layers.filter(l => layerVisibility[l.id]).map(layer =>
+          {visibleLayers.map(layer =>
             layer.items.map(item => {
               if (item.type === 'camera') {
-                return (
-                  <CameraItem
-                    key={item.id}
-                    item={item}
-                    selected={selectedItemId === item.id}
-                    editMode={editMode}
-                    containerRef={containerRef}
-                    onSelect={(id) => {
-                      onSelect(id)
-                      if (!editMode) handleItemViewClick('camera', item, window.event)
-                    }}
-                    onUpdate={(patch) => onUpdateItem(layer.id, item.id, patch)}
-                  />
-                )
+                return <CameraCone key={`${item.id}-cone`} item={item} />
               }
               if (item.type === 'polygon') {
                 return (
@@ -432,11 +419,12 @@ export default function MapCanvas({
                     selected={selectedItemId === item.id}
                     editMode={editMode}
                     containerRef={containerRef}
-                    onSelect={(id) => {
-                      onSelect(id)
-                      if (!editMode) handleItemViewClick('polygon', item, window.event)
-                    }}
+                    onSelect={onSelect}
                     onUpdate={(patch) => onUpdateItem(layer.id, item.id, patch)}
+                    onViewClick={(e) => {
+                      if (editMode) return
+                      setPopover({ type: 'zone', item, pos: popoverPosFromEvent(e) })
+                    }}
                   />
                 )
               }
@@ -445,8 +433,27 @@ export default function MapCanvas({
           )}
         </svg>
 
-        {overlay.layers.filter(l => layerVisibility[l.id]).map(layer =>
+        {/* HTML overlay: camera dots (circular regardless of aspect),
+            sensors, labels, rotation handles. */}
+        {visibleLayers.map(layer =>
           layer.items.map(item => {
+            if (item.type === 'camera') {
+              return (
+                <CameraMarker
+                  key={item.id}
+                  item={item}
+                  selected={selectedItemId === item.id}
+                  editMode={editMode}
+                  containerRef={containerRef}
+                  onSelect={onSelect}
+                  onUpdate={(patch) => onUpdateItem(layer.id, item.id, patch)}
+                  onViewClick={(e) => {
+                    if (editMode) return
+                    setPopover({ type: 'camera', item, pos: popoverPosFromEvent(e) })
+                  }}
+                />
+              )
+            }
             if (item.type === 'marker') {
               return (
                 <MarkerItem
