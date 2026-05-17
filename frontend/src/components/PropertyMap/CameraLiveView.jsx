@@ -28,7 +28,7 @@ export default function CameraLiveView({ streamName, label }) {
     if (!go2rtcScriptInjected) {
       const script = document.createElement('script')
       script.type = 'module'
-      script.src = `${CAM_STREAM_URL}/static/video-stream.js`
+      script.src = `${CAM_STREAM_URL}/video-stream.js`
       document.head.appendChild(script)
       go2rtcScriptInjected = true
     }
