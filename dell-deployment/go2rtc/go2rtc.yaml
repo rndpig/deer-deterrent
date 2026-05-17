@@ -14,9 +14,11 @@
 api:
   listen: ':1984'
 
+# Friendly stream aliases (left side). Right side is the underlying RTSP
+# source on ring-mqtt's internal go2rtc server which uses {ring_id}_live.
 streams:
-  10cea9e4511f_live: rtsp://deer-ring-mqtt:8554/10cea9e4511f_live
-  c4dbad08f862_live: rtsp://deer-ring-mqtt:8554/c4dbad08f862_live
-  587a624d3fae_live: rtsp://deer-ring-mqtt:8554/587a624d3fae_live
-  4439c4de7a79_live: rtsp://deer-ring-mqtt:8554/4439c4de7a79_live
-  f045dae9383a_live: rtsp://deer-ring-mqtt:8554/f045dae9383a_live
+  woods:     rtsp://deer-ring-mqtt:8554/10cea9e4511f_live
+  side:      rtsp://deer-ring-mqtt:8554/c4dbad08f862_live
+  driveway:  rtsp://deer-ring-mqtt:8554/587a624d3fae_live
+  frontdoor: rtsp://deer-ring-mqtt:8554/4439c4de7a79_live
+  back:      rtsp://deer-ring-mqtt:8554/f045dae9383a_live

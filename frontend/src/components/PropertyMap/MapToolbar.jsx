@@ -42,7 +42,7 @@ export default function MapToolbar({
       color: '#4ade80',
       fill_opacity: 0.35,
       stroke_width: 2,
-      polygon: [[0.45, 0.45], [0.55, 0.45], [0.50, 0.55]],
+      rings: [[[0.45, 0.45], [0.55, 0.45], [0.50, 0.55]]],
       meta: {},
     })
   }

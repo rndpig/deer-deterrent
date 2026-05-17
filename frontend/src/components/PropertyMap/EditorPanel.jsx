@@ -1,4 +1,5 @@
 import { CAMERA_ID_LIST, getCameraDefaults, getCameraModelInfo } from './cameraDefaults'
+import { getRings } from './polygonUtils'
 
 function Field({ label, children }) {
   return (
@@ -88,16 +89,20 @@ function CameraEditor({ item, onUpdate, onDelete }) {
       <SliderField label="Rotation" value={item.rotation_deg ?? 0} min={-180} max={180} onChange={v => onUpdate({ rotation_deg: v })} />
       <SliderField label="FOV" value={item.fov_deg ?? 90} min={10} max={360} onChange={v => onUpdate({ fov_deg: v })} />
       <SliderField label="Range" value={item.range ?? 0.15} min={0.01} max={1} step={0.01} onChange={v => onUpdate({ range: v })} />
-      <div className="pm-coords">x: {(item.x ?? 0).toFixed(3)}, y: {(item.y ?? 0).toFixed(3)}</div>
-      <button className="pm-delete-btn" onClick={() => {
-        if (window.confirm(`Delete camera "${item.label}"?`)) onDelete()
-      }}>Delete camera</button>
     </>
   )
 }
 
-function PolygonEditor({ item, onUpdate, onDelete }) {
+function PolygonEditor({
+  item, onUpdate, onDelete,
+  drawingItemId, drawingRing,
+  onStartDrawingRing, onFinishDrawingRing, onCancelDrawingRing, onRemoveRing,
+}) {
   const meta = item.meta ?? {}
+  const rings = getRings(item)
+  const isDrawingThis = drawingItemId === item.id
+  const isDrawingOther = drawingItemId && drawingItemId !== item.id
+
   return (
     <>
       <Field label="Label">
@@ -117,10 +122,58 @@ function PolygonEditor({ item, onUpdate, onDelete }) {
           onUpdate({ meta: { ...meta, rainbird_zone: isNaN(n) ? undefined : n } })
         }} />
       </Field>
-      <div className="pm-coords">Vertices: {(item.polygon ?? []).length}</div>
-      <button className="pm-delete-btn" onClick={() => {
-        if (window.confirm(`Delete zone "${item.label}"?`)) onDelete()
-      }}>Delete zone</button>
+
+      {/* Shapes (rings) ---------------------------------------------------- */}
+      <div className="pm-section-header">Shapes</div>
+      <div className="pm-shape-list">
+        {rings.map((ring, idx) => (
+          <div key={idx} className="pm-shape-row">
+            <span>Shape {idx + 1} <span style={{ color: '#64748b' }}>({ring.length} vertices)</span></span>
+            <button
+              type="button"
+              className="pm-btn pm-shape-del"
+              disabled={rings.length <= 1}
+              onClick={() => {
+                if (window.confirm(`Remove shape ${idx + 1} from "${item.label}"?`)) onRemoveRing?.(idx)
+              }}
+              title={rings.length <= 1 ? 'A zone must have at least one shape' : 'Remove this shape'}
+            >×</button>
+          </div>
+        ))}
+      </div>
+
+      {isDrawingThis ? (
+        <div className="pm-drawing-banner">
+          <div style={{ fontSize: '0.78rem', color: '#facc15', marginBottom: '0.4rem' }}>
+            Drawing new shape: <strong>{drawingRing?.length ?? 0}</strong> vertices
+          </div>
+          <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.5rem' }}>
+            Click on the map to drop vertices. Double-click or press Enter to finish. Esc to cancel.
+          </div>
+          <div className="pm-field-row">
+            <button
+              type="button"
+              className="pm-btn primary"
+              disabled={(drawingRing?.length ?? 0) < 3}
+              onClick={onFinishDrawingRing}
+            >Finish ({drawingRing?.length ?? 0})</button>
+            <button type="button" className="pm-btn" onClick={onCancelDrawingRing}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="pm-btn"
+          style={{ marginTop: '0.4rem', width: '100%' }}
+          disabled={isDrawingOther}
+          onClick={onStartDrawingRing}
+          title={isDrawingOther ? 'Finish or cancel the current drawing first' : 'Draw an additional disconnected shape for this zone'}
+        >+ Add shape</button>
+      )}
+
+      <div className="pm-hint">
+        {rings.reduce((sum, r) => sum + r.length, 0)} vertices total · drag to move · drag a midpoint to insert · hover a vertex → click × (or Delete key) to remove.
+      </div>
     </>
   )
 }
@@ -151,10 +204,6 @@ function MarkerEditor({ item, onUpdate, onDelete }) {
           onUpdate({ meta: { ...meta, channel: v ? Number(v) || v : undefined, name: v || undefined } })
         }} />
       </Field>
-      <div className="pm-coords">x: {(item.x ?? 0).toFixed(3)}, y: {(item.y ?? 0).toFixed(3)}</div>
-      <button className="pm-delete-btn" onClick={() => {
-        if (window.confirm(`Delete sensor "${item.label}"?`)) onDelete()
-      }}>Delete sensor</button>
     </>
   )
 }
@@ -165,27 +214,51 @@ function LabelEditor({ item, onUpdate, onDelete }) {
       <Field label="Text">
         <input type="text" value={item.label ?? ''} onChange={e => onUpdate({ label: e.target.value })} />
       </Field>
-      <div className="pm-coords">x: {(item.x ?? 0).toFixed(3)}, y: {(item.y ?? 0).toFixed(3)}</div>
-      <button className="pm-delete-btn" onClick={() => {
-        if (window.confirm(`Delete label "${item.label}"?`)) onDelete()
-      }}>Delete label</button>
     </>
   )
 }
 
 const TYPE_LABEL = { camera: 'Camera', polygon: 'Zone', marker: 'Sensor', label: 'Label' }
+const TYPE_NOUN  = { camera: 'camera', polygon: 'zone', marker: 'sensor', label: 'label' }
 
-export default function EditorPanel({ item, layerId, onUpdate, onDelete }) {
+export default function EditorPanel({
+  item, layerId, onUpdate, onDelete,
+  drawingItemId, drawingRing,
+  onStartDrawingRing, onFinishDrawingRing, onCancelDrawingRing, onRemoveRing,
+}) {
   if (!item) return null
+  const noun = TYPE_NOUN[item.type] ?? 'item'
+  const hasXY = typeof item.x === 'number' && typeof item.y === 'number'
   return (
     <div className="pm-editor">
       <div className="pm-editor__header">
-        <span>{TYPE_LABEL[item.type] ?? item.type}</span>
-        <span style={{ color: '#64748b', fontSize: '0.75rem' }}>{item.id}</span>
+        <span className="pm-editor__title">{TYPE_LABEL[item.type] ?? item.type}</span>
+        {hasXY && (
+          <span className="pm-editor__coords">x: {item.x.toFixed(3)}, y: {item.y.toFixed(3)}</span>
+        )}
+        <span className="pm-editor__id">{item.id}</span>
+        <button
+          type="button"
+          className="pm-editor__delete"
+          onClick={() => {
+            if (window.confirm(`Delete ${noun} "${item.label}"?`)) onDelete()
+          }}
+          title={`Delete ${noun}`}
+        >Delete</button>
       </div>
       <div className="pm-editor__body">
         {item.type === 'camera'  && <CameraEditor  item={item} onUpdate={onUpdate} onDelete={onDelete} />}
-        {item.type === 'polygon' && <PolygonEditor item={item} onUpdate={onUpdate} onDelete={onDelete} />}
+        {item.type === 'polygon' && (
+          <PolygonEditor
+            item={item} onUpdate={onUpdate} onDelete={onDelete}
+            drawingItemId={drawingItemId}
+            drawingRing={drawingRing}
+            onStartDrawingRing={onStartDrawingRing}
+            onFinishDrawingRing={onFinishDrawingRing}
+            onCancelDrawingRing={onCancelDrawingRing}
+            onRemoveRing={onRemoveRing}
+          />
+        )}
         {item.type === 'marker'  && <MarkerEditor  item={item} onUpdate={onUpdate} onDelete={onDelete} />}
         {item.type === 'label'   && <LabelEditor   item={item} onUpdate={onUpdate} onDelete={onDelete} />}
       </div>

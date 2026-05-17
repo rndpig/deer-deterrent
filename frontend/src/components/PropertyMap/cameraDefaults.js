@@ -27,11 +27,11 @@ export function getCameraModelInfo(ringCameraId) {
   return CAMERA_MODELS[ringCameraId] ?? null
 }
 
-// Maps Ring camera hex ID → go2rtc stream name (served by the deer-go2rtc relay container)
+// Maps Ring camera hex ID → go2rtc stream alias (served by the deer-go2rtc relay container)
 export const RING_ID_TO_STREAM_NAME = {
-  '10cea9e4511f': '10cea9e4511f_live', // Woods
-  'c4dbad08f862': 'c4dbad08f862_live', // Side (4K Floodlight Pro)
-  '587a624d3fae': '587a624d3fae_live', // Driveway
-  '4439c4de7a79': '4439c4de7a79_live', // Front Door
-  'f045dae9383a': 'f045dae9383a_live', // Back
+  '10cea9e4511f': 'woods',
+  'c4dbad08f862': 'side',     // 4K Floodlight Pro
+  '587a624d3fae': 'driveway',
+  '4439c4de7a79': 'frontdoor',
+  'f045dae9383a': 'back',
 }

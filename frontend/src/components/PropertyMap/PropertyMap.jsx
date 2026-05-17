@@ -5,6 +5,7 @@ import MapCanvas from './MapCanvas'
 import MapToolbar from './MapToolbar'
 import EditorPanel from './EditorPanel'
 import ImageUploadModal from './ImageUploadModal'
+import { getRings, ringsPatch, appendRing, removeRing } from './polygonUtils'
 import './PropertyMap.css'
 
 const STORAGE_KEY = 'propertyMap_layerVisibility'
@@ -31,6 +32,10 @@ export default function PropertyMap({ onClose }) {
   const [layerVisibility, setLayerVisibility] = useState({})
   const [saveStatus, setSaveStatus] = useState('saved')
   const [showUploadModal, setShowUploadModal] = useState(false)
+  // Drawing a new ring (shape) onto an existing polygon item:
+  const [drawingItemId, setDrawingItemId] = useState(null)
+  const [drawingLayerId, setDrawingLayerId] = useState(null)
+  const [drawingRing, setDrawingRing] = useState([])
   const saveTimer = useRef(null)
 
   useEffect(() => {
@@ -49,6 +54,15 @@ export default function PropertyMap({ onClose }) {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  // When rendered as a fullscreen modal, lock body scroll so background
+  // elements (e.g. the dashboard's HH:MM time selector) can't show
+  // alongside it on mobile where viewport units / scroll behavior differ.
+  useEffect(() => {
+    if (!onClose) return
+    document.body.classList.add('pm-modal-open')
+    return () => document.body.classList.remove('pm-modal-open')
   }, [onClose])
 
   const persistLayers = useCallback((vis) => {
@@ -137,6 +151,73 @@ export default function PropertyMap({ onClose }) {
     setShowUploadModal(false)
   }, [scheduleSave])
 
+  // --- Multi-ring drawing -------------------------------------------------
+  const startDrawingRing = useCallback((layerId, itemId) => {
+    setDrawingLayerId(layerId)
+    setDrawingItemId(itemId)
+    setDrawingRing([])
+  }, [])
+
+  const cancelDrawingRing = useCallback(() => {
+    setDrawingLayerId(null)
+    setDrawingItemId(null)
+    setDrawingRing([])
+  }, [])
+
+  const addDrawingVertex = useCallback((pt) => {
+    setDrawingRing(prev => [...prev, pt])
+  }, [])
+
+  const finishDrawingRing = useCallback(() => {
+    if (!drawingItemId || !drawingLayerId) return
+    if (drawingRing.length < 3) {
+      // Not enough vertices for a polygon \u2014 just cancel
+      cancelDrawingRing()
+      return
+    }
+    setOverlay(prev => {
+      const next = {
+        ...prev,
+        layers: prev.layers.map(layer =>
+          layer.id !== drawingLayerId ? layer : {
+            ...layer,
+            items: layer.items.map(item => {
+              if (item.id !== drawingItemId) return item
+              const rings = getRings(item)
+              const patch = ringsPatch(appendRing(rings, drawingRing))
+              return { ...item, ...patch }
+            })
+          }
+        )
+      }
+      scheduleSave(next)
+      return next
+    })
+    cancelDrawingRing()
+  }, [drawingItemId, drawingLayerId, drawingRing, scheduleSave, cancelDrawingRing])
+
+  const removePolygonRing = useCallback((layerId, itemId, ringIdx) => {
+    setOverlay(prev => {
+      const next = {
+        ...prev,
+        layers: prev.layers.map(layer =>
+          layer.id !== layerId ? layer : {
+            ...layer,
+            items: layer.items.map(item => {
+              if (item.id !== itemId) return item
+              const rings = getRings(item)
+              const newRings = removeRing(rings, ringIdx)
+              if (newRings.length === 0) return item // can't remove the last ring
+              return { ...item, ...ringsPatch(newRings) }
+            })
+          }
+        )
+      }
+      scheduleSave(next)
+      return next
+    })
+  }, [scheduleSave])
+
   const getSelection = () => {
     if (!overlay || !selectedItemId) return null
     for (const layer of overlay.layers) {
@@ -162,7 +243,7 @@ export default function PropertyMap({ onClose }) {
         editMode={editMode}
         user={user}
         saveStatus={saveStatus}
-        onEditToggle={() => { setEditMode(e => !e); setSelectedItemId(null) }}
+        onEditToggle={() => { setEditMode(e => !e); setSelectedItemId(null); cancelDrawingRing() }}
         onLayerToggle={setLayerVisible}
         onAddItem={addItem}
         onUploadImage={() => setShowUploadModal(true)}
@@ -177,6 +258,11 @@ export default function PropertyMap({ onClose }) {
           onSelect={setSelectedItemId}
           onDeselect={() => setSelectedItemId(null)}
           onUpdateItem={updateItem}
+          drawingItemId={drawingItemId}
+          drawingRing={drawingRing}
+          onDrawingAddVertex={addDrawingVertex}
+          onDrawingFinish={finishDrawingRing}
+          onDrawingCancel={cancelDrawingRing}
         />
         {editMode && selection && (
           <EditorPanel
@@ -184,6 +270,12 @@ export default function PropertyMap({ onClose }) {
             layerId={selection.layerId}
             onUpdate={(patch) => updateItem(selection.layerId, selection.item.id, patch)}
             onDelete={() => deleteItem(selection.layerId, selection.item.id)}
+            drawingItemId={drawingItemId}
+            drawingRing={drawingRing}
+            onStartDrawingRing={() => startDrawingRing(selection.layerId, selection.item.id)}
+            onFinishDrawingRing={finishDrawingRing}
+            onCancelDrawingRing={cancelDrawingRing}
+            onRemoveRing={(ringIdx) => removePolygonRing(selection.layerId, selection.item.id, ringIdx)}
           />
         )}
       </div>
