@@ -2555,7 +2555,7 @@ async def cams_ws(websocket: WebSocket):
 
     src = websocket.query_params.get("src", "")
     token = websocket.query_params.get("token", "")
-    logger.info(f"[cams/ws] upgrade src={src!r} token_len={len(token)}")
+    logger.debug(f"[cams/ws] upgrade src={src!r} token_len={len(token)}")
 
     if not token:
         logger.warning("[cams/ws] rejecting: no token")
@@ -2576,11 +2576,11 @@ async def cams_ws(websocket: WebSocket):
     )
 
     await websocket.accept()
-    logger.info(f"[cams/ws] accepted, connecting upstream {upstream_url}")
+    logger.debug(f"[cams/ws] accepted, connecting upstream {upstream_url}")
 
     try:
         async with ws_client.connect(upstream_url, max_size=None) as upstream:
-            logger.info(f"[cams/ws] upstream connected for src={src}")
+            logger.debug(f"[cams/ws] upstream connected for src={src}")
 
             async def client_to_upstream():
                 try:
@@ -2615,7 +2615,7 @@ async def cams_ws(websocket: WebSocket):
             await websocket.close()
         except Exception:
             pass
-        logger.info(f"[cams/ws] closed src={src}")
+        logger.debug(f"[cams/ws] closed src={src}")
 
 
 @app.websocket("/ws")
