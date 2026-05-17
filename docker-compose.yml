@@ -103,6 +103,8 @@ services:
     volumes:
       - ./dell-deployment/go2rtc:/config
 
+    command: ["go2rtc", "-c", "/config/go2rtc.yaml"]
+
     ports:
       - "1984:1984"
 
