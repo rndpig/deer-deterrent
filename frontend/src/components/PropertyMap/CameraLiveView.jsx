@@ -50,14 +50,18 @@ export default function CameraLiveView({ streamName, label }) {
         const token = await user.getIdToken()
         if (cancelled) return
 
+        // Load the go2rtc web component BEFORE inserting the element into the
+        // DOM. Otherwise the first instance mounts as an unknown element and
+        // its connectedCallback never fires (subsequent clicks work because
+        // the customElement is registered by then).
+        await loadGo2rtcScript()
+        if (cancelled) return
+
         const url = new URL(CAMS_BASE)
         const proto = url.protocol === 'https:' ? 'wss' : 'ws'
         setWsUrl(
           `${proto}://${url.host}/cams/ws?src=${encodeURIComponent(streamName)}&token=${encodeURIComponent(token)}`
         )
-
-        await loadGo2rtcScript()
-        if (cancelled) return
 
         pollId = setInterval(() => {
           const video = containerRef.current?.querySelector('video')

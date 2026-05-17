@@ -6,13 +6,29 @@
   color: #f1f5f9;
 }
 
-/* Fullscreen modal variant — used when invoked via the Map tab. */
+/* Fullscreen modal variant — used when invoked via the Map tab.
+   100dvh/100dvw to avoid the iOS Safari address-bar bug where 100vh
+   leaves a gap that lets the page underneath show through. */
 .pm-container--modal {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  height: 100vh;
   width: 100vw;
+  width: 100dvw;
+  height: 100vh;
+  height: 100dvh;
+  background: #0f172a;
+  overflow: hidden;
+}
+
+/* When the map modal is open, prevent the underlying dashboard from
+   scrolling behind it. We use only `overflow: hidden` (no `position:
+   fixed` and no `touch-action: none`) because those would kill the
+   browser's pinch-zoom gesture on mobile. The modal itself is
+   `position: fixed; inset: 0` with an opaque background, so it
+   already visually covers everything. */
+body.pm-modal-open {
+  overflow: hidden;
 }
 
 .pm-close-btn {
@@ -202,7 +218,9 @@
 
 /* Body */
 .pm-body {
+  position: relative;
   display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -210,24 +228,30 @@
 
 /* Canvas */
 .pm-canvas-wrapper {
-  flex: 1;
+  flex: 1 1 0;
+  min-height: 0;
   position: relative;
   overflow: hidden;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: 1rem;
+  padding: 0.5rem;
+  container-type: size;
 }
 
+/* Aspect-ratio-preserving fit-to-parent: width is the smaller of
+   (100% of wrapper width) and (wrapper height * image ratio). This
+   shrinks the map to fit when the editor bar takes vertical space. */
 .pm-map-container {
   position: relative;
-  width: 100%;
+  width: min(100%, calc(100cqh * var(--pm-ratio, 1.5)));
+  max-width: 100%;
   max-height: 100%;
 }
 
 .pm-map-container img {
   width: 100%;
-  height: auto;
+  height: 100%;
   display: block;
   user-select: none;
   -webkit-user-drag: none;
@@ -262,10 +286,11 @@
 }
 
 .pm-marker-dot {
-  width: 14px;
-  height: 14px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.7);
+  border: 1.5px solid rgba(255,255,255,0.8);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.4);
 }
 
 .pm-marker-label {
@@ -282,32 +307,95 @@
   pointer-events: none;
 }
 
-/* Editor panel */
+/* Editor panel: compact bottom bar in normal flow (NOT overlay).
+   Fields are inline label+input pairs that wrap horizontally. */
 .pm-editor {
-  width: 260px;
-  min-width: 220px;
+  flex-shrink: 0;
+  max-height: 40vh;
   background: #1e293b;
-  border-left: 1px solid #334155;
+  border-top: 1px solid #334155;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
 }
 
 .pm-editor__header {
-  padding: 0.75rem 1rem;
+  padding: 0.35rem 0.75rem;
   border-bottom: 1px solid #334155;
-  font-weight: 600;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.75rem;
+  flex-shrink: 0;
 }
+.pm-editor__title { font-weight: 600; }
+.pm-editor__coords { color: #94a3b8; font-family: ui-monospace, monospace; font-size: 0.72rem; }
+.pm-editor__id { color: #64748b; font-size: 0.7rem; margin-left: auto; }
+.pm-editor__delete {
+  background: #7f1d1d;
+  color: #fff;
+  border: 1px solid #b91c1c;
+  border-radius: 4px;
+  padding: 0.18rem 0.55rem;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.pm-editor__delete:hover { background: #b91c1c; }
 
 .pm-editor__body {
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.85rem;
+}
+
+/* Inline label+input field */
+.pm-editor__body .pm-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 1 auto;
+}
+.pm-editor__body .pm-field > label {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  margin: 0;
+}
+.pm-editor__body .pm-field input[type="text"],
+.pm-editor__body .pm-field input[type="number"],
+.pm-editor__body .pm-field select {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #f1f5f9;
+  border-radius: 4px;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.78rem;
+  min-width: 0;
+  max-width: 12rem;
+}
+.pm-editor__body .pm-field input[type="range"] {
+  width: 8rem;
+}
+.pm-editor__body .pm-field input[type="color"] {
+  width: 2rem; height: 1.4rem; padding: 0; border: 1px solid #334155; background: transparent;
+}
+
+/* Larger blocks take a full row */
+.pm-editor__body .pm-section-header,
+.pm-editor__body .pm-shape-list,
+.pm-editor__body .pm-drawing-banner,
+.pm-editor__body .pm-hint {
+  flex: 1 0 100%;
+}
+.pm-editor__body .pm-hint {
+  font-size: 0.7rem;
+  color: #64748b;
+  line-height: 1.35;
 }
 
 .pm-field {
@@ -389,6 +477,11 @@
   box-shadow: 0 10px 30px rgba(0,0,0,0.5);
   transform: translate(-50%, -110%);
 }
+/* When the anchor is near the top of the map, flip the popover BELOW
+   the cursor so it stays in view. */
+.pm-popover[data-flip="below"] {
+  transform: translate(-50%, 16px);
+}
 
 .pm-popover img {
   width: 100%;
@@ -418,6 +511,62 @@
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
+}
+
+/* Wide centered-modal variant — used for live camera streams so the
+   video has real room. Sits over a translucent backdrop. */
+.pm-popover--modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(90vw, 800px);
+  max-width: 800px;
+  z-index: 1100;
+  padding: 1rem;
+}
+.pm-popover--modal .pm-popover__title {
+  font-size: 1rem;
+  margin-bottom: 0.6rem;
+}
+
+/* Live camera view */
+.pm-livecam {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.pm-livecam__video,
+.pm-livecam video-stream,
+.pm-livecam video {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  background: #000;
+  object-fit: contain;
+}
+/* go2rtc's video-stream injects a `.info` overlay (status + playback mode
+   label like "MSE"). Hide it — we manage status ourselves. */
+.pm-livecam video-stream .info { display: none !important; }
+.pm-livecam__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.85);
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 1rem;
+  z-index: 2;
+}
+.pm-livecam__overlay--error {
+  background: rgba(15, 23, 42, 0.95);
 }
 
 /* Upload modal */
@@ -468,7 +617,138 @@
   transition: opacity 0.15s;
 }
 .pm-fov-cone:hover { opacity: 0.85; }
-.pm-vertex-handle { cursor: move; touch-action: none; }
-.pm-midpoint-handle { cursor: pointer; opacity: 0.5; touch-action: none; }
-.pm-midpoint-handle:hover { opacity: 1; }
+/* Polygon vertex handle \u2014 HTML overlay div, stays circular regardless of
+   the map image's aspect ratio. */
+.pm-vertex-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.45);
+  transform: translate(-50%, -50%);
+  cursor: move;
+  z-index: 7;
+  touch-action: none;
+  transition: width 0.12s, height 0.12s;
+}
+.pm-vertex-handle:hover,
+.pm-vertex-handle.active {
+  width: 14px;
+  height: 14px;
+}
+
+/* The tiny \u2715 delete badge that pops up on hover. */
+.pm-vertex-delete {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid #fff;
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  line-height: 12px;
+  font-weight: 700;
+  padding: 0;
+  display: none;
+  cursor: pointer;
+  z-index: 8;
+}
+.pm-vertex-handle:hover .pm-vertex-delete,
+.pm-vertex-handle.active .pm-vertex-delete {
+  display: block;
+}
+
+/* Midpoint handle \u2014 small ghost circle between two vertices. Drag to
+   insert a new vertex (Leaflet.Draw / Mapbox style). */
+.pm-midpoint-handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  background: rgba(255,255,255,0.5);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+  transform: translate(-50%, -50%);
+  cursor: copy;
+  z-index: 6;
+  opacity: 0.7;
+  touch-action: none;
+  transition: opacity 0.12s, width 0.12s, height 0.12s;
+}
+.pm-midpoint-handle:hover {
+  opacity: 1;
+  width: 11px;
+  height: 11px;
+}
+
 .pm-rotate-handle { cursor: ew-resize; touch-action: none; }
+
+/* Drawing-new-ring mode \u2014 use a custom high-visibility cursor (white
+   crosshair with black outline) so it's readable against any map color.
+   24x24 SVG, hotspot in the middle. */
+.pm-map-container.pm-drawing,
+.pm-map-container.pm-drawing *,
+.pm-svg-overlay.drawing,
+.pm-svg-overlay.drawing * {
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><line x1='12' y1='2' x2='12' y2='22' stroke='black' stroke-width='5'/><line x1='2' y1='12' x2='22' y2='12' stroke='black' stroke-width='5'/><line x1='12' y1='2' x2='12' y2='22' stroke='%23facc15' stroke-width='2'/><line x1='2' y1='12' x2='22' y2='12' stroke='%23facc15' stroke-width='2'/><circle cx='12' cy='12' r='2.5' fill='%23facc15' stroke='black' stroke-width='1'/></svg>") 12 12, crosshair;
+}
+.pm-drawing-preview { pointer-events: none; }
+
+/* Editor panel: shape list + drawing banner */
+.pm-section-header {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  margin: 0.85rem 0 0.35rem 0;
+  border-top: 1px solid #334155;
+  padding-top: 0.65rem;
+}
+.pm-shape-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.pm-shape-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  font-size: 0.78rem;
+}
+.pm-shape-del {
+  padding: 0.05rem 0.4rem;
+  font-size: 0.7rem;
+  color: #fca5a5;
+  border-color: #7f1d1d;
+}
+.pm-shape-del:hover:not(:disabled) {
+  background: #7f1d1d;
+  color: #fff;
+}
+.pm-shape-del:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.pm-drawing-banner {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  background: rgba(250, 204, 21, 0.08);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  border-radius: 4px;
+}
+.pm-hint {
+  font-size: 0.7rem;
+  color: #64748b;
+  line-height: 1.35;
+  margin-top: 0.35rem;
+}

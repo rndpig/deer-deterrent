@@ -441,7 +441,11 @@ function ZonePopover({ item, pos, onClose }) {
   }
 
   return (
-    <div className="pm-popover" style={{ left: pos.x, top: pos.y }}>
+    <div
+      className="pm-popover"
+      data-flip={pos.y < 110 ? 'below' : undefined}
+      style={{ left: pos.x, top: pos.y }}
+    >
       <button className="pm-popover__close" onClick={onClose}>✕</button>
       <div className="pm-popover__title">{item.label}</div>
       {zone ? (
@@ -540,7 +544,11 @@ function SensorPopover({ item, pos, onClose }) {
   }
 
   return (
-    <div className="pm-popover" style={{ left: pos.x, top: pos.y }}>
+    <div
+      className="pm-popover"
+      data-flip={pos.y < 110 ? 'below' : undefined}
+      style={{ left: pos.x, top: pos.y }}
+    >
       <button className="pm-popover__close" onClick={onClose}>✕</button>
       <div className="pm-popover__title">{item.label}</div>
       {renderValue()}
